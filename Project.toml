@@ -1,0 +1,4 @@
+name = "TrustRegionRadius"
+uuid = "b2e96d2e-59a1-40e6-a41d-1c10527a0261"
+authors = ["JeremyRieussec <jeremy.rieussec@gmail.com>"]
+version = "0.1.0"
