@@ -1,5 +1,5 @@
 # Truncated Conjugate Gradient (CG) method for solving the trust-region subproblem
-function truncated_cg_steihaug(g, H, Δ; χ::Float64=0.1, θ::Float64=0.5, max_iters=100)
+function truncated_cg_steihaug(nlp::AbstractNLPModel, x_current, g, Δ; χ::Float64=0.1, θ::Float64=0.5, max_iters=100)
     n = length(g)
     normg = norm(g)
 
@@ -12,7 +12,7 @@ function truncated_cg_steihaug(g, H, Δ; χ::Float64=0.1, θ::Float64=0.5, max_i
     on_boundary = false  # Flag to indicate if the solution is on the boundary
 
     for k in 1:max_iters
-        Hd = H * d
+        Hd = hprod(nlp, x_current, d)  # Hessian-vector product
 
         if dot(d, Hd) <= 0
             τ = find_trust_region_boundary(p, d, Δ) # Solve for τ such that ‖p + τ * d‖ = Δ

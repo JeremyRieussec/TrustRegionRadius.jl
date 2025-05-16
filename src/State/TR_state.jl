@@ -1,12 +1,9 @@
-abstract type AbstractTrustRegionState end
-
 mutable struct TrustRegionState <: AbstractTrustRegionState
     x::Vector{Float64}       # Current point
     Δ::Float64               # Trust-region radius
 
     objective::Float64       # Objective value at the current point
     gradient::Vector{Float64} # Gradient at the current point
-    hessian::Matrix{Float64} # Hessian at the current point
     
     iteration::Int           # Current iteration number
 
@@ -27,7 +24,6 @@ function Base.show(io::IO, state::TrustRegionState)
     println(io, "  Trust-region radius (Δ): ", state.Δ)
     println(io, "  Objective value: ", state.objective)
     println(io, "  Gradient: ", state.gradient)
-    println(io, "  Hessian: ", state.hessian)
     println(io, "  Iteration: ", state.iteration)
     println(io, "  Candidate point (x_candidate): ", state.x_candidate)
     println(io, "  Candidate objective value (f_candidate): ", state.f_candidate)

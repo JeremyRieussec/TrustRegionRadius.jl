@@ -9,7 +9,7 @@ function plot_opt_path(path, objectives, nlp)
     x2 = range(minimum([min_x2, -1]), maximum([1.5, max_x2]), length=100)
     
     # Contour plot of the Rosenbrock function
-    p1 = contour(x1, x2, ((x, y) -> obj(nlp, [x,y])), title="Rosenbrock Function", xlabel="x₁", ylabel="x₂", colorbar=true)
+    p1 = contour(x1, x2, ((x, y) -> obj(nlp, [x,y])), title=nlp.meta.name, xlabel="x₁", ylabel="x₂", colorbar=true)
     scatter!(p1, [x[1] for x in path], [x[2] for x in path], label="Path", color=:red, markersize=3)
     scatter!(p1, [path[1][1]], [path[1][2]], label="Start", color=:green, markersize=5)
     scatter!(p1, [path[end][1]], [path[end][2]], label="End", color=:blue, markersize=5)
