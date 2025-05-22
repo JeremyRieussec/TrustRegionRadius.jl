@@ -1,1 +1,5 @@
-include("TR_radius_updates.jl")
+include("Conn_gould_toint_params.jl")
+include("Fan-Yuan_params.jl")
+include("Hei_params.jl")
+include("Scheinberg_params.jl")
+include("HeiFanYuan_params.jl")

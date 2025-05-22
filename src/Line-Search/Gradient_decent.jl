@@ -1,18 +1,31 @@
 
 # Function to perform gradient descent
-"""
-    gradient_descent(nlp::AbstractNLPModel, stop::AbstractStoppingCriteria, info::AlgorithmInfoGD; alpha::Float64 = 0.01)
-    Perform gradient descent optimization on the given NLP model.
 
-    # Arguments
-    - `nlp::AbstractNLPModel`: The NLP model to optimize.
-    - `stop::AbstractStoppingCriteria`: Stopping criteria for the optimization.
-    - `info::AlgorithmInfoGD`: Information structure to store algorithm details.
-    - `alpha::Float64`: Step size for the gradient descent. Default is 0.01.
-    
-    # Returns
-    - `state::GradientDescentState`: The final state of the optimization.
-    - `info::AlgorithmInfoGD`: Updated algorithm information.
+"""
+    gradient_descent(nlp::AbstractNLPModel, stop::AbstractStoppingCriteria; alpha::Float64 = 0.01)
+
+Performs gradient descent optimization on a nonlinear programming (NLP) model.
+
+# Arguments
+- `nlp::AbstractNLPModel`: The nonlinear programming model to optimize. Must provide `grad` and `obj` methods.
+- `stop::AbstractStoppingCriteria`: Stopping criteria for the optimization process (e.g., maximum iterations, tolerance).
+- `alpha::Float64=0.01`: (Optional) Step size (learning rate) for the gradient descent updates.
+
+# Returns
+- `state`: The final state of the optimization, including the last iterate, gradient, and objective value.
+- `info`: An `AlgorithmInfoGD` object containing the optimization history, convergence information, and final results.
+
+# Description
+Initializes the optimization state and iteratively updates the solution by moving in the direction of the negative gradient, scaled by the step size `alpha`. At each iteration, checks for convergence using the provided stopping criteria. Records the optimization history and returns the final state and information object.
+
+# Logging
+- Logs the start of the optimization process.
+- Logs a message if the maximum number of iterations is reached without convergence.
+
+# Example
+```julia
+state, info = gradient_descent(nlp, stop; alpha=0.01)
+```
 """
 function gradient_descent(nlp::AbstractNLPModel, stop::AbstractStoppingCriteria; alpha::Float64 = 0.01)
     @info "Starting Gradient Descent optimization."

@@ -1,17 +1,27 @@
 # Function to perform gradient descent with backtracking line search
+
 """
-    LS_steepest_backtrack(nlp::AbstractNLPModel, stop::AbstractStoppingCriteria; eta=1e-4, sigma=0.66)
-    Perform gradient descent optimization with backtracking line search on the given NLP model.
+  LS_steepest_backtrack(nlp::AbstractNLPModel, stop::AbstractStoppingCriteria; eta=1e-4, sigma=0.66)
 
-    # Arguments
-    - `nlp::AbstractNLPModel`: The NLP model to optimize.
-    - `stop::AbstractStoppingCriteria`: Stopping criteria for the optimization.
-    - `eta::Float64`: Parameter for backtracking line search. Default is 1e-4.
-    - `sigma::Float64`: Parameter for backtracking line search. Default is 0.66.
+Performs gradient descent optimization using a backtracking line search strategy.
 
-    # Returns
-    - `state::GradientDescentState`: The final state of the optimization.
-    - `info::AlgorithmInfoGD`: Updated algorithm information.
+# Arguments
+- `nlp::AbstractNLPModel`: The nonlinear programming model to be optimized. Must provide `obj` and `grad` methods for objective and gradient evaluation.
+- `stop::AbstractStoppingCriteria`: Stopping criteria for the optimization process, such as maximum iterations or tolerance thresholds.
+- `eta`: (Optional) Armijo condition parameter for sufficient decrease. Default is `1e-4`.
+- `sigma`: (Optional) Step size reduction factor for backtracking. Default is `0.66`.
+
+# Returns
+- `state`: The final state of the gradient descent algorithm, containing the optimized variables, objective value, and gradient.
+- `info`: An `AlgorithmInfoGD` object containing detailed information about the optimization process, including iteration history and convergence status.
+
+# Description
+This function implements the steepest descent (gradient descent) method with a backtracking line search to determine the step size at each iteration. The step size is reduced by a factor of `sigma` until the Armijo condition is satisfied. The optimization stops when the stopping criteria are met or the maximum number of iterations is reached.
+
+# Example
+```julia
+state, info = LS_steepest_backtrack(nlp, stop; eta=1e-4, sigma=0.66)
+```
 """
 function LS_steepest_backtrack(nlp::AbstractNLPModel, stop::AbstractStoppingCriteria; eta=1e-4, sigma=0.66)
   @info "Starting backtracking line search gradient descent optimization."

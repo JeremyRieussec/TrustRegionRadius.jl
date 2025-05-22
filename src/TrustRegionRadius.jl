@@ -21,17 +21,24 @@ abstract type AbstractStoppingCriteria end
 
 
 include("State/main.jl")
-include("Radius_updates/main.jl")
 include("Saving_info/main.jl")
+include("Radius_updates/main.jl")
 include("Stopping_tests/main.jl")
 include("Subproblem/main.jl")
 include("Plotting_graphs/main.jl")
-include("Trust-region/TR_algo.jl")
+include("Trust-region/main.jl")
 include("Line-Search/main.jl")
 
-export SimpleScheinbergParameters, YuanFanParameters, HeiParameters, HeiGradParameters,ScheinbergParameters, HeiParametersModified 
+
+export SimpleTointGouldTointParameters, TointGouldTointParameters, 
+        SimpleScheinbergParameters, ScheinbergParameters, 
+        YuanFanParameters, 
+        HeiParameters, HeiGradParameters, 
+        HeiFanYuanParameters
 
 export StoppingCriteriaGradient
+
+export AlgorithmInfoTR, AlgorithmInfoGD
 
 export trust_region_with_cg, gradient_descent, LS_steepest_backtrack
 
