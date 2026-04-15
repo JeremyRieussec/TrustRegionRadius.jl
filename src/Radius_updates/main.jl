@@ -1,3 +1,4 @@
+include("canonical_R1R2R3R4.jl")
 include("Conn_gould_toint_params.jl")
 include("Fan-Yuan_params.jl")
 include("Hei_params.jl")

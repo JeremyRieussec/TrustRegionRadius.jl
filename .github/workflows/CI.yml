@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # ============================================================
+  # Job 1 — Unit tests (no CUTEst)
+  # Runs on push and pull_request to main.
+  # ============================================================
+  unit_tests:
+    name: Unit tests — Julia ${{ matrix.julia-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        julia-version: ["1.9", "1.10", "lts"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Julia ${{ matrix.julia-version }}
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+
+      - name: Cache Julia packages
+        uses: julia-actions/cache@v2
+
+      - name: Install dependencies
+        run: julia -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run unit tests (without CUTEst)
+        run: julia -e 'using Pkg; Pkg.test("TrustRegionRadius")'
+
+      - name: Process coverage
+        uses: julia-actions/julia-processcoverage@v1
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  # ============================================================
+  # Job 2 — CUTEst integration tests
+  # Runs on push to main only (CUTEst install is slow).
+  # ============================================================
+  cutest_tests:
+    name: CUTEst integration tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Julia (lts)
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: lts
+
+      - name: Cache Julia packages
+        uses: julia-actions/cache@v2
+
+      - name: Install CUTEst system dependencies
+        run: sudo apt-get install -y gfortran liblapack-dev
+
+      - name: Install CUTEst.jl and instantiate
+        run: |
+          julia -e '
+            using Pkg
+            Pkg.add("CUTEst")
+            Pkg.instantiate()
+          '
+
+      - name: Run tests with CUTEst enabled
+        run: CUTEST_AVAILABLE=true julia -e 'using Pkg; Pkg.test("TrustRegionRadius")'
+
+  # ============================================================
+  # Job 3 — Documentation
+  # Runs on push to main (docs/make.jl exists).
+  # ============================================================
+  documentation:
+    name: Build and deploy documentation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Julia (lts)
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: lts
+
+      - name: Cache Julia packages
+        uses: julia-actions/cache@v2
+
+      - name: Install documentation dependencies
+        run: |
+          julia -e '
+            using Pkg
+            Pkg.develop(PackageSpec(path=pwd()))
+            Pkg.instantiate()
+          '
+        working-directory: docs
+
+      - name: Build and deploy documentation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+        run: julia --project=docs docs/make.jl

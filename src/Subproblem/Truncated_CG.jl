@@ -35,13 +35,12 @@ function truncated_cg_steihaug(nlp::AbstractNLPModel, x_current, g, Δ; χ::Floa
         p += α * d
 
         r_new = r - α * Hd
+        rs_new = dot(r_new, r_new)
 
         # Check for convergence
         if sqrt(rs_new) < min(χ, normg^θ)*normg
             return p, on_boundary, k
         end
-
-        rs_new = dot(r_new, r_new)
 
         # Update the search direction
         β = rs_new / rs_old

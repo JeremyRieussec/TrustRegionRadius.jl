@@ -1,6 +1,7 @@
 module TrustRegionRadius
 
 using NLPModels
+using CUTEst
 using LinearAlgebra
 using Plots, LaTeXStrings
 using Test
@@ -19,6 +20,8 @@ abstract type AbstractTrustRegionParameters end
 
 abstract type AbstractStoppingCriteria end
 
+abstract type AbstractRadiusUpdate end
+
 
 include("State/main.jl")
 include("Saving_info/main.jl")
@@ -30,16 +33,25 @@ include("Trust-region/main.jl")
 include("Line-Search/main.jl")
 
 
-export SimpleTointGouldTointParameters, TointGouldTointParameters, 
-        SimpleScheinbergParameters, ScheinbergParameters, 
-        YuanFanParameters, 
-        HeiParameters, HeiGradParameters, 
+# Legacy parameter types (existing mechanisms)
+export SimpleTointGouldTointParameters, TointGouldTointParameters,
+        SimpleScheinbergParameters, ScheinbergParameters,
+        YuanFanParameters,
+        HeiParameters, HeiGradParameters,
         HeiFanYuanParameters
+
+# Canonical R1–R4 radius update rules
+export AbstractRadiusUpdate
+export R1ClassicalUpdate, R2StepSizeUpdate, R3DFOLikeUpdate, R4RelativeGradUpdate
+export update_radius!, initial_radius
+
+# Solver parameters and output
+export TRSolverParams, TROutput
 
 export StoppingCriteriaGradient
 
 export AlgorithmInfoTR, AlgorithmInfoGD
 
-export trust_region_with_cg, gradient_descent, LS_steepest_backtrack
+export trust_region_with_cg, trust_region_solver, gradient_descent, LS_steepest_backtrack
 
 end # module TrustRegionRadius

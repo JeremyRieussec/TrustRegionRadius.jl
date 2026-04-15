@@ -1,0 +1,16 @@
+% Exp 4 — R4 sensitivity to mu0 (auto-generated)
+\begin{tabular}{lrr}
+\toprule
+\mu_0 & Rate (\%) & Median iterations \\
+\midrule
+0.01 & 100.0 & 18.0 \\
+0.05 & 100.0 & 16.0 \\
+0.1 & 100.0 & 16.0 \\
+0.25 & 100.0 & 15.5 \\
+0.5 & 100.0 & 14.5 \\
+1 & 100.0 & 13.5 \\
+2 & 100.0 & 15.0 \\
+5 & 100.0 & 14.0 \\
+10 & 100.0 & 16.0 \\
+\bottomrule
+\end{tabular}
