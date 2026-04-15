@@ -45,6 +45,9 @@ export AbstractRadiusUpdate
 export R1ClassicalUpdate, R2StepSizeUpdate, R3DFOLikeUpdate, R4RelativeGradUpdate
 export update_radius!, initial_radius
 
+# Hei-family canonical rules
+export HeiUpdate, HeiGradUpdate, HeiFanYuanUpdate
+
 # Solver parameters and output
 export TRSolverParams, TROutput
 

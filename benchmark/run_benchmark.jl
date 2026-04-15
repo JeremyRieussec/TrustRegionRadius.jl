@@ -31,62 +31,23 @@ using LinearAlgebra
 using Printf
 
 # =============================================================================
-# Configuration
+# Configuration  (edit benchmark/config.jl to change any of these values)
 # =============================================================================
 
 const RESULTS_DIR = joinpath(@__DIR__, "results")
 mkpath(RESULTS_DIR)
 
-const SOLVER_PARAMS = TRSolverParams(
-    η₁ = 0.1,
-    η₂ = 0.9,
-    Δ₀ = 1.0,
-    max_iterations = 10_000,
-    tol = 1e-5,
-)
-
-# Factory functions so each run gets a fresh (and for R4 mutable) rule
-const RULES = [
-    ("R1", () -> R1ClassicalUpdate(0.25, 0.50, 2.0)),
-    ("R2", () -> R2StepSizeUpdate(0.25, 0.80, 2.0)),
-    ("R3", () -> R3DFOLikeUpdate(0.25, 0.50, 2.0, 1.0)),
-    ("R4", () -> R4RelativeGradUpdate(0.25, 2.0,  1.0)),
-]
+include(joinpath(@__DIR__, "config.jl"))
 
 # =============================================================================
 # Problem selection
 # =============================================================================
-println("Enter problem selection parameters:")
-print(" - Minimum number of variables: ")
-input = readline()
-min_vars =  try
-    parse(Int, input)
-    # println("Input was: ", min_vars)
-catch
-    println("Error: Please enter a valid integer.")
-end
 
-print(" - Maximum number of variables: ")
-input = readline()
-max_vars = try
-    parse(Int, input)
-    # println("Input was: ", max_vars)
-catch
-    println("Error: Please enter a valid integer.")
-end
-print(" - Maximum number of constraints: ")
-input = readline()
-max_cons = try
-    parse(Int, input)
-    # println("Input was: ", max_cons)
-catch
-    println("Error: Please enter a valid integer.") 
-end
-println("Using problem selection: min_var=$min_vars, max_var=$max_vars, max_con=$max_cons")
+@info "Problem selection: min_var=$MIN_VAR, max_var=$MAX_VAR, max_con=$MAX_CON"
 
 @info "Querying CUTEst problem list…"
 prob_list = try
-    CUTEst.select_sif_problems(min_var = min_vars, max_var = max_vars, max_con = max_cons)
+    CUTEst.select_sif_problems(min_var = MIN_VAR, max_var = MAX_VAR, max_con = MAX_CON)
 catch e
     @warn "CUTEst.select failed ($e); falling back to an empty list."
     String[]
@@ -97,8 +58,11 @@ if isempty(prob_list)
           "(MASTSIF environment variable must be set) and try again.")
 end
 
-@info "Found $(length(prob_list)) candidate problems."
+@info "Found $(length(prob_list)) candidate problems satisfying : " *
+      "  nvar ∈ [$MIN_VAR, $MAX_VAR], ncon ≤ $MAX_CON." *
+      "  RULES are $(join(keys(RULES), ", "))."
 
+      
 # =============================================================================
 # Benchmark loop
 # =============================================================================
@@ -110,8 +74,7 @@ n_maxiter = Dict(name => 0 for (name, _) in RULES)
 
 for (prob_idx, prob_name) in enumerate(sort(prob_list))
 
-    global n_total, n_solved, n_failed, n_maxiter, min_var, max_var, max_con 
-    # Make these available in the global scope for the finally block
+    global n_total, n_solved, n_failed, n_maxiter
 
     println("\n[$prob_idx/$(length(prob_list))] $prob_name")
     n_total += 1
@@ -143,7 +106,7 @@ for (prob_idx, prob_name) in enumerate(sort(prob_list))
             # Safety check: skip if problem has constraints or wrong size
             nvar = nlp.meta.nvar
             ncon = nlp.meta.ncon
-            if nvar < min_var || nvar > max_var || ncon > max_con
+            if nvar < MIN_VAR || nvar > MAX_VAR || ncon > MAX_CON
                 @warn "  $rule_name: skipping $prob_name (nvar=$nvar, ncon=$ncon)"
                 finalize(nlp)
                 nlp = nothing
