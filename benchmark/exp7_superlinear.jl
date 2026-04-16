@@ -36,18 +36,18 @@ using ADNLPModels
 pgfplotsx()   # uncomment if PGFPlotsX is installed
 # gr()
 
-const RESULTS_DIR = joinpath(@__DIR__, "results")
-const FIGURES_DIR = joinpath(@__DIR__, "figures")
-const TABLES_DIR  = joinpath(@__DIR__, "tables")
+RESULTS_DIR = get(ENV, "TR_RESULTS_DIR", joinpath(@__DIR__, "results"))
+FIGURES_DIR = joinpath(@__DIR__, "figures")
+TABLES_DIR  = joinpath(@__DIR__, "tables")
 mkpath(FIGURES_DIR)
 mkpath(TABLES_DIR)
 
-const RULE_COLORS = Dict(
-    "R1" => colorant"#3266AD",
-    "R2" => colorant"#1D9E75",
-    "R3" => colorant"#D85A30",
-    "R4" => colorant"#9933AA",
-)
+# Positional colour cycle — handles any number of rules
+const _COLOR_CYCLE_E7 = [
+    colorant"#3266AD", colorant"#1D9E75", colorant"#D85A30", colorant"#9933AA",
+    colorant"#E6AB02", colorant"#66A61E", colorant"#E7298A", colorant"#A6761D",
+]
+rule_color_e7(i::Int) = _COLOR_CYCLE_E7[mod1(i, length(_COLOR_CYCLE_E7))]
 
 const CONV_WINDOW = 15
 const GNORM_FLOOR = 1e-14
@@ -180,9 +180,9 @@ for (j, rname) in enumerate(rule_names)
     isempty(qs) && continue
     jitter = 0.15 * (rand(length(qs)) .- 0.5)
     scatter!(p_box, fill(j, length(qs)) .+ jitter, qs;
-             color=RULE_COLORS[rname], alpha=0.5, ms=4, label=rname)
+             color=rule_color_e7(j), alpha=0.5, ms=4, label=rname)
     plot!(p_box, [j-0.3, j+0.3], fill(median(qs), 2);
-          color=RULE_COLORS[rname], linewidth=2.5, label="")
+          color=rule_color_e7(j), linewidth=2.5, label="")
 end
 hline!(p_box, [1.0]; linestyle=:dash, color=:black, label="q=1 (linear)")
 xticks!(p_box, 1:length(rule_names), rule_names)
@@ -197,7 +197,8 @@ p_sc = plot(; xlabel="n", ylabel="q", title="Convergence order vs problem size",
 for rname in rule_names
     qs = q_data[rname]; ns = n_data[rname]
     isempty(qs) && continue
-    scatter!(p_sc, ns, qs; label=rname, color=RULE_COLORS[rname], alpha=0.6, ms=4)
+    scatter!(p_sc, ns, qs; label=rname,
+             color=rule_color_e7(findfirst(==(rname), rule_names)), alpha=0.6, ms=4)
 end
 hline!(p_sc, [1.0]; linestyle=:dash, color=:black, label="q=1")
 savefig(p_sc, joinpath(FIGURES_DIR, "exp7_conv_order_scatter.pdf"))

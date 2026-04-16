@@ -38,22 +38,18 @@ using Statistics
 pgfplotsx()   # uncomment if PGFPlotsX is installed (better PDF quality)
 # gr()
 
-const RESULTS_DIR = joinpath(@__DIR__, "results")
-const FIGURES_DIR = joinpath(@__DIR__, "figures")
+RESULTS_DIR = get(ENV, "TR_RESULTS_DIR", joinpath(@__DIR__, "results"))
+FIGURES_DIR = joinpath(@__DIR__, "figures")
 mkpath(FIGURES_DIR)
 
-const RULE_COLORS = Dict(
-    "R1" => colorant"#3266AD",
-    "R2" => colorant"#1D9E75",
-    "R3" => colorant"#D85A30",
-    "R4" => colorant"#9933AA",
-)
-const RULE_STYLES = Dict(
-    "R1" => :solid,
-    "R2" => :solid,
-    "R3" => :dash,
-    "R4" => :dot,
-)
+# Positional colour / style cycle — handles any number of rules
+const _COLOR_CYCLE_E2 = [
+    colorant"#3266AD", colorant"#1D9E75", colorant"#D85A30", colorant"#9933AA",
+    colorant"#E6AB02", colorant"#66A61E", colorant"#E7298A", colorant"#A6761D",
+]
+const _STYLE_CYCLE_E2 = [:solid, :dash, :dot, :dashdot, :solid, :dash, :dot, :dashdot]
+rule_color_e2(i::Int) = _COLOR_CYCLE_E2[mod1(i, length(_COLOR_CYCLE_E2))]
+rule_style_e2(i::Int) = _STYLE_CYCLE_E2[mod1(i, length(_STYLE_CYCLE_E2))]
 
 # ---------------------------------------------------------------------------
 # Load data
@@ -105,8 +101,8 @@ for prob in rep_probs
         traj = entry.delta_trajectory
         plot!(pd, 0:length(traj)-1, traj;
               label     = rname,
-              color     = RULE_COLORS[rname],
-              linestyle = RULE_STYLES[rname],
+              color     = rule_color_e2(findfirst(==(rname), rule_names)),
+              linestyle = rule_style_e2(findfirst(==(rname), rule_names)),
               linewidth = 1.5)
     end
     savefig(pd, joinpath(FIGURES_DIR, "exp2_delta_traj_$(prob).pdf"))
@@ -125,8 +121,8 @@ for prob in rep_probs
         traj = entry.grad_norm_trajectory
         plot!(pg, 0:length(traj)-1, max.(traj, 1e-16);
               label     = rname,
-              color     = RULE_COLORS[rname],
-              linestyle = RULE_STYLES[rname],
+              color     = rule_color_e2(findfirst(==(rname), rule_names)),
+              linestyle = rule_style_e2(findfirst(==(rname), rule_names)),
               linewidth = 1.5)
     end
     savefig(pg, joinpath(FIGURES_DIR, "exp2_grad_traj_$(prob).pdf"))
@@ -148,8 +144,8 @@ for prob in rep_probs
         ratio = dt[1:n] ./ max.(gt[1:n], 1e-16)
         plot!(pr, 0:n-1, ratio;
               label     = rname,
-              color     = RULE_COLORS[rname],
-              linestyle = RULE_STYLES[rname],
+              color     = rule_color_e2(findfirst(==(rname), rule_names)),
+              linestyle = rule_style_e2(findfirst(==(rname), rule_names)),
               linewidth = 1.5)
     end
     savefig(pr, joinpath(FIGURES_DIR, "exp2_ratio_traj_$(prob).pdf"))
@@ -179,8 +175,8 @@ for (idx, prob) in enumerate(rep_probs)
         plot!(p_cum, 0:length(cs)-1, cs;
               subplot   = idx,
               label     = rname,
-              color     = RULE_COLORS[rname],
-              linestyle = RULE_STYLES[rname],
+              color     = rule_color_e2(findfirst(==(rname), rule_names)),
+              linestyle = rule_style_e2(findfirst(==(rname), rule_names)),
               linewidth = 1.5,
               title     = prob,
               xlabel    = "k",

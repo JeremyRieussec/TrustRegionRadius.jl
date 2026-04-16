@@ -38,24 +38,18 @@ using ADNLPModels
 pgfplotsx()   # uncomment if PGFPlotsX is installed
 # gr()
 
-const RESULTS_DIR = joinpath(@__DIR__, "results")
-const FIGURES_DIR = joinpath(@__DIR__, "figures")
-const TABLES_DIR  = joinpath(@__DIR__, "tables")
+RESULTS_DIR = get(ENV, "TR_RESULTS_DIR", joinpath(@__DIR__, "results"))
+FIGURES_DIR = joinpath(@__DIR__, "figures")
+TABLES_DIR  = joinpath(@__DIR__, "tables")
 mkpath(FIGURES_DIR)
 mkpath(TABLES_DIR)
 
-const RULE_COLORS = Dict(
-    "R1" => colorant"#3266AD",
-    "R2" => colorant"#1D9E75",
-    "R3" => colorant"#D85A30",
-    "R4" => colorant"#9933AA",
-)
-const RULE_STYLES = Dict(
-    "R1" => :solid,
-    "R2" => :solid,
-    "R3" => :dash,
-    "R4" => :dot,
-)
+# Positional colour cycle — handles any number of rules
+const _COLOR_CYCLE_E5 = [
+    colorant"#3266AD", colorant"#1D9E75", colorant"#D85A30", colorant"#9933AA",
+    colorant"#E6AB02", colorant"#66A61E", colorant"#E7298A", colorant"#A6761D",
+]
+rule_color_e5(i::Int) = _COLOR_CYCLE_E5[mod1(i, length(_COLOR_CYCLE_E5))]
 
 # Threshold: problems where the *hardest* mechanism needed ≥ ITER_HARD iters
 const ITER_HARD = 100
@@ -182,7 +176,7 @@ pb = bar(rule_names, med_iters;
          ylabel    = "Median iterations",
          title     = "Ill-conditioned: median iterations",
          legend    = false,
-         color     = [RULE_COLORS[r] for r in rule_names],
+         color     = [rule_color_e5(j) for j in 1:length(rule_names)],
          bar_width = 0.6)
 savefig(pb, joinpath(FIGURES_DIR, "exp5_iter_comparison_illcond.pdf"))
 @info "Saved exp5_iter_comparison_illcond.pdf"

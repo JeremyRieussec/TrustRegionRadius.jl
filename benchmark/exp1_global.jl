@@ -31,27 +31,26 @@ pgfplotsx()   # comment out and use gr() / pyplot() if PGFPlotsX is not installe
 # ---------------------------------------------------------------------------
 # I/O directories
 # ---------------------------------------------------------------------------
-const RESULTS_DIR = joinpath(@__DIR__, "results")
-const FIGURES_DIR = joinpath(@__DIR__, "figures")
-const TABLES_DIR  = joinpath(@__DIR__, "tables")
+# RESULTS_DIR can be overridden by TR_RESULTS_DIR env var so that
+# generate_all_figures.jl can point exp scripts at temp_results/.
+RESULTS_DIR = get(ENV, "TR_RESULTS_DIR", joinpath(@__DIR__, "results"))
+FIGURES_DIR = joinpath(@__DIR__, "figures")
+TABLES_DIR  = joinpath(@__DIR__, "tables")
 mkpath(FIGURES_DIR)
 mkpath(TABLES_DIR)
 
 # ---------------------------------------------------------------------------
-# Colour / style constants (shared across all experiments)
+# Colour / style cycle — supports any number of rules
 # ---------------------------------------------------------------------------
-const RULE_COLORS = Dict(
-    "R1" => colorant"#3266AD",
-    "R2" => colorant"#1D9E75",
-    "R3" => colorant"#D85A30",
-    "R4" => colorant"#9933AA",
-)
-const RULE_STYLES = Dict(
-    "R1" => :solid,
-    "R2" => :solid,
-    "R3" => :dash,
-    "R4" => :dot,
-)
+# Assign colours and line styles positionally so that rules added to config.jl
+# (R4-Alt, Hei, HeiG, HFY, …) automatically get a distinct appearance.
+const _COLOR_CYCLE = [
+    colorant"#3266AD", colorant"#1D9E75", colorant"#D85A30", colorant"#9933AA",
+    colorant"#E6AB02", colorant"#66A61E", colorant"#E7298A", colorant"#A6761D",
+]
+const _STYLE_CYCLE = [:solid, :dash, :dot, :dashdot, :solid, :dash, :dot, :dashdot]
+rule_color(i::Int) = _COLOR_CYCLE[mod1(i, length(_COLOR_CYCLE))]
+rule_style(i::Int) = _STYLE_CYCLE[mod1(i, length(_STYLE_CYCLE))]
 
 # ---------------------------------------------------------------------------
 # Load benchmark data
@@ -91,7 +90,7 @@ T_fevals = metric_matrix(e -> Float64(e.f_evals))
 function make_perf_profile(T, metric_label, fname)
     # Pass colours through `palette` so they go through the normal Plots
     # pipeline — avoid post-hoc series_list mutation which confuses PGFPlotsX.
-    rule_palette = [RULE_COLORS[r] for r in rule_names]
+    rule_palette = [rule_color(j) for j in 1:length(rule_names)]
     p = performance_profile(
         PlotsBackend(),
         T, rule_names;
@@ -150,8 +149,9 @@ end
 # N[p] = n + 1 (simplex-gradient scaling); fall back to 2 if n unknown
 N_scale = Float64[max(results[p][rule_names[1]].n + 1, 2) for p in common_probs]
 
-rule_palette = [RULE_COLORS[r] for r in rule_names]
+rule_palette = [rule_color(j) for j in 1:length(rule_names)]
 p_data = data_profile(
+    PlotsBackend(),
     H,
     N_scale,
     AbstractString[r for r in rule_names];

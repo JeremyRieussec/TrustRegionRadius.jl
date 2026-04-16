@@ -1,15 +1,21 @@
 # =============================================================================
 # benchmark/run_benchmark.jl
 #
-# Runs all four canonical radius update mechanisms (R1–R4) on every
-# unconstrained CUTEst problem with 2 ≤ n ≤ 500 and saves one JLD2
-# file per (problem, mechanism) pair to benchmark/results/.
+# Runs all radius update rules on every unconstrained CUTEst problem with
+# 2 ≤ n ≤ 500 and saves one JLD2 file per (problem, rule) pair to
+# benchmark/temp_results/.
+#
+# After the run, an `experiment_config.toml` is written to temp_results/ so
+# that generate_all_figures.jl can archive everything self-consistently.
 #
 # Usage (from repo root):
 #   julia --project=benchmark benchmark/run_benchmark.jl
 #
+# To discard all existing temp results and restart from scratch:
+#   julia --project=benchmark benchmark/run_benchmark.jl --force
+#
 # Results are saved as:
-#   benchmark/results/<PROBLEM>_<RULE>.jld2
+#   benchmark/temp_results/<PROBLEM>_<RULE>.jld2
 #
 # Each JLD2 file contains scalar fields only (no struct dependency at
 # load time), making the files self-contained.
@@ -34,16 +40,38 @@ using Printf
 # Configuration  (edit benchmark/config.jl to change any of these values)
 # =============================================================================
 
-const RESULTS_DIR = joinpath(@__DIR__, "results")
-mkpath(RESULTS_DIR)
+const TEMP_RESULTS_DIR = joinpath(@__DIR__, "temp_results")
+mkpath(TEMP_RESULTS_DIR)
 
 include(joinpath(@__DIR__, "config.jl"))
+include(joinpath(@__DIR__, "config_utils.jl"))
+
+# =============================================================================
+# --force flag: optionally wipe existing temp results before starting
+# =============================================================================
+
+const FORCE = "--force" in ARGS
+
+existing_jld2 = filter(f -> endswith(f, ".jld2"), readdir(TEMP_RESULTS_DIR))
+
+if !isempty(existing_jld2) && FORCE
+    @info "Clearing $(length(existing_jld2)) existing JLD2 file(s) from temp_results/…"
+    for f in existing_jld2
+        rm(joinpath(TEMP_RESULTS_DIR, f))
+    end
+    cfg_old = joinpath(TEMP_RESULTS_DIR, "experiment_config.toml")
+    isfile(cfg_old) && rm(cfg_old)
+elseif !isempty(existing_jld2)
+    @info "temp_results/ has $(length(existing_jld2)) existing file(s) — already-computed " *
+          "(problem, rule) pairs will be skipped.  Pass --force to restart from scratch."
+end
 
 # =============================================================================
 # Problem selection
 # =============================================================================
 
 @info "Problem selection: min_var=$MIN_VAR, max_var=$MAX_VAR, max_con=$MAX_CON"
+@info "Rules: $(join(first.(RULES), ", "))"
 
 @info "Querying CUTEst problem list…"
 prob_list = try
@@ -58,11 +86,8 @@ if isempty(prob_list)
           "(MASTSIF environment variable must be set) and try again.")
 end
 
-@info "Found $(length(prob_list)) candidate problems satisfying : " *
-      "  nvar ∈ [$MIN_VAR, $MAX_VAR], ncon ≤ $MAX_CON." *
-      "  RULES are $(join(keys(RULES), ", "))."
+@info "Found $(length(prob_list)) candidate problems."
 
-      
 # =============================================================================
 # Benchmark loop
 # =============================================================================
@@ -81,7 +106,7 @@ for (prob_idx, prob_name) in enumerate(sort(prob_list))
 
     for (rule_name, make_rule) in RULES
 
-        out_path = joinpath(RESULTS_DIR, "$(prob_name)_$(rule_name).jld2")
+        out_path = joinpath(TEMP_RESULTS_DIR, "$(prob_name)_$(rule_name).jld2")
 
         if isfile(out_path)
             println("  $rule_name: result exists — skipping")
@@ -89,7 +114,7 @@ for (prob_idx, prob_name) in enumerate(sort(prob_list))
             try
                 d = load(out_path)
                 st = d["status"]
-                if st == "solved";   n_solved[rule_name]  += 1
+                if st == "solved";       n_solved[rule_name]  += 1
                 elseif st == "max_iter"; n_maxiter[rule_name] += 1
                 else;                    n_failed[rule_name]  += 1
                 end
@@ -191,17 +216,28 @@ println("BENCHMARK COMPLETE")
 println("="^60)
 println("Total problems attempted: $n_total")
 println()
-println(@sprintf("%-6s  %6s  %6s  %6s  %6s  %6s",
+println(@sprintf("%-8s  %6s  %6s  %6s  %6s  %6s",
         "Rule", "Solved", "MaxIter", "Failed", "Total", "Rate%"))
-println("-"^48)
+println("-"^52)
 for (rule_name, _) in RULES
     ns = n_solved[rule_name]
     nm = n_maxiter[rule_name]
     nf = n_failed[rule_name]
     tot = ns + nm + nf
     rate = tot > 0 ? round(100 * ns / tot, digits=1) : 0.0
-    println(@sprintf("%-6s  %6d  %6d  %6d  %6d  %6.1f",
+    println(@sprintf("%-8s  %6d  %6d  %6d  %6d  %6.1f",
             rule_name, ns, nm, nf, tot, rate))
 end
 println("="^60)
-println("Results saved to: $RESULTS_DIR")
+println("Results saved to: $TEMP_RESULTS_DIR")
+
+# =============================================================================
+# Write experiment config — records exactly what was run and with what params
+# =============================================================================
+
+config_path = joinpath(TEMP_RESULTS_DIR, "experiment_config.toml")
+save_experiment_config(config_path, RULES, SOLVER_PARAMS, MIN_VAR, MAX_VAR, MAX_CON)
+
+println()
+println("Next step:")
+println("  julia --project=benchmark benchmark/generate_all_figures.jl")

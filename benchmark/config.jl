@@ -27,19 +27,22 @@ const SOLVER_PARAMS = TRSolverParams(
 const RULES = [
     ("R1",  () -> R1ClassicalUpdate(0.25, 0.50, 2.0)),
     ("R2",  () -> R2StepSizeUpdate(0.25, 0.80, 2.0)),
-    ("R3",  () -> R3DFOLikeUpdate(0.25, 0.50, 2.0, 1.0)),
-    ("R4",  () -> R4RelativeGradUpdate(0.25, 2.0, 1.0)),
-    ("R4-Alt", () -> R4RelativeGradUpdate(0.25, 2.0, 0.5)),
-    #           η     β     γ₁    γ₂    M      λ₁    λ₂
-    ("Hei",    () -> HeiUpdate(       0.1, 0.1, 0.1, 0.5, 10.0, 0.5, 0.1)),
-    ("HeiG",   () -> HeiGradUpdate(   0.1, 0.1, 0.1, 0.5, 10.0, 0.5, 0.1)),
-    ("HFY",    () -> HeiFanYuanUpdate(0.1, 0.1, 0.1, 0.1, 0.5, 10.0, 0.5, 0.1)),
+    # ("R3",  () -> R3DFOLikeUpdate(0.25, 0.50, 2.0, 1.0)),
+    # ("R4",  () -> R4RelativeGradUpdate(0.25, 2.0, 1.0)),
+    # ("R4-Alt", () -> R4RelativeGradUpdate(0.25, 2.0, 0.5)),
+    # #           η     β     γ₁    γ₂    M      λ₁    λ₂
+    # ("Hei",    () -> HeiUpdate(       0.1, 0.1, 0.1, 0.5, 10.0, 0.5, 0.1)),
+    # ("HeiG",   () -> HeiGradUpdate(   0.1, 0.1, 0.1, 0.5, 10.0, 0.5, 0.1)),
+    # ("HFY",    () -> HeiFanYuanUpdate(0.1, 0.1, 0.1, 0.1, 0.5, 10.0, 0.5, 0.1)),
     #                                  μ    η    β    γ₁   γ₂    M    λ₁   λ₂
 ]
 
 # -----------------------------------------------------------------------------
 # CUTEst problem selection
 # -----------------------------------------------------------------------------
-const MIN_VAR = 2      # minimum number of variables
+const MIN_VAR = 500      # minimum number of variables
 const MAX_VAR = 500    # maximum number of variables
 const MAX_CON = 0      # maximum number of constraints (0 = unconstrained only)
+
+# to start run :
+#  julia --project=benchmark benchmark/run_benchmark.jl [--force]
