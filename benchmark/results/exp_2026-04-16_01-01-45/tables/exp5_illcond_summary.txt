@@ -1,0 +1,11 @@
+% Exp 5 — Ill-conditioned subset (auto-generated)
+\begin{tabular}{lrrrrr}
+\toprule
+Rule & Solved & Max-iter & Failed & Total & Rate (\%) \\
+\midrule
+R1 & 10 & 0 & 0 & 10 & 100.0\% \\
+R2 & 10 & 0 & 0 & 10 & 100.0\% \\
+R3 & 10 & 0 & 0 & 10 & 100.0\% \\
+R4 & 10 & 0 & 0 & 10 & 100.0\% \\
+\bottomrule
+\end{tabular}

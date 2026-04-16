@@ -23,24 +23,16 @@
 #   julia --project=benchmark benchmark/exp2_radius_regime.jl
 # =============================================================================
 
-using Pkg
-Pkg.activate(@__DIR__)
-
-include(joinpath(@__DIR__, "load_results.jl"))
-
-using Plots
-using PGFPlotsX
-
-using Printf
-using LinearAlgebra
-using Statistics
-
 pgfplotsx()   # uncomment if PGFPlotsX is installed (better PDF quality)
 # gr()
 
+# ---------------------------------------------------------------------------
+# I/O directories
+# ---------------------------------------------------------------------------
+# RESULTS_DIR can be overridden by TR_RESULTS_DIR env var so that
+# generate_all_figures.jl can point exp scripts at temp_results/.
 RESULTS_DIR = get(ENV, "TR_RESULTS_DIR", joinpath(@__DIR__, "results"))
-FIGURES_DIR = joinpath(@__DIR__, "figures")
-mkpath(FIGURES_DIR)
+FIGURES_DIR = joinpath(RESULTS_DIR, "figures")
 
 # Positional colour / style cycle — handles any number of rules
 const _COLOR_CYCLE_E2 = [
@@ -55,7 +47,7 @@ rule_style_e2(i::Int) = _STYLE_CYCLE_E2[mod1(i, length(_STYLE_CYCLE_E2))]
 # Load data
 # ---------------------------------------------------------------------------
 @info "Loading results…"
-results, prob_names, rule_names = load_all_results(RESULTS_DIR)
+results, prob_names, rule_names = load_all_results(joinpath(RESULTS_DIR, "jld2"))
 
 # Select representative problems: all-solved, 50 ≤ n ≤ 200, moderate iter
 all_solved = problems_all_solved(results, prob_names, rule_names)

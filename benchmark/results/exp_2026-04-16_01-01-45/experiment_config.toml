@@ -1,0 +1,26 @@
+generated_at = "2026-04-16T01:02:01.946"
+
+[problem_selection]
+min_var = 500
+max_var = 500
+max_con = 0
+
+[[rules]]
+name = "R1"
+gamma1 = 0.25
+gamma2 = 0.5
+gamma3 = 2.0
+type = "R1ClassicalUpdate"
+[[rules]]
+name = "R2"
+gamma1 = 0.25
+gamma2 = 0.8
+gamma3 = 2.0
+type = "R2StepSizeUpdate"
+
+[solver_params]
+tol = 1.0e-5
+max_iterations = 10000
+eta2 = 0.9
+eta1 = 0.1
+Delta0 = 1.0

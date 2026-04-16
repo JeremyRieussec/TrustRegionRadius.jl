@@ -1,0 +1,39 @@
+generated_at = "2026-04-16T02:08:59.853"
+
+[problem_selection]
+min_var = 500
+max_var = 500
+max_con = 0
+
+[[rules]]
+name = "R1"
+gamma1 = 0.25
+gamma2 = 0.5
+gamma3 = 2.0
+type = "R1ClassicalUpdate"
+[[rules]]
+name = "R2"
+gamma1 = 0.25
+gamma2 = 0.8
+gamma3 = 2.0
+type = "R2StepSizeUpdate"
+[[rules]]
+name = "R3"
+gamma1 = 0.25
+gamma2 = 0.5
+zeta = 1.0
+gamma3 = 2.0
+type = "R3DFOLikeUpdate"
+[[rules]]
+name = "R4"
+gamma1 = 0.25
+gamma2 = 2.0
+type = "R4RelativeGradUpdate"
+mu = 1.0
+
+[solver_params]
+tol = 1.0e-5
+max_iterations = 10000
+eta2 = 0.9
+eta1 = 0.1
+Delta0 = 1.0

@@ -13,18 +13,6 @@
 #   julia --project=benchmark benchmark/exp1_global.jl
 # =============================================================================
 
-using Pkg
-Pkg.activate(@__DIR__)
-
-include(joinpath(@__DIR__, "load_results.jl"))
-
-using BenchmarkProfiles
-using Plots
-using PGFPlotsX
-using Printf
-using LinearAlgebra
-using Statistics
-
 pgfplotsx()   # comment out and use gr() / pyplot() if PGFPlotsX is not installed
 # gr()
 
@@ -34,10 +22,8 @@ pgfplotsx()   # comment out and use gr() / pyplot() if PGFPlotsX is not installe
 # RESULTS_DIR can be overridden by TR_RESULTS_DIR env var so that
 # generate_all_figures.jl can point exp scripts at temp_results/.
 RESULTS_DIR = get(ENV, "TR_RESULTS_DIR", joinpath(@__DIR__, "results"))
-FIGURES_DIR = joinpath(@__DIR__, "figures")
-TABLES_DIR  = joinpath(@__DIR__, "tables")
-mkpath(FIGURES_DIR)
-mkpath(TABLES_DIR)
+FIGURES_DIR = joinpath(RESULTS_DIR, "figures")
+TABLES_DIR  = joinpath(RESULTS_DIR, "tables")
 
 # ---------------------------------------------------------------------------
 # Colour / style cycle — supports any number of rules
@@ -56,7 +42,7 @@ rule_style(i::Int) = _STYLE_CYCLE[mod1(i, length(_STYLE_CYCLE))]
 # Load benchmark data
 # ---------------------------------------------------------------------------
 @info "Loading results…"
-results, prob_names, rule_names = load_all_results(RESULTS_DIR)
+results, prob_names, rule_names = load_all_results(joinpath(RESULTS_DIR, "jld2"))
 
 # Work only on problems where every mechanism has a result (any status)
 common_probs = filter(prob_names) do p

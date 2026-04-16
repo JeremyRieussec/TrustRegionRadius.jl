@@ -51,21 +51,20 @@ file needs to change.
 ### Step 2 — Generate figures and archive
 
 ```bash
-julia --project=benchmark benchmark/generate_all_figures.jl
+julia --project=benchmark benchmark/generate_all_figures.jl exp_2026-04-16_00-40-55
 ```
 
-- Reads JLD2 results from `benchmark/temp_results/`.
-- Runs exp1–exp7 in sequence, writing PDFs to `benchmark/figures/` and LaTeX tables to
-  `benchmark/tables/`.
-- Creates a timestamped archive directory `benchmark/results/exp_YYYY-MM-DD_HH-MM-SS/`
-  containing: all JLD2 files, all figures, all tables, the config TOML, and a
-  human-readable `experiment_summary.md`.
-- Clears `benchmark/temp_results/` after a successful archive.
+Pass the name of the archive directory created by Step 1 (relative to `benchmark/results/`).
+
+- Points exp scripts at `benchmark/results/<archive_name>/jld2/` for result loading.
+- Runs exp1–exp7, staging PDFs in `benchmark/figures/` and tables in `benchmark/tables/`.
+- Copies all outputs into `benchmark/results/<archive_name>/figures/` and `tables/`.
+- Writes `experiment_summary.md` into the archive.
 
 To skip specific experiments (e.g. while iterating on one script):
 
 ```bash
-SKIP_EXP3=1 SKIP_EXP4=1 julia --project=benchmark benchmark/generate_all_figures.jl
+SKIP_EXP3=1 SKIP_EXP4=1 julia --project=benchmark benchmark/generate_all_figures.jl exp_2026-04-16_00-40-55
 ```
 
 ### Configuration

@@ -24,6 +24,9 @@
 using Pkg
 Pkg.activate(@__DIR__)
 
+using Dates
+using TOML
+
 # Auto-develop the parent package if it is not yet in the environment
 if !haskey(Pkg.project().dependencies, "TrustRegionRadius")
     @info "Developing TrustRegionRadius from parent directory…"
@@ -40,8 +43,17 @@ using Printf
 # Configuration  (edit benchmark/config.jl to change any of these values)
 # =============================================================================
 
-const TEMP_RESULTS_DIR = joinpath(@__DIR__, "temp_results")
+const TEMP_RESULTS_DIR = joinpath(@__DIR__, "results")
 mkpath(TEMP_RESULTS_DIR)
+
+# ---------------------------------------------------------------------------
+# Create timestamped archive directory
+# ---------------------------------------------------------------------------
+timestamp    = Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")
+archive_dir  = joinpath(TEMP_RESULTS_DIR, "exp_$timestamp")
+mkpath(archive_dir)
+archive_jld2 = joinpath(archive_dir, "jld2")
+mkpath(archive_jld2)
 
 include(joinpath(@__DIR__, "config.jl"))
 include(joinpath(@__DIR__, "config_utils.jl"))
@@ -50,21 +62,21 @@ include(joinpath(@__DIR__, "config_utils.jl"))
 # --force flag: optionally wipe existing temp results before starting
 # =============================================================================
 
-const FORCE = "--force" in ARGS
+# const FORCE = "--force" in ARGS
 
-existing_jld2 = filter(f -> endswith(f, ".jld2"), readdir(TEMP_RESULTS_DIR))
+# existing_jld2 = filter(f -> endswith(f, ".jld2"), readdir(TEMP_RESULTS_DIR))
 
-if !isempty(existing_jld2) && FORCE
-    @info "Clearing $(length(existing_jld2)) existing JLD2 file(s) from temp_results/…"
-    for f in existing_jld2
-        rm(joinpath(TEMP_RESULTS_DIR, f))
-    end
-    cfg_old = joinpath(TEMP_RESULTS_DIR, "experiment_config.toml")
-    isfile(cfg_old) && rm(cfg_old)
-elseif !isempty(existing_jld2)
-    @info "temp_results/ has $(length(existing_jld2)) existing file(s) — already-computed " *
-          "(problem, rule) pairs will be skipped.  Pass --force to restart from scratch."
-end
+# if !isempty(existing_jld2) && FORCE
+#     @info "Clearing $(length(existing_jld2)) existing JLD2 file(s) from temp_results/…"
+#     for f in existing_jld2
+#         rm(joinpath(TEMP_RESULTS_DIR, f))
+#     end
+#     cfg_old = joinpath(TEMP_RESULTS_DIR, "experiment_config.toml")
+#     isfile(cfg_old) && rm(cfg_old)
+# elseif !isempty(existing_jld2)
+#     @info "temp_results/ has $(length(existing_jld2)) existing file(s) — already-computed " *
+#           "(problem, rule) pairs will be skipped.  Pass --force to restart from scratch."
+# end
 
 # =============================================================================
 # Problem selection
@@ -106,7 +118,7 @@ for (prob_idx, prob_name) in enumerate(sort(prob_list))
 
     for (rule_name, make_rule) in RULES
 
-        out_path = joinpath(TEMP_RESULTS_DIR, "$(prob_name)_$(rule_name).jld2")
+        out_path = joinpath(archive_jld2, "$(prob_name)_$(rule_name).jld2")
 
         if isfile(out_path)
             println("  $rule_name: result exists — skipping")
@@ -229,15 +241,16 @@ for (rule_name, _) in RULES
             rule_name, ns, nm, nf, tot, rate))
 end
 println("="^60)
-println("Results saved to: $TEMP_RESULTS_DIR")
+println("Results saved to: $archive_jld2")
 
 # =============================================================================
 # Write experiment config — records exactly what was run and with what params
 # =============================================================================
 
-config_path = joinpath(TEMP_RESULTS_DIR, "experiment_config.toml")
+config_path = joinpath(archive_dir, "experiment_config.toml")
 save_experiment_config(config_path, RULES, SOLVER_PARAMS, MIN_VAR, MAX_VAR, MAX_CON)
 
 println()
 println("Next step:")
 println("  julia --project=benchmark benchmark/generate_all_figures.jl")
+println("Saving in dir: " * archive_dir)

@@ -1,0 +1,11 @@
+% Exp 7 — Convergence order (auto-generated, window=15)
+\begin{tabular}{lrrrrr}
+\toprule
+Rule & n & Median q & Mean q & Std q & q>1 (\%) \\
+\midrule
+R1 & 6 & 1.331 & 1.400 & 0.303 & 100.0\% \\
+R2 & 6 & 1.842 & 1.720 & 0.327 & 100.0\% \\
+R3 & 7 & 1.430 & 1.630 & 0.663 & 100.0\% \\
+R4 & 5 & 1.535 & 1.542 & 0.296 & 100.0\% \\
+\bottomrule
+\end{tabular}

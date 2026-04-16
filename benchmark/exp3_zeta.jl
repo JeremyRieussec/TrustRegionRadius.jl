@@ -21,21 +21,11 @@
 #   julia --project=benchmark benchmark/exp3_zeta.jl
 # =============================================================================
 
-using Pkg
-Pkg.activate(@__DIR__)
-
-using TrustRegionRadius
-using LinearAlgebra
-using Plots
-using PGFPlotsX
-
-using Printf
-using Statistics
-using BenchmarkProfiles
 using ADNLPModels
+using TrustRegionRadius
 
 pgfplotsx()   # uncomment if PGFPlotsX is installed
-# gr()
+# gr()  
 
 # CUTEst is optional — attempt to load at top level
 CUTEST_AVAILABLE = false
@@ -46,10 +36,14 @@ catch
     @info "CUTEst not available; will use ADNLPModels problems"
 end
 
-const FIGURES_DIR = joinpath(@__DIR__, "figures")
-const TABLES_DIR  = joinpath(@__DIR__, "tables")
-mkpath(FIGURES_DIR)
-mkpath(TABLES_DIR)
+# ---------------------------------------------------------------------------
+# I/O directories
+# ---------------------------------------------------------------------------
+# RESULTS_DIR can be overridden by TR_RESULTS_DIR env var so that
+# generate_all_figures.jl can point exp scripts at temp_results/.
+RESULTS_DIR = get(ENV, "TR_RESULTS_DIR", joinpath(@__DIR__, "results"))
+FIGURES_DIR = joinpath(RESULTS_DIR, "figures")
+TABLES_DIR  = joinpath(RESULTS_DIR, "tables")
 
 # ---------------------------------------------------------------------------
 # Solver parameters (fixed across all ζ)

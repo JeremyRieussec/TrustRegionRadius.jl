@@ -16,19 +16,6 @@
 #   julia --project=benchmark benchmark/exp6_delta0.jl
 # =============================================================================
 
-using Pkg
-Pkg.activate(@__DIR__)
-
-using TrustRegionRadius
-using LinearAlgebra
-using BenchmarkProfiles
-using Plots
-using PGFPlotsX
-
-using Printf
-using Statistics
-using ADNLPModels
-
 pgfplotsx()   # uncomment if PGFPlotsX is installed
 # gr()
 
@@ -40,10 +27,14 @@ catch
     @info "CUTEst not available; will use ADNLPModels problems"
 end
 
-const FIGURES_DIR = joinpath(@__DIR__, "figures")
-const TABLES_DIR  = joinpath(@__DIR__, "tables")
-mkpath(FIGURES_DIR)
-mkpath(TABLES_DIR)
+# ---------------------------------------------------------------------------
+# I/O directories
+# ---------------------------------------------------------------------------
+# RESULTS_DIR can be overridden by TR_RESULTS_DIR env var so that
+# generate_all_figures.jl can point exp scripts at temp_results/.
+RESULTS_DIR = get(ENV, "TR_RESULTS_DIR", joinpath(@__DIR__, "results"))
+FIGURES_DIR = joinpath(RESULTS_DIR, "figures")
+TABLES_DIR  = joinpath(RESULTS_DIR, "tables")
 
 const DELTA0_VALUES = [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
 const RULE_COLORS   = Dict("R1"=>colorant"#3266AD","R2"=>colorant"#1D9E75","R3"=>colorant"#D85A30")

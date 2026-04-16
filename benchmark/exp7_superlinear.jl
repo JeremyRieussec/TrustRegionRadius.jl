@@ -19,28 +19,17 @@
 #   julia --project=benchmark benchmark/exp7_superlinear.jl
 # =============================================================================
 
-using Pkg
-Pkg.activate(@__DIR__)
-
-include(joinpath(@__DIR__, "load_results.jl"))
-
-using TrustRegionRadius
-using LinearAlgebra
-using Plots
-using PGFPlotsX
-
-using Printf
-using Statistics
-using ADNLPModels
-
 pgfplotsx()   # uncomment if PGFPlotsX is installed
 # gr()
 
+# ---------------------------------------------------------------------------
+# I/O directories
+# ---------------------------------------------------------------------------
+# RESULTS_DIR can be overridden by TR_RESULTS_DIR env var so that
+# generate_all_figures.jl can point exp scripts at temp_results/.
 RESULTS_DIR = get(ENV, "TR_RESULTS_DIR", joinpath(@__DIR__, "results"))
-FIGURES_DIR = joinpath(@__DIR__, "figures")
-TABLES_DIR  = joinpath(@__DIR__, "tables")
-mkpath(FIGURES_DIR)
-mkpath(TABLES_DIR)
+FIGURES_DIR = joinpath(RESULTS_DIR, "figures")
+TABLES_DIR  = joinpath(RESULTS_DIR, "tables")
 
 # Positional colour cycle — handles any number of rules
 const _COLOR_CYCLE_E7 = [
@@ -60,9 +49,9 @@ results    = nothing
 prob_names = nothing
 rule_names = nothing
 
-if isdir(RESULTS_DIR) && !isempty(filter(f -> endswith(f, ".jld2"), readdir(RESULTS_DIR)))
+if isdir(joinpath(RESULTS_DIR, "jld2")) && !isempty(filter(f -> endswith(f, ".jld2"), readdir(joinpath(RESULTS_DIR, "jld2"))))
     @info "Loading existing benchmark results…"
-    results, prob_names, rule_names = load_all_results(RESULTS_DIR)
+    results, prob_names, rule_names = load_all_results(joinpath(RESULTS_DIR, "jld2"))
     all_solved = problems_all_solved(results, prob_names, rule_names)
     results_available = length(all_solved) >= 5
 end

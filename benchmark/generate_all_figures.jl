@@ -1,29 +1,26 @@
 # =============================================================================
 # benchmark/generate_all_figures.jl
 #
-# Master script — reads results from temp_results/, runs all seven experiment
-# scripts to produce figures and tables, then archives everything into a
-# timestamped folder under results/.
-#
-# Prerequisites:
-#   • Run `julia --project=benchmark benchmark/run_benchmark.jl` first to
-#     produce the JLD2 results and experiment_config.toml in temp_results/.
-#   • For CUTEst experiments (exp3, exp4, exp6) the MASTSIF environment
-#     variable must be set; otherwise ADNLPModels problems are used as fallback.
+# Generates all figures and tables for a given benchmark run and writes them
+# into the run's archive directory alongside the JLD2 results.
 #
 # Usage (from repo root):
-#   julia --project=benchmark benchmark/generate_all_figures.jl
+#   julia --project=benchmark benchmark/generate_all_figures.jl <archive_name>
+#
+# where <archive_name> is the name of a directory under benchmark/results/,
+# for example:
+#   julia --project=benchmark benchmark/generate_all_figures.jl exp_2026-04-16_00-40-55
+#
+# The script expects the archive to contain a jld2/ subdirectory with the
+# raw result files produced by run_benchmark.jl.
+#
+# Outputs are written to:
+#   benchmark/results/<archive_name>/figures/
+#   benchmark/results/<archive_name>/tables/
+#   benchmark/results/<archive_name>/experiment_summary.md
 #
 # To skip specific experiments while iterating:
-#   SKIP_EXP3=1 SKIP_EXP4=1 julia --project=benchmark benchmark/generate_all_figures.jl
-#
-# Archive layout:
-#   benchmark/results/exp_YYYY-MM-DD_HH-MM-SS/
-#     experiment_config.toml   — parameters used (solver + rules)
-#     experiment_summary.md    — human-readable summary
-#     jld2/                    — all raw JLD2 result files
-#     figures/                 — all generated figures
-#     tables/                  — all generated tables
+#   SKIP_EXP3=1 SKIP_EXP4=1 julia --project=benchmark benchmark/generate_all_figures.jl <archive_name>
 # =============================================================================
 
 using Pkg
@@ -32,6 +29,16 @@ Pkg.activate(@__DIR__)
 using Dates
 using TOML
 
+include(joinpath(@__DIR__, "load_results.jl"))
+
+using BenchmarkProfiles
+using Plots
+using PGFPlotsX
+using Printf
+using LinearAlgebra
+using Statistics
+
+
 t_total = time()
 println("=" ^ 70)
 println("  TrustRegionRadius.jl — generate all figures and tables")
@@ -39,43 +46,64 @@ println("=" ^ 70)
 println()
 
 # ---------------------------------------------------------------------------
-# Directories
+# Parse argument
 # ---------------------------------------------------------------------------
-const BENCH_DIR        = @__DIR__
-const TEMP_RESULTS_DIR = joinpath(BENCH_DIR, "temp_results")
-const FIGURES_DIR      = joinpath(BENCH_DIR, "figures")
-const TABLES_DIR       = joinpath(BENCH_DIR, "tables")
-const ARCHIVE_BASE_DIR = joinpath(BENCH_DIR, "results")
+if isempty(ARGS)
+    error("""
+    Usage: julia --project=benchmark benchmark/generate_all_figures.jl <archive_name>
+
+    <archive_name> is a directory under benchmark/results/, e.g.:
+      exp_2026-04-16_00-40-55
+    """)
+end
+
+archive_name = ARGS[1]
+
+const BENCH_DIR   = @__DIR__
+archive_dir  = joinpath(BENCH_DIR, "results", archive_name)
+archive_jld2 = joinpath(archive_dir, "jld2")
 
 # ---------------------------------------------------------------------------
-# Validate temp_results/
+# Point exp scripts at the archive's jld2/ directory
 # ---------------------------------------------------------------------------
-jld2_files = filter(f -> endswith(f, ".jld2"), readdir(TEMP_RESULTS_DIR))
+ENV["TR_RESULTS_DIR"] = archive_dir
 
+
+if !isdir(archive_dir)
+    error("Archive directory not found: $archive_dir\n" *
+          "Run benchmark/run_benchmark.jl first.")
+end
+
+if !isdir(archive_jld2)
+    error("No jld2/ subdirectory in $archive_dir\n" *
+          "Run benchmark/run_benchmark.jl first.")
+end
+
+jld2_files = filter(f -> endswith(f, ".jld2"), readdir(archive_jld2))
 if isempty(jld2_files)
-    error("No JLD2 files found in temp_results/.\n" *
-          "Run benchmark/run_benchmark.jl first, then re-run this script.")
+    error("No JLD2 files found in $archive_jld2\n" *
+          "Run benchmark/run_benchmark.jl first.")
 end
 
-config_src = joinpath(TEMP_RESULTS_DIR, "experiment_config.toml")
-if !isfile(config_src)
-    @warn "experiment_config.toml not found in temp_results/ — archive will be created without it."
-end
+@info "Archive: $archive_dir"
+@info "Found $(length(jld2_files)) JLD2 result files"
 
-@info "Found $(length(jld2_files)) result files in temp_results/"
+archive_figs = joinpath(archive_dir, "figures")
+mkpath(archive_figs)
+archive_tabs = joinpath(archive_dir, "tables")
+mkpath(archive_tabs)
 
-# ---------------------------------------------------------------------------
-# Point exp scripts at temp_results/ so they load the current run's data
-# ---------------------------------------------------------------------------
-ENV["TR_RESULTS_DIR"] = TEMP_RESULTS_DIR
 
 # ---------------------------------------------------------------------------
-# Clear figures/ and tables/ so the archive only contains this run's outputs
+# Exp scripts write figures/tables to benchmark/figures/ and benchmark/tables/
+# by default. Clear those staging directories before running.
 # ---------------------------------------------------------------------------
-mkpath(FIGURES_DIR)
-mkpath(TABLES_DIR)
-for f in readdir(FIGURES_DIR); rm(joinpath(FIGURES_DIR, f)); end
-for f in readdir(TABLES_DIR);  rm(joinpath(TABLES_DIR,  f)); end
+staging_figs = joinpath(BENCH_DIR, "figures")
+staging_tabs = joinpath(BENCH_DIR, "tables")
+mkpath(staging_figs)
+mkpath(staging_tabs)
+for f in readdir(staging_figs); rm(joinpath(staging_figs, f)); end
+for f in readdir(staging_tabs); rm(joinpath(staging_tabs, f)); end
 
 # ---------------------------------------------------------------------------
 # Helper: run one experiment script
@@ -107,66 +135,49 @@ end
 # Run all experiments
 # ---------------------------------------------------------------------------
 run_experiment("Exp 1 — Global comparison",
-               joinpath(BENCH_DIR, "exp1_global.jl");    skip_env = "SKIP_EXP1")
+               joinpath(BENCH_DIR, "exp1_global.jl");       skip_env = "SKIP_EXP1")
 
-# run_experiment("Exp 2 — Radius regime & trajectories",
-#                joinpath(BENCH_DIR, "exp2_radius_regime.jl"); skip_env = "SKIP_EXP2")
+run_experiment("Exp 2 — Radius regime & trajectories",
+               joinpath(BENCH_DIR, "exp2_radius_regime.jl"); skip_env = "SKIP_EXP2")
 
-# run_experiment("Exp 3 — R3 sensitivity to ζ",
-#                joinpath(BENCH_DIR, "exp3_zeta.jl");      skip_env = "SKIP_EXP3")
+run_experiment("Exp 3 — R3 sensitivity to ζ",
+               joinpath(BENCH_DIR, "exp3_zeta.jl");          skip_env = "SKIP_EXP3")
 
-# run_experiment("Exp 4 — R4 sensitivity to μ₀",
-#                joinpath(BENCH_DIR, "exp4_mu.jl");        skip_env = "SKIP_EXP4")
+run_experiment("Exp 4 — R4 sensitivity to μ₀",
+               joinpath(BENCH_DIR, "exp4_mu.jl");            skip_env = "SKIP_EXP4")
 
-# run_experiment("Exp 5 — Ill-conditioned problems",
-#                joinpath(BENCH_DIR, "exp5_illcond.jl");   skip_env = "SKIP_EXP5")
+run_experiment("Exp 5 — Ill-conditioned problems",
+               joinpath(BENCH_DIR, "exp5_illcond.jl");       skip_env = "SKIP_EXP5")
 
 # run_experiment("Exp 6 — Sensitivity to Δ₀",
-#                joinpath(BENCH_DIR, "exp6_delta0.jl");    skip_env = "SKIP_EXP6")
+#                joinpath(BENCH_DIR, "exp6_delta0.jl");        skip_env = "SKIP_EXP6")
 
 # run_experiment("Exp 7 — Superlinear convergence",
-#                joinpath(BENCH_DIR, "exp7_superlinear.jl"); skip_env = "SKIP_EXP7")
+#                joinpath(BENCH_DIR, "exp7_superlinear.jl");   skip_env = "SKIP_EXP7")
 
 # ---------------------------------------------------------------------------
-# Create timestamped archive directory
+# Copy staging figures/tables into the archive
 # ---------------------------------------------------------------------------
-timestamp    = Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")
-archive_dir  = joinpath(ARCHIVE_BASE_DIR, "exp_$timestamp")
-archive_jld2 = joinpath(archive_dir, "jld2")
-archive_figs = joinpath(archive_dir, "figures")
-archive_tabs = joinpath(archive_dir, "tables")
-
-mkpath(archive_dir)
-mkpath(archive_jld2)
-mkpath(archive_figs)
-mkpath(archive_tabs)
-
-@info "Archiving to $archive_dir …"
-
-# Copy JLD2 results
-for f in jld2_files
-    cp(joinpath(TEMP_RESULTS_DIR, f), joinpath(archive_jld2, f))
+@info "Copying outputs into archive…"
+for f in readdir(staging_figs)
+    cp(joinpath(staging_figs, f), joinpath(archive_figs, f); force = true)
 end
-
-# Copy config
-if isfile(config_src)
-    cp(config_src, joinpath(archive_dir, "experiment_config.toml"))
+for f in readdir(staging_tabs)
+    cp(joinpath(staging_tabs, f), joinpath(archive_tabs, f); force = true)
 end
-
-# Copy figures and tables
-for f in readdir(FIGURES_DIR); cp(joinpath(FIGURES_DIR, f), joinpath(archive_figs, f)); end
-for f in readdir(TABLES_DIR);  cp(joinpath(TABLES_DIR,  f), joinpath(archive_tabs,  f)); end
 
 # ---------------------------------------------------------------------------
 # Write experiment_summary.md
 # ---------------------------------------------------------------------------
-cfg_dict = isfile(config_src) ? TOML.parsefile(config_src) : Dict{String,Any}()
+config_path = joinpath(archive_dir, "experiment_config.toml")
+cfg_dict    = isfile(config_path) ? TOML.parsefile(config_path) : Dict{String,Any}()
 
 summary_path = joinpath(archive_dir, "experiment_summary.md")
 open(summary_path, "w") do io
     println(io, "# Experiment Summary")
     println(io)
-    println(io, "**Archived:** ", Dates.format(now(), "yyyy-mm-dd HH:MM:SS"))
+    println(io, "**Archive:** `", archive_name, "`")
+    println(io, "**Generated:** ", Dates.format(now(), "yyyy-mm-dd HH:MM:SS"))
     println(io)
 
     # --- Solver parameters ---
@@ -189,7 +200,7 @@ open(summary_path, "w") do io
         println(io)
         println(io, "| Criterion | Value |")
         println(io, "|-----------|-------|")
-        for (k, v) in sort(collect(ps))
+        for (k, v) in sort(collect(ps), by = first)
             println(io, "| `", k, "` | ", v, " |")
         end
         println(io)
@@ -204,7 +215,8 @@ open(summary_path, "w") do io
             typ  = get(rule, "type", "?")
             params_str = join(
                 [string(k, " = ", v)
-                 for (k, v) in sort(collect(rule), by = first) if k ∉ ("name", "type")],
+                 for (k, v) in sort(collect(rule), by = first)
+                 if k ∉ ("name", "type")],
                 ", ")
             println(io, "- **", name, "** (`", typ, "`): ", params_str)
         end
@@ -212,17 +224,13 @@ open(summary_path, "w") do io
     end
 
     # --- Output counts ---
-    n_jld2    = length(jld2_files)
-    n_figures = length(readdir(archive_figs))
-    n_tables  = length(readdir(archive_tabs))
-
     println(io, "## Outputs")
     println(io)
     println(io, "| Item | Count |")
     println(io, "|------|-------|")
-    println(io, "| JLD2 result files | ", n_jld2,    " |")
-    println(io, "| Figures           | ", n_figures, " |")
-    println(io, "| Tables            | ", n_tables,  " |")
+    println(io, "| JLD2 result files | ", length(jld2_files),             " |")
+    println(io, "| Figures           | ", length(readdir(archive_figs)), " |")
+    println(io, "| Tables            | ", length(readdir(archive_tabs)), " |")
     println(io)
 
     println(io, "### Figures")
@@ -241,22 +249,13 @@ end
 @info "Wrote experiment_summary.md"
 
 # ---------------------------------------------------------------------------
-# Clear temp_results/ after successful archive
-# ---------------------------------------------------------------------------
-@info "Clearing temp_results/…"
-for f in jld2_files
-    rm(joinpath(TEMP_RESULTS_DIR, f))
-end
-isfile(config_src) && rm(config_src)
-
-# ---------------------------------------------------------------------------
 # Final inventory
 # ---------------------------------------------------------------------------
 elapsed_total = round(time() - t_total, digits = 1)
 
 println()
 println("=" ^ 70)
-println("  OUTPUT INVENTORY")
+println("  OUTPUT INVENTORY  ($archive_name)")
 println("=" ^ 70)
 
 for (label, dir) in [("Figures", archive_figs), ("Tables", archive_tabs)]
