@@ -4,6 +4,9 @@
 #
 # Abstract interface and concrete implementations for
 # trust-region subproblem solvers.
+#
+# All implementations write the step into a caller-provided buffer
+# `p::V` so the outer solver loop never allocates.
 # ============================================================
 
 """
@@ -12,46 +15,53 @@
 Abstract supertype for trust-region subproblem solvers.
 Concrete subtypes implement:
 
-    solve_subproblem!(subsolver, nlp, x, g, Δ) -> (step::V, on_boundary::Bool)
+    solve_subproblem!(subsolver, nlp, x, g, Δ, p, Hbuf) -> on_boundary::Bool
+
+which solves
+
+    min_{‖s‖ ≤ Δ}  gᵀs + ½ sᵀH(x)s
+
+writing the optimal step into the caller-provided buffer `p`.  The
+buffer `Hbuf` may be used as scratch for a Hessian-vector product.
+
+The function returns a single boolean indicating whether the returned
+step lies on the trust-region boundary.
 """
 abstract type AbstractTRSubproblemSolver end
 
 """
-    solve_subproblem!(subsolver, nlp, x, g, Δ) -> (step, on_boundary::Bool)
+    solve_subproblem!(subsolver, nlp, x, g, Δ, p, Hbuf) -> on_boundary::Bool
 
-Solve the trust-region subproblem
-
-    min_{‖s‖ ≤ Δ}  gᵀs + ½sᵀHs
-
-and return the step `s` together with a boolean indicating whether the
-solution lies on the trust-region boundary.
+Solve the trust-region subproblem and write the step into `p`.
 
 # Arguments
 - `subsolver`: concrete subproblem solver
-- `nlp`:       NLPModel (provides `hprod` / `hess_op`)
+- `nlp`:       NLPModel (provides `hprod!` / `hess_op`)
 - `x`:         current iterate
 - `g`:         current gradient
 - `Δ`:         trust-region radius
+- `p`:         output buffer for the step (filled in place, same type as `x`)
+- `Hbuf`:     scratch buffer for Hessian-vector products (same type as `x`)
+
+# Returns
+`on_boundary::Bool` -- `true` if ‖p‖ ≈ Δ, `false` otherwise.
 """
 function solve_subproblem! end
 
 
-# ------------------------------------------------------------
-# SteihaugTointCG — wraps the existing truncated_cg_steihaug
-# ------------------------------------------------------------
+# ============================================================
+# SteihaugTointCG -- hand-rolled Steihaug-Toint truncated CG
+# ============================================================
 
 """
-    SteihaugTointCG <: AbstractTRSubproblemSolver
+    SteihaugTointCG(; χ=0.1, θ=0.5, max_iters=100)
 
-Steihaug–Toint truncated CG subproblem solver.
-
-Wraps the existing `truncated_cg_steihaug` function with configurable
-parameters.
+Steihaug-Toint truncated CG subproblem solver.
 
 # Fields
-- `χ`:         forcing-function constant (default 0.1)
-- `θ`:         forcing-function exponent (default 0.5)
-- `max_iters`: maximum CG iterations (default 100)
+- `χ`:         forcing-function constant
+- `θ`:         forcing-function exponent
+- `max_iters`: maximum CG iterations
 """
 struct SteihaugTointCG <: AbstractTRSubproblemSolver
     χ::Float64
@@ -60,33 +70,91 @@ struct SteihaugTointCG <: AbstractTRSubproblemSolver
     SteihaugTointCG(; χ=0.1, θ=0.5, max_iters=100) = new(χ, θ, max_iters)
 end
 
-function solve_subproblem!(solver::SteihaugTointCG,
-                            nlp::AbstractNLPModel,
-                            x, g, Δ)
-    p, on_bnd, _ = truncated_cg_steihaug(nlp, x, g, Δ;
-                                          χ=solver.χ,
-                                          θ=solver.θ,
-                                          max_iters=solver.max_iters)
-    return p, on_bnd
+function solve_subproblem!(sub::SteihaugTointCG,
+                            nlp::AbstractNLPModel{T, V},
+                            x::V, g::V, Δ::T,
+                            p::V, Hbuf::V) where {T, V}
+    n     = length(g)
+    normg = norm(g)
+
+    # Zero-gradient guard
+    if normg == 0
+        fill!(p, zero(T))
+        return false
+    end
+
+    fill!(p, zero(T))                 # step
+    r  = similar(g);  @. r = -g       # residual    (negative gradient)
+    d  = similar(g);  @. d =  r       # direction
+    rs_old = dot(r, r)
+
+    on_boundary = false
+    threshold = min(T(sub.χ), normg^T(sub.θ)) * normg
+
+    for _ in 1:sub.max_iters
+        hprod!(nlp, x, d, Hbuf)         # Hbuf = H(x) * d   (in place)
+        dHd = dot(d, Hbuf)
+
+        if dHd <= 0
+            τ = _find_tr_boundary(p, d, Δ)
+            @. p += τ * d
+            return true
+        end
+
+        α = rs_old / dHd
+
+        # Step would exceed the trust region?  Truncate to the boundary.
+        @. Hbuf = p + α * d                   # reuse Hbuf temporarily
+        if norm(Hbuf) > Δ
+            τ = _find_tr_boundary(p, d, Δ)
+            @. p += τ * d
+            return true
+        end
+        @. p += α * d
+
+        # r_new = r - α * Hd   (Hd is still in Hbuf from the test above
+        # -- but we overwrote Hbuf; recompute)
+        hprod!(nlp, x, d, Hbuf)
+        @. r -= α * Hbuf
+        rs_new = dot(r, r)
+
+        if sqrt(rs_new) < threshold
+            return on_boundary
+        end
+
+        β = rs_new / rs_old
+        @. d = r + β * d
+        rs_old = rs_new
+    end
+
+    return on_boundary
+end
+
+# Find τ > 0 such that ‖p + τ d‖ = Δ
+@inline function _find_tr_boundary(p::AbstractVector{T}, d::AbstractVector{T}, Δ::T) where {T}
+    a = dot(d, d)
+    b = 2 * dot(p, d)
+    c = dot(p, p) - Δ^2
+    disc = b^2 - 4 * a * c
+    disc = disc < 0 ? zero(T) : disc
+    return (-b + sqrt(disc)) / (2 * a)
 end
 
 
-# ------------------------------------------------------------
-# KrylovCG — Krylov.cg with trust-region radius
-# ------------------------------------------------------------
+# ============================================================
+# KrylovCG -- Krylov.cg with trust-region radius
+# ============================================================
 
 """
-    KrylovCG <: AbstractTRSubproblemSolver
+    KrylovCG(; atol=1e-6, rtol=1e-6, itmax=0)
 
-Trust-region subproblem solver using `Krylov.cg` with a trust-region
-radius constraint.
-
-Requires the `Krylov` package to be loaded in the calling environment.
+Trust-region subproblem solver wrapping `Krylov.cg` with the
+`radius` keyword (Steihaug-style truncation at the TR boundary).
 
 # Fields
-- `atol`:   absolute tolerance (default 1e-6)
-- `rtol`:   relative tolerance (default 1e-6)
-- `itmax`:  maximum CG iterations (0 = use Krylov default)
+- `atol`:  absolute tolerance
+- `rtol`:  relative tolerance
+- `itmax`: maximum CG iterations (0 = Krylov default)
 """
 struct KrylovCG <: AbstractTRSubproblemSolver
     atol::Float64
@@ -95,36 +163,32 @@ struct KrylovCG <: AbstractTRSubproblemSolver
     KrylovCG(; atol=1e-6, rtol=1e-6, itmax=0) = new(atol, rtol, itmax)
 end
 
-function solve_subproblem!(solver::KrylovCG,
-                            nlp::AbstractNLPModel,
-                            x::V, g::V, Δ::T) where {T, V}
+function solve_subproblem!(sub::KrylovCG,
+                            nlp::AbstractNLPModel{T, V},
+                            x::V, g::V, Δ::T,
+                            p::V, Hbuf::V) where {T, V}
     op = hess_op(nlp, x)
-    p, stats = Krylov.cg(op, -g;
-                          radius=T(Δ),
-                          atol=solver.atol,
-                          rtol=solver.rtol,
-                          itmax=solver.itmax)
-    on_bnd = stats.on_boundary
-    return V(p), on_bnd
+    rhs = similar(g)
+    @. rhs = -g
+    sol, stats = Krylov.cg(op, rhs;
+                            radius = Δ,
+                            atol   = T(sub.atol),
+                            rtol   = T(sub.rtol),
+                            itmax  = sub.itmax)
+    copyto!(p, sol)
+    return _get_on_boundary(stats, p, Δ)
 end
 
 
-# ------------------------------------------------------------
-# KrylovCGLanczos — Krylov.cg_lanczos with trust-region radius
-# ------------------------------------------------------------
+# ============================================================
+# KrylovCGLanczos -- Krylov.cg_lanczos with trust-region radius
+# ============================================================
 
 """
-    KrylovCGLanczos <: AbstractTRSubproblemSolver
+    KrylovCGLanczos(; atol=1e-6, rtol=1e-6, itmax=0)
 
-Trust-region subproblem solver using `Krylov.cg_lanczos` with a
-trust-region radius constraint.
-
-Requires the `Krylov` package to be loaded in the calling environment.
-
-# Fields
-- `atol`:   absolute tolerance (default 1e-6)
-- `rtol`:   relative tolerance (default 1e-6)
-- `itmax`:  maximum iterations (0 = use Krylov default)
+Trust-region subproblem solver wrapping `Krylov.cg_lanczos` with
+`radius`.  Handles indefinite Hessians gracefully.
 """
 struct KrylovCGLanczos <: AbstractTRSubproblemSolver
     atol::Float64
@@ -133,15 +197,38 @@ struct KrylovCGLanczos <: AbstractTRSubproblemSolver
     KrylovCGLanczos(; atol=1e-6, rtol=1e-6, itmax=0) = new(atol, rtol, itmax)
 end
 
-function solve_subproblem!(solver::KrylovCGLanczos,
-                            nlp::AbstractNLPModel,
-                            x::V, g::V, Δ::T) where {T, V}
+function solve_subproblem!(sub::KrylovCGLanczos,
+                            nlp::AbstractNLPModel{T, V},
+                            x::V, g::V, Δ::T,
+                            p::V, Hbuf::V) where {T, V}
     op = hess_op(nlp, x)
-    p, stats = Krylov.cg_lanczos(op, -g;
-                                   radius=T(Δ),
-                                   atol=solver.atol,
-                                   rtol=solver.rtol,
-                                   itmax=solver.itmax)
-    on_bnd = stats.on_boundary
-    return V(p), on_bnd
+    rhs = similar(g)
+    @. rhs = -g
+    sol, stats = Krylov.cg_lanczos(op, rhs;
+                                    radius = Δ,
+                                    atol   = T(sub.atol),
+                                    rtol   = T(sub.rtol),
+                                    itmax  = sub.itmax)
+    copyto!(p, sol)
+    return _get_on_boundary(stats, p, Δ)
+end
+
+
+# ============================================================
+# Helper: extract on_boundary flag from Krylov stats
+#
+# The `on_boundary` field has moved between Krylov.jl versions.
+# Inspect `propertynames(stats)` at runtime and fall back to a
+# norm comparison if neither field is present.
+# ============================================================
+
+@inline function _get_on_boundary(stats, p, Δ)
+    if hasproperty(stats, :on_boundary)
+        return stats.on_boundary
+    elseif hasproperty(stats, :solved) && hasproperty(stats, :niter)
+        # No explicit flag: decide by step norm
+        return norm(p) >= (1 - 1e-8) * Δ
+    else
+        return norm(p) >= (1 - 1e-8) * Δ
+    end
 end

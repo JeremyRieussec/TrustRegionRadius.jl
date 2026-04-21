@@ -2,144 +2,121 @@
 # ============================================================
 # benchmark/compare_jso.jl
 #
-# Performance comparison: TrustRegionRadius.jl update rules
-# (R1–R4, Hei family) vs JSOSolvers (trunk, lbfgs, R2, fomo)
-# on a selection of unconstrained CUTEst problems.
+# Benchmarks TRRSolver (R1, R2, R3, R4, Hei-family) against
+# JSOSolvers.trunk / lbfgs / R2 / fomo on a set of CUTEst
+# problems, and produces a Dolan-Moré performance profile on
+# the number of gradient evaluations.
 #
-# Uses SolverBenchmark.jl to produce Dolan–Moré performance
-# profiles and summary tables.
+# Requirements
+# ------------
+#   ] add CUTEst JSOSolvers SolverBenchmark Plots
 #
-# Prerequisites (add to the benchmark/ Project.toml if separate):
-#   CUTEst, NLPModels, JSOSolvers, SolverBenchmark,
-#   TrustRegionRadius, Plots, Printf
+# Usage
+# -----
+#   julia --project=. benchmark/compare_jso.jl
 # ============================================================
 
 using CUTEst
-using NLPModels
 using JSOSolvers
+using NLPModels
 using SolverBenchmark
 using Plots
 using Printf
 using TrustRegionRadius
 
 # ------------------------------------------------------------
-# Problem list — small-to-medium unconstrained CUTEst problems
+# Problem set -- small unconstrained CUTEst problems
 # ------------------------------------------------------------
-const PROBLEM_NAMES = [
-    "ROSENBR", "BROWN4",    "PENALTY1",  "ARWHEAD",   "BDQRTIC",
-    "CRAGGLVY", "DIXMAANA", "DIXMAANB",  "DQRTIC",    "ENGVAL1",
-    "FLETCHCR", "FREUROTH", "GENROSE",   "HIMMELBB",  "JENSMP",
-    "LIARWHD",  "MANCINO",  "NONDQUAR",  "PENALTY2",  "TRIDIA",
+problem_names = [
+    "ROSENBR", "BEALE", "DIXMAANA", "DIXMAANB", "DIXMAANC",
+    "DIXMAAND", "DIXMAANE", "DIXMAANF", "DIXMAANG", "DIXMAANH",
+    "BROYDN7D", "FREUROTH", "PENALTY1", "GENROSE", "NONDQUAR",
+    "POWELLSG", "SROSENBR", "TQUARTIC", "VAREIGVL", "WOODS",
+    "ENGVAL1", "EXTROSNB", "QUARTC", "LIARWHD", "DENSCHNA",
 ]
 
+problems = AbstractNLPModel[]
+for name in problem_names
+    try
+        push!(problems, CUTEstModel(name))
+    catch e
+        @warn "Skipping $name: $e"
+    end
+end
+@info "Loaded $(length(problems)) problems"
+
 # ------------------------------------------------------------
-# Solver wrappers
-# Each function signature: (nlp; kwargs...) -> GenericExecutionStats
+# Solver dictionary
+#
+# Each entry is a function  nlp -> GenericExecutionStats
+# SolverBenchmark.solve_problems! applies each entry to every
+# problem and collects neval_* counters automatically.
 # ------------------------------------------------------------
 
-# Default TRSolverParams for all TRR variants
-const TRR_PARAMS = TRSolverParams(tol=1e-5, max_iterations=10_000)
+hei_default = (0.25, 0.1, 0.25, 2.0, 4.0, 2.0, 2.0)
+common_params(T) = TRSolverParams{T}(tol = 1e-6, max_iterations = 10_000)
 
-const SOLVERS = Dict{Symbol, Function}(
-
-    # --- TrustRegionRadius.jl update rules ---
-    :TRR_R1 => (nlp; kw...) -> trust_region_radius(nlp;
+solvers = Dict{Symbol, Function}(
+    # ------- TRRSolver with each canonical rule -------
+    :TRR_R1    => nlp -> trust_region_radius(nlp;
                     rule   = R1ClassicalUpdate(),
-                    params = TRR_PARAMS, kw...),
-
-    :TRR_R2 => (nlp; kw...) -> trust_region_radius(nlp;
+                    params = common_params(eltype(nlp.meta.x0))),
+    :TRR_R2    => nlp -> trust_region_radius(nlp;
                     rule   = R2StepSizeUpdate(),
-                    params = TRR_PARAMS, kw...),
-
-    :TRR_R3 => (nlp; kw...) -> trust_region_radius(nlp;
+                    params = common_params(eltype(nlp.meta.x0))),
+    :TRR_R3    => nlp -> trust_region_radius(nlp;
                     rule   = R3DFOLikeUpdate(),
-                    params = TRR_PARAMS, kw...),
-
-    :TRR_R4 => (nlp; kw...) -> trust_region_radius(nlp;
+                    params = common_params(eltype(nlp.meta.x0))),
+    :TRR_R4    => nlp -> trust_region_radius(nlp;
                     rule   = R4RelativeGradUpdate(),
-                    params = TRR_PARAMS, kw...),
+                    params = common_params(eltype(nlp.meta.x0))),
+    :TRR_Hei   => nlp -> trust_region_radius(nlp;
+                    rule   = HeiUpdate(hei_default...),
+                    params = common_params(eltype(nlp.meta.x0))),
+    :TRR_HeiFY => nlp -> trust_region_radius(nlp;
+                    rule   = HeiFanYuanUpdate(1.0, hei_default...),
+                    params = common_params(eltype(nlp.meta.x0))),
 
-    :TRR_Hei => (nlp; kw...) -> trust_region_radius(nlp;
-                    rule   = HeiUpdate(0.1, 0.25, 0.25, 0.25, 4.0, 2.0, 2.0),
-                    params = TRR_PARAMS, kw...),
-
-    :TRR_HeiGrad => (nlp; kw...) -> trust_region_radius(nlp;
-                    rule   = HeiGradUpdate(0.1, 0.25, 0.25, 0.25, 4.0, 2.0, 2.0),
-                    params = TRR_PARAMS, kw...),
-
-    # --- JSOSolvers reference solvers ---
-    :trunk  => (nlp; kw...) -> trunk(nlp; kw...),
-    :lbfgs  => (nlp; kw...) -> lbfgs(nlp; kw...),
-    :R2JSO  => (nlp; kw...) -> R2(nlp; kw...),
-    :fomo   => (nlp; kw...) -> fomo(nlp; kw...),
+    # ------- JSOSolvers.jl baselines -------
+    :trunk  => nlp -> trunk(nlp;  atol = 1e-6, rtol = 1e-6, max_time = 60.0),
+    :lbfgs  => nlp -> lbfgs(nlp;  atol = 1e-6, rtol = 1e-6, max_time = 60.0),
+    :R2     => nlp -> JSOSolvers.R2(nlp;    atol = 1e-6, rtol = 1e-6, max_time = 60.0),
+    :fomo   => nlp -> fomo(nlp;   atol = 1e-6, rtol = 1e-6, max_time = 60.0),
 )
 
 # ------------------------------------------------------------
-# Run benchmark
+# Run every solver on every problem
 # ------------------------------------------------------------
-
-println("Running JSO benchmark on $(length(PROBLEM_NAMES)) CUTEst problems …")
-println("Solvers: ", join(string.(keys(SOLVERS)), ", "))
-
-stats = bmark_solvers(
-    SOLVERS,
-    PROBLEM_NAMES;
-    skipif  = prob -> (prob.meta.ncon > 0 || prob.meta.nvar > 1_000),
-    max_eval = 50_000,
-    atol     = 1e-5,
-    rtol     = 1e-5,
-)
+stats = bmark_solvers(solvers, problems)
 
 # ------------------------------------------------------------
-# Performance profiles
+# Print per-solver markdown summary
 # ------------------------------------------------------------
-
-results_dir = joinpath(@__DIR__, "results")
-mkpath(results_dir)
-
-# Profile on number of gradient evaluations
-p_grad = performance_profile(
-    stats,
-    df -> df.neval_grad,
-    title = "Performance Profile — gradient evaluations",
-)
-savefig(p_grad, joinpath(results_dir, "perf_profile_neval_grad.pdf"))
-println("Saved: ", joinpath(results_dir, "perf_profile_neval_grad.pdf"))
-
-# Profile on number of objective evaluations
-p_obj = performance_profile(
-    stats,
-    df -> df.neval_obj,
-    title = "Performance Profile — objective evaluations",
-)
-savefig(p_obj, joinpath(results_dir, "perf_profile_neval_obj.pdf"))
-println("Saved: ", joinpath(results_dir, "perf_profile_neval_obj.pdf"))
-
-# Profile on elapsed time
-p_time = performance_profile(
-    stats,
-    df -> df.elapsed_time,
-    title = "Performance Profile — wall-clock time (s)",
-)
-savefig(p_time, joinpath(results_dir, "perf_profile_time.pdf"))
-println("Saved: ", joinpath(results_dir, "perf_profile_time.pdf"))
-
-# ------------------------------------------------------------
-# Summary table
-# ------------------------------------------------------------
-println("\n", "="^70)
-println("Benchmark summary")
-println("="^70)
-pretty_stats(stats)
-
-# ------------------------------------------------------------
-# Per-solver win counts  (simple analysis)
-# ------------------------------------------------------------
-println("\n", "="^70)
-println("First-order convergence counts per solver")
-println("="^70)
 for (name, df) in stats
-    n_solved = sum(df.status .== :first_order)
-    @printf("  %-16s : %3d / %3d problems solved\n",
-            string(name), n_solved, nrow(df))
+    println("\n## ", name)
+    pretty_stats(stdout, df[:, [:name, :nvar, :status, :objective,
+                                :elapsed_time, :iter, :neval_grad]];
+                 tf = markdown_table())
+end
+
+# ------------------------------------------------------------
+# Dolan-Moré performance profile on neval_grad
+# ------------------------------------------------------------
+success(df) = df.status .== :first_order
+cost(df)    = ifelse.(success(df), df.neval_grad, Inf)
+
+plt = performance_profile(stats, cost;
+    legend = :bottomright,
+    title  = "Performance profile -- #gradient evaluations",
+    xlabel = "within factor of best",
+    ylabel = "fraction of problems")
+
+savefig(plt, "benchmark_gradient_profile.pdf")
+println("\nSaved profile to benchmark_gradient_profile.pdf")
+
+# ------------------------------------------------------------
+# Clean up CUTEst handles
+# ------------------------------------------------------------
+for p in problems
+    finalize(p)
 end
