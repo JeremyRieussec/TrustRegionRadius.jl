@@ -5,3 +5,4 @@
 # include("TR_algo.jl")
 
 include("trust_region_solver.jl")
+include("TRRSolver.jl")

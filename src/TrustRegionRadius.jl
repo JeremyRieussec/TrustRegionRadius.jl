@@ -1,10 +1,9 @@
 module TrustRegionRadius
 
 using NLPModels
-using CUTEst
+using SolverCore
 using LinearAlgebra
 using Plots, LaTeXStrings
-using Test
 
 import Base:show,println, print, Base.showerror
 
@@ -56,5 +55,15 @@ export StoppingCriteriaGradient
 export AlgorithmInfoTR, AlgorithmInfoGD
 
 export trust_region_with_cg, trust_region_solver, gradient_descent, LS_steepest_backtrack
+
+# JSO-compatible solver interface (SolverCore)
+export TRRSolver, trust_region_radius
+
+# Subproblem solver interface
+export AbstractTRSubproblemSolver, solve_subproblem!
+export SteihaugTointCG, KrylovCG, KrylovCGLanczos
+
+# Radius update reset interface
+export reset_rule!
 
 end # module TrustRegionRadius

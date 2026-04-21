@@ -136,6 +136,7 @@ for every solver run (use a factory function in benchmark configurations).
 """
 mutable struct HeiFanYuanUpdate <: AbstractRadiusUpdate
     μ ::Float64   # current multiplier (updated each iteration)
+    μ₀::Float64   # initial value for reset
     η ::Float64
     β ::Float64
     γ₁::Float64
@@ -143,6 +144,11 @@ mutable struct HeiFanYuanUpdate <: AbstractRadiusUpdate
     M ::Float64
     λ₁::Float64
     λ₂::Float64
+    function HeiFanYuanUpdate(μ::Float64, η::Float64, β::Float64,
+                               γ₁::Float64, γ₂::Float64, M::Float64,
+                               λ₁::Float64, λ₂::Float64)
+        new(μ, μ, η, β, γ₁, γ₂, M, λ₁, λ₂)  # μ₀ = μ at construction
+    end
 end
 
 function update_radius!(rule::HeiFanYuanUpdate,

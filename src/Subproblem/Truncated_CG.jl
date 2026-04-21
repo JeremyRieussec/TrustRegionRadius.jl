@@ -3,6 +3,11 @@ function truncated_cg_steihaug(nlp::AbstractNLPModel, x_current, g, Δ; χ::Floa
     n = length(g)
     normg = norm(g)
 
+    # Zero-gradient guard: return zero step immediately
+    if normg == 0
+        return zeros(eltype(g), n), false, 0
+    end
+
     p = zeros(n)  # Initial step
     r = -g        # Initial residual
     d = copy(r)   # Initial search direction

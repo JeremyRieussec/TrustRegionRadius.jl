@@ -140,12 +140,13 @@ acceptance decision (g_norm_new).
 mutable struct R4RelativeGradUpdate <: AbstractRadiusUpdate
     γ₁::Float64
     γ₂::Float64
-    μ::Float64
+    μ ::Float64
+    μ₀::Float64  # initial value for reset
     function R4RelativeGradUpdate(γ₁::Float64 = 0.25, γ₂::Float64 = 2.0, μ::Float64 = 1.0)
         @assert 0 < γ₁ < 1  "R4: need 0 < γ₁ < 1"
         @assert γ₂ > 1      "R4: need γ₂ > 1"
         @assert μ > 0        "R4: need μ > 0"
-        new(γ₁, γ₂, μ)
+        new(γ₁, γ₂, μ, μ)  # μ₀ = μ at construction
     end
 end
 
@@ -263,4 +264,5 @@ function Base.show(io::IO, r::R4RelativeGradUpdate)
     println(io, "  γ₁ (μ contraction): ", r.γ₁)
     println(io, "  γ₂ (μ expansion):   ", r.γ₂)
     println(io, "  μ  (current):       ", r.μ)
+    println(io, "  μ₀ (initial):       ", r.μ₀)
 end

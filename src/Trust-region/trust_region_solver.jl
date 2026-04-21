@@ -57,11 +57,11 @@ function trust_region_solver(nlp::AbstractNLPModel,
 
         # Convergence check (before computing anything for this iter)
         if g_norm <= params.tol
-            return TROutput(:solved, k - 1, 
-                            CUTEst.neval_obj(nlp), 
-                            CUTEst.neval_grad(nlp),
-                            CUTEst.neval_hess(nlp),
-                            CUTEst.neval_hprod(nlp),
+            return TROutput(:solved, k - 1,
+                            neval_obj(nlp),
+                            neval_grad(nlp),
+                            neval_hess(nlp),
+                            neval_hprod(nlp),
                             g_norm, Δ,
                             delta_traj, grad_traj, obj_traj,
                             time() - t_start)
@@ -112,11 +112,11 @@ function trust_region_solver(nlp::AbstractNLPModel,
     # Maximum iterations reached
     # ----------------------------------------------------------
     @info "trust_region_solver: maximum iterations ($(params.max_iterations)) reached without convergence."
-    return TROutput(:max_iter, params.max_iterations, 
-                    CUTEst.neval_obj(nlp), 
-                    CUTEst.neval_grad(nlp),
-                    CUTEst.neval_hess(nlp),
-                    CUTEst.neval_hprod(nlp),
+    return TROutput(:max_iter, params.max_iterations,
+                    neval_obj(nlp),
+                    neval_grad(nlp),
+                    neval_hess(nlp),
+                    neval_hprod(nlp),
                     g_norm, Δ,
                     delta_traj, grad_traj, obj_traj,
                     time() - t_start)
