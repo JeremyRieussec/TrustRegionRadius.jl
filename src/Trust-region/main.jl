@@ -1,5 +1,9 @@
-include("generate_state.jl")
+# =============================================================================
+# src/Trust-region/main.jl
+#
+# The solver, which threads the three axes together.
+#
+# Requires all of Radius_updates/, Model_Hessians/ and Subproblem/.
+# =============================================================================
 
-include("accept_reject.jl")
-
-include("TR_algo.jl")
+include("solver.jl")

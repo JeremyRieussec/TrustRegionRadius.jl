@@ -1,45 +1,64 @@
 module TrustRegionRadius
 
-using NLPModels
 using LinearAlgebra
-using Plots, LaTeXStrings
-using Test
+using Printf
 
-import Base:show,println, print, Base.showerror
+using NLPModels
+using SolverCore
+using Krylov
+using LinearOperators
 
-greet() = print("Hello World! This is the package for testing Trust Region Raidus update mechanisms.")
+import SolverCore: solve!, reset!
 
-abstract type AbstractState end
-abstract type AbstractTrustRegionState <: AbstractState end
-abstract type AbstractGradientDescentState <: AbstractState end
+# =============================================================================
+# Includes.  Order matters: the three axes are defined before the solver that
+# threads them together, and the benchmark layer last.
+# =============================================================================
 
-abstract type AbstractAlgorithmInfo end
+include("Radius_updates/main.jl")     # RadiusRule and every mechanism
+include("Model_Hessians/main.jl")     # ModelHessian and every model
+include("Subproblem/main.jl")         # SubproblemSolver and every subsolver
+include("Trust-region/main.jl")       # TRParams, TRSolver, tr_solve
+include("Benchmark/main.jl")          # profiles and the run matrix
 
-abstract type AbstractTrustRegionParameters end
+# =============================================================================
+# Exports
+#
+# Three orthogonal axes, one solver, one benchmarking layer.
+# Each name appears exactly once.
+# =============================================================================
 
-abstract type AbstractStoppingCriteria end
+# ---- Axis 1: radius mechanisms ----------------------------------------------
+export RadiusRule
+export RDelta, RStep, RDFO, RGrad, RGradCapped
+export RAdaptiveStep, RAdaptiveGrad, RAdaptiveFanYuan
+export RRTR, RRTRGrad
+export initial_radius, update_radius!, reset_rule!
+export needs_retrospective, is_criticality_anchored, retrospective_ratio
 
+# ---- Axis 2: model Hessians -------------------------------------------------
+export ModelHessian
+export ExactHessian, LBFGSModel, SR1Model, ScaledIdentity, SPDTarget
+export hessian_op, dense_hessian, model_hprod!, update_model!, reset_model!
+export phi_target
 
-include("State/main.jl")
-include("Saving_info/main.jl")
-include("Radius_updates/main.jl")
-include("Stopping_tests/main.jl")
-include("Subproblem/main.jl")
-include("Plotting_graphs/main.jl")
-include("Trust-region/main.jl")
-include("Line-Search/main.jl")
+# ---- Axis 3: subproblem solvers ---------------------------------------------
+export SubproblemSolver
+export SteihaugCG, ExactMS, KrylovCG, KrylovCGLanczos
+export solve_subproblem!, cg_step_info
 
+# ---- Solver -----------------------------------------------------------------
+export TRParams, TRResult, TRSolver, tr_solve
 
-export SimpleTointGouldTointParameters, TointGouldTointParameters, 
-        SimpleScheinbergParameters, ScheinbergParameters, 
-        YuanFanParameters, 
-        HeiParameters, HeiGradParameters, 
-        HeiFanYuanParameters
+# ---- Benchmarking -----------------------------------------------------------
+export performance_profile, data_profile, profile_to_pgfplots
+export run_matrix, summarise, TRConfig, sweep_configs
 
-export StoppingCriteriaGradient
+"""
+    greet()
 
-export AlgorithmInfoTR, AlgorithmInfoGD
-
-export trust_region_with_cg, gradient_descent, LS_steepest_backtrack
+One-line description of the package.
+"""
+greet() = print("TrustRegionRadius: a testbed for trust-region radius update mechanisms.")
 
 end # module TrustRegionRadius
