@@ -8,13 +8,6 @@
 # than the legacy trust_region_update!(state, params, ...).
 # ============================================================
 
-"""
-    AbstractRadiusUpdate
-
-Abstract supertype for the four canonical radius update rules R1–R4.
-Concrete subtypes implement `update_radius!(rule, Δ, ρ, η₁, η₂, s_norm, g_norm_old, g_norm_new)`.
-"""
-abstract type AbstractRadiusUpdate end
 
 # ------------------------------------------------------------
 # R1 — Classical multiplicative update (Conn–Gould–Toint)

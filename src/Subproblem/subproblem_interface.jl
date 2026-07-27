@@ -86,6 +86,7 @@ function solve_subproblem!(sub::SteihaugTointCG,
     fill!(p, zero(T))                 # step
     r  = similar(g);  @. r = -g       # residual    (negative gradient)
     d  = similar(g);  @. d =  r       # direction
+    cand = similar(g)                 # scratch for the trial step p + α d
     rs_old = dot(r, r)
 
     on_boundary = false
@@ -104,17 +105,16 @@ function solve_subproblem!(sub::SteihaugTointCG,
         α = rs_old / dHd
 
         # Step would exceed the trust region?  Truncate to the boundary.
-        @. Hbuf = p + α * d                   # reuse Hbuf temporarily
-        if norm(Hbuf) > Δ
+        # Use a dedicated scratch buffer so Hbuf (= H·d) is preserved.
+        @. cand = p + α * d
+        if norm(cand) > Δ
             τ = _find_tr_boundary(p, d, Δ)
             @. p += τ * d
             return true
         end
-        @. p += α * d
+        @. p = cand                     # accept the full CG step
 
-        # r_new = r - α * Hd   (Hd is still in Hbuf from the test above
-        # -- but we overwrote Hbuf; recompute)
-        hprod!(nlp, x, d, Hbuf)
+        # r_new = r - α * Hd   (Hbuf still holds H·d -- no recompute needed)
         @. r -= α * Hbuf
         rs_new = dot(r, r)
 

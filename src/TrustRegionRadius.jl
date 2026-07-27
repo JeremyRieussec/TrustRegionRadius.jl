@@ -21,6 +21,12 @@ abstract type AbstractGradientDescentState <: AbstractState end
 abstract type AbstractAlgorithmInfo end
 abstract type AbstractTrustRegionParameters end
 abstract type AbstractStoppingCriteria end
+"""
+    AbstractRadiusUpdate
+
+Abstract supertype for the four canonical radius update rules R1–R4.
+Concrete subtypes implement `update_radius!(rule, Δ, ρ, η₁, η₂, s_norm, g_norm_old, g_norm_new)`.
+"""
 abstract type AbstractRadiusUpdate end
 abstract type AbstractTRSubproblemSolver end
 
@@ -28,14 +34,14 @@ abstract type AbstractTRSubproblemSolver end
 # Includes
 # ============================================================
 
-include("State/main.jl")
-include("Saving_info/main.jl")
+# include("State/main.jl")
+# include("Saving_info/main.jl")
 include("Radius_updates/main.jl")
-include("Stopping_tests/main.jl")
+# include("Stopping_tests/main.jl")
 include("Subproblem/main.jl")
-include("Plotting_graphs/main.jl")
+# include("Plotting_graphs/main.jl")
 include("Trust-region/main.jl")
-include("Line-Search/main.jl")
+# include("Line-Search/main.jl")
 
 # ============================================================
 # Exports
@@ -46,7 +52,7 @@ export SimpleTointGouldTointParameters, TointGouldTointParameters,
        SimpleScheinbergParameters, ScheinbergParameters,
        YuanFanParameters,
        HeiParameters, HeiGradParameters, HeiFanYuanParameters
-
+        
 # Canonical R1-R4 radius update rules
 export AbstractRadiusUpdate
 export R1ClassicalUpdate, R2StepSizeUpdate, R3DFOLikeUpdate, R4RelativeGradUpdate
