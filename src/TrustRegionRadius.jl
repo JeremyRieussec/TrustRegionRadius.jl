@@ -35,6 +35,7 @@ export RAdaptiveStep, RAdaptiveGrad, RAdaptiveFanYuan
 export RRTR, RRTRGrad
 export initial_radius, update_radius!, reset_rule!
 export needs_retrospective, is_criticality_anchored, retrospective_ratio
+export asymptotic_regime, validate_thresholds, check_factors
 
 # ---- Axis 2: model Hessians -------------------------------------------------
 export ModelHessian

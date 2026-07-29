@@ -12,4 +12,5 @@ using SolverCore
     include("test_subproblem.jl")
     include("test_solver.jl")
     include("test_profiles.jl")
+    include("test_thresholds.jl")
 end
