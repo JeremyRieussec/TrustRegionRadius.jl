@@ -150,8 +150,10 @@ function run_experiment(problems, configs;
                         params::TRParams = TRParams(),
                         trace::Bool = true,
                         archive = nothing,
+                        resume::Bool = true,
                         verbose::Bool = true)
     records = RunRecord[]
+    n_reused = 0
 
     if verbose
         @printf("%-20s", "problem")
@@ -163,9 +165,37 @@ function run_experiment(problems, configs;
     end
 
     for (pname, mk) in problems
-        nlp = mk()
+        # --- Toutes les configurations sont-elles déjà en cache ? ------------
+        # Si oui, on n'ouvre pas le modèle du tout : sur CUTEst, l'ouverture
+        # décode et compile un fichier SIF, ce qui domine le coût d'une reprise.
+        cached = Dict{String, RunRecord}()
+        if resume && archive !== nothing
+            for (cname, _) in configs
+                has_data(archive, pname, cname) || continue
+                try
+                    cached[cname] = _record_from_data(load_data(archive, pname, cname))
+                catch err
+                    # Un JLD2 tronqué par une interruption est illisible :
+                    # on le traite comme absent et on recalculera.
+                    verbose && @warn "données illisibles, recalcul" problem=pname config=cname
+                end
+            end
+        end
+        all_cached = length(cached) == length(configs)
+
+        nlp = all_cached ? nothing : mk()
         row = String[]
+
         for (cname, factory) in configs
+            if haskey(cached, cname)
+                rec = cached[cname]
+                n_reused += 1
+                push!(records, rec)
+                push!(row, solved(rec) ? @sprintf("%14s", string(rec.iterations) * "*") :
+                                         @sprintf("%14s", string(rec.status) * "*"))
+                continue
+            end
+
             cfg = factory()
             rule  = cfg.rule
             model = hasproperty(cfg, :model)     ? cfg.model     : ExactHessian()
@@ -194,22 +224,93 @@ function run_experiment(problems, configs;
             push!(records, rec)
             push!(row, solved(rec) ? @sprintf("%14d", rec.iterations) :
                                      @sprintf("%14s", string(rec.status)))
-            archive === nothing || save_data(archive, "$(pname)_$(cname).jld2";
-                problem_name = rec.problem, rule_name = rec.config, n = rec.n,
-                status = rec.status, iterations = rec.iterations,
-                f_evals = rec.f_evals, g_evals = rec.g_evals,
-                final_grad_norm = rec.final_grad, final_obj = rec.final_obj,
-                solve_time = rec.solve_time,
-                delta_trajectory = rec.delta_traj,
-                grad_norm_trajectory = rec.grad_traj,
-                obj_trajectory = rec.obj_traj,
-                ratio_trajectory = rec.ratio_traj,
-                active_trajectory = rec.active_traj)
+
+            # L'écriture est protégée : une campagne de plusieurs heures ne doit
+            # pas être perdue parce qu'un nom de fichier a déplu au système.
+            if archive !== nothing
+                try
+                    save_record(archive, rec)
+                catch err
+                    err isa InterruptException && rethrow()
+                    @warn "échec d'écriture des données" problem=pname config=cname err
+                end
+            end
         end
+
         verbose && (@printf("%-20s", first(pname, 20)); println(join(row)))
-        finalize(nlp)
+        nlp === nothing || finalize(nlp)
+    end
+
+    if verbose && n_reused > 0
+        @printf("\n%d exécution(s) relue(s) du cache (marquées *), %d recalculée(s).\n",
+                n_reused, length(records) - n_reused)
     end
     return records
+end
+
+"""
+    save_record(archive, rec)
+
+Écrire un `RunRecord` dans `data/`, sous le nom canonique de
+[`data_filename`](@ref). Tous les champs sont enregistrés, y compris `h_evals`,
+afin qu'une relecture reconstruise l'enregistrement à l'identique.
+"""
+function save_record(a, rec::RunRecord)
+    return save_data(a, data_filename(rec.problem, rec.config);
+        problem_name = rec.problem, rule_name = rec.config, n = rec.n,
+        status = rec.status, iterations = rec.iterations,
+        f_evals = rec.f_evals, g_evals = rec.g_evals, h_evals = rec.h_evals,
+        final_grad_norm = rec.final_grad, final_obj = rec.final_obj,
+        solve_time = rec.solve_time,
+        delta_trajectory     = rec.delta_traj,
+        grad_norm_trajectory = rec.grad_traj,
+        obj_trajectory       = rec.obj_traj,
+        ratio_trajectory     = rec.ratio_traj,
+        active_trajectory    = rec.active_traj)
+end
+
+"""
+    _record_from_data(d) -> RunRecord
+
+Reconstruire un `RunRecord` depuis le dictionnaire rendu par `JLD2.load`.
+
+`h_evals` est absent des fichiers écrits avant l'ajout de ce champ ; il est
+alors mis à zéro plutôt que de faire échouer la relecture. Les autres champs
+sont obligatoires : leur absence signale un fichier tronqué, et l'exception
+remonte à l'appelant qui recalculera.
+"""
+function _record_from_data(d::AbstractDict)
+    return RunRecord(
+        d["problem_name"], d["rule_name"], d["n"],
+        d["status"], d["iterations"],
+        d["f_evals"], d["g_evals"], get(d, "h_evals", 0),
+        d["final_grad_norm"], d["final_obj"], d["solve_time"],
+        d["delta_trajectory"], d["grad_norm_trajectory"],
+        d["obj_trajectory"], d["ratio_trajectory"], d["active_trajectory"])
+end
+
+"""
+    load_records(archive) -> Vector{RunRecord}
+
+Relire toutes les exécutions archivées, sans rien recalculer. Utile pour
+refaire les figures et les tableaux d'une campagne terminée :
+
+```julia
+arch    = reopen_archive(latest_archive())
+records = load_records(arch)
+```
+"""
+function load_records(a)
+    recs = RunRecord[]
+    for f in sort(readdir(a.data))
+        endswith(f, ".jld2") || continue
+        try
+            push!(recs, _record_from_data(JLD2.load(joinpath(a.data, f))))
+        catch err
+            @warn "fichier de données ignoré" file=f err
+        end
+    end
+    return recs
 end
 
 # -----------------------------------------------------------------------------

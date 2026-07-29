@@ -19,6 +19,7 @@
 
 using TOML
 using Dates
+using JLD2
 
 # -----------------------------------------------------------------------------
 # Unicode → ASCII field names for TOML
@@ -103,7 +104,19 @@ end
 
 function ExperimentArchive(root::AbstractString = joinpath(@__DIR__, "results");
                            tag::AbstractString = "",
-                           timestamp::DateTime = now())
+                           timestamp::DateTime = now(),
+                           resume::Union{Nothing,AbstractString} = nothing)
+    # Reprise : soit l'argument `resume`, soit la variable d'environnement
+    # TRR_RESUME, ce qui permet de relancer un script d'expérience inchangé.
+    #     TRR_RESUME=results/exp_...  julia --project=benchmark .../exp1.jl
+    dir_resume = resume === nothing ? get(ENV, "TRR_RESUME", "") : String(resume)
+    if !isempty(dir_resume)
+        return reopen_archive(dir_resume)
+    end
+    return _new_archive(root, tag, timestamp)
+end
+
+function _new_archive(root::AbstractString, tag::AbstractString, timestamp::DateTime)
     stamp = Dates.format(timestamp, "yyyy-mm-dd_HH-MM-SS")
     name  = isempty(tag) ? "exp_$stamp" : "exp_$(stamp)_$tag"
     dir   = joinpath(root, name)
@@ -222,6 +235,86 @@ function save_table(a::ExperimentArchive, filename::AbstractString, content)
 end
 
 """
+    reopen_archive(dir) -> ExperimentArchive
+
+Rouvrir une archive existante au lieu d'en créer une nouvelle.
+
+Les sous-répertoires manquants sont recréés, de sorte qu'une archive
+interrompue avant la première figure reste utilisable. La configuration déjà
+écrite est relue dans `meta`, ce qui permet à `finalize_archive` de reproduire
+le résumé complet.
+
+```julia
+arch = reopen_archive("benchmark/results/exp_2026-07-29_02-15-23_comparison")
+```
+
+Ou, sans modifier le script d'expérience :
+
+```bash
+TRR_RESUME=benchmark/results/exp_2026-07-29_02-15-23_comparison \
+  julia --project=benchmark benchmark/experiments/exp1_comparison.jl
+```
+"""
+function reopen_archive(dir::AbstractString)
+    isdir(dir) || error("reopen_archive : répertoire introuvable : $dir")
+    figs = joinpath(dir, "figures")
+    tabs = joinpath(dir, "tables")
+    data = joinpath(dir, "data")
+    for d in (figs, tabs, data)
+        mkpath(d)
+    end
+
+    name = basename(rstrip(dir, ['/', '\\']))
+    m = match(r"^exp_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})(?:_(.*))?$", name)
+    created = m === nothing ? now() :
+              DateTime(replace(m.captures[1], "_" => "T"), dateformat"yyyy-mm-ddTHH-MM-SS")
+    tag = (m === nothing || m.captures[2] === nothing) ? "" : m.captures[2]
+
+    meta = Dict{String, Any}()
+    cfgpath = joinpath(dir, "experiment_config.toml")
+    isfile(cfgpath) && (meta["config"] = TOML.parsefile(cfgpath))
+
+    n = length(filter(f -> endswith(f, ".jld2"), readdir(data)))
+    @info "Archive rouverte → $dir  ($n fichier(s) de données déjà présent(s))"
+    return ExperimentArchive(dirname(rstrip(dir, ['/', '\\'])), dir,
+                             figs, tabs, data, created, tag, meta)
+end
+
+"""
+    data_filename(problem, config) -> String
+
+Nom de fichier canonique d'une exécution, utilisé aussi bien à l'écriture qu'à
+la relecture. Les caractères hostiles aux systèmes de fichiers sont remplacés.
+
+C'est indispensable : les configurations de l'expérience 6 s'appellent
+`"RDelta/exact"`, et une barre oblique ferait écrire dans un sous-répertoire
+inexistant.
+"""
+function data_filename(problem::AbstractString, config::AbstractString)
+    clean(x) = replace(String(x), r"[/\\:*?\"<>|]" => "-")
+    return string(clean(problem), "__", clean(config), ".jld2")
+end
+
+"""
+    has_data(archive, problem, config) -> Bool
+
+Vrai si l'exécution correspondante a déjà été enregistrée.
+"""
+has_data(a::ExperimentArchive, problem, config) =
+    isfile(joinpath(a.data, data_filename(problem, config)))
+
+"""
+    load_data(archive, problem, config) -> Dict{String,Any}
+
+Relire un fichier de données. Lève une exception si le fichier est absent ou
+illisible ; l'appelant doit traiter ce cas comme « à recalculer », puisqu'une
+écriture interrompue laisse un JLD2 tronqué.
+"""
+function load_data(a::ExperimentArchive, problem, config)
+    return JLD2.load(joinpath(a.data, data_filename(problem, config)))
+end
+
+"""
     save_data(archive, filename; kwargs...) -> String
 
 Write raw results into `data/` as JLD2. Every keyword becomes a stored key.
@@ -233,7 +326,9 @@ save_data(arch, "GENROSE_RDelta.jld2";
 ```
 """
 function save_data(a::ExperimentArchive, filename::AbstractString; kwargs...)
-    path = joinpath(a.data, String(filename))
+    # Assainir : un nom de configuration peut contenir « / » (expérience 6).
+    safe = replace(String(filename), r"[/\\:*?\"<>|]" => "-")
+    path = joinpath(a.data, safe)
     jldsave(path; kwargs...)
     return path
 end
