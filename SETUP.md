@@ -205,7 +205,7 @@ cannot be reproduced two years from now cannot be diagnosed either.
 - [x] `LICENSE` present (MIT supplied; change if your institution requires otherwise)
 - [x] repository named `TrustRegionRadius.jl`
 - [x] `Manifest.toml` untracked
-- [ ] workflows copied, `DOCUMENTER_KEY` set, Pages pointed at `gh-pages`
-- [ ] `deploydocs` uncommented with the real repository
-- [ ] CI green
+- [x] workflows copied, `DOCUMENTER_KEY` set, Pages pointed at `gh-pages`
+- [x] `deploydocs` uncommented with the real repository
+- [x] CI green
 - [ ] Zenodo DOI minted from a release
