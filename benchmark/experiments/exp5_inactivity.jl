@@ -102,4 +102,6 @@ function main()
         """)
 end
 
-abspath(PROGRAM_FILE) == @__FILE__ && main()
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end

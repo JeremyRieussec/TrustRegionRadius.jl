@@ -17,6 +17,7 @@
 # =============================================================================
 
 using Plots
+using StatsPlots         # `boxplot` below is StatsPlots, not Plots
 include(joinpath(@__DIR__, "..", "archive.jl"))
 include(joinpath(@__DIR__, "..", "harness.jl"))
 include(joinpath(@__DIR__, "..", "config.jl"))
@@ -122,4 +123,6 @@ function main()
         """)
 end
 
-abspath(PROGRAM_FILE) == @__FILE__ && main()
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end

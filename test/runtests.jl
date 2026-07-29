@@ -1,8 +1,10 @@
-using Test
 using TrustRegionRadius
+
+using Test
 using ADNLPModels
 using NLPModels
 using LinearAlgebra
+using SolverCore
 
 @testset "TrustRegionRadius.jl" begin
     include("test_rules.jl")

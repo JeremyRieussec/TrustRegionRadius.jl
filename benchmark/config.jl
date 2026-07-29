@@ -29,10 +29,10 @@ const RULES = [
     ("RStep",   () -> RStep( γ₁ = 0.25, γ₂ = 0.80, γ₃ = 2.0)),
     ("RDFO",    () -> RDFO(  γ₁ = 0.25, γ₂ = 0.50, γ₃ = 2.0, ζ = 1.0)),
     ("RGrad",   () -> RGrad( γ₁ = 0.25, γ₂ = 2.00, μ = 1.0)),
-    # ("RGradCapped", () -> RGradCapped(μ = 1.0, μ_max = 1.0)),
-    # ("RAdaptiveStep",    () -> RAdaptiveStep()),
+    ("RGradCapped", () -> RGradCapped(μ = 1.0, μ_max = 1.0)),
+    ("RAdaptiveStep",    () -> RAdaptiveStep()),
     # ("RAdaptiveGrad",    () -> RAdaptiveGrad()),
-    # ("RAdaptiveFanYuan", () -> RAdaptiveFanYuan(μ = 1.0)),
+    ("RAdaptiveFanYuan", () -> RAdaptiveFanYuan(μ = 1.0)),
     # ("RRTR",             () -> RRTR()),
     # ("RRTRGrad",         () -> RRTRGrad(μ = 1.0)),
 ]
@@ -50,9 +50,9 @@ rule_configs(rules = RULES; model = DEFAULT_MODEL, subsolver = DEFAULT_SUBSOLVER
 # CUTEst problem selection
 # -----------------------------------------------------------------------------
 const MIN_VAR = 2
-const MAX_VAR = 500
+const MAX_VAR = 100
 const MAX_CON = 0        # 0 = unconstrained only
-const PROBLEM_LIMIT = nothing   # e.g. 50 for a quick pass
+const PROBLEM_LIMIT = 20   # e.g. 50 for a quick pass
 
 const PROBLEM_SELECTION = Dict(
     "min_var" => MIN_VAR, "max_var" => MAX_VAR,

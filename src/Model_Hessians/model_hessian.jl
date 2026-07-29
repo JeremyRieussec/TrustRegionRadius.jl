@@ -18,7 +18,7 @@
 #
 # and optionally
 #
-#     materialise(m, nlp, x)        -- dense Matrix, small n only (diagnostics)
+#     dense_hessian(m, nlp, x)        -- dense Matrix, small n only (diagnostics)
 #
 # `update_model!` is a no-op for models that carry no state.
 # =============================================================================
@@ -59,11 +59,11 @@ Return an object `B` supporting `B * v`, representing `H_k` at `x`.
 function hessian_op end
 
 """
-    materialise(model, nlp, x) -> Matrix
+    dense_hessian(model, nlp, x) -> Matrix
 
 Dense representation, for diagnostics on small problems only.
 """
-function materialise end
+function dense_hessian end
 
 # -----------------------------------------------------------------------------
 # ExactHessian
@@ -82,7 +82,7 @@ which needs asymptotic second-order coherence instead, does.
 struct ExactHessian <: ModelHessian end
 
 hessian_op(::ExactHessian, nlp, x) = hess_op(nlp, x)
-materialise(::ExactHessian, nlp, x) = Matrix(Symmetric(hess(nlp, x), :L))
+dense_hessian(::ExactHessian, nlp, x) = Matrix(Symmetric(hess(nlp, x), :L))
 Base.show(io::IO, ::ExactHessian) = print(io, "exact ∇²f")
 
 # -----------------------------------------------------------------------------
@@ -118,7 +118,7 @@ function update_model!(m::LBFGSModel, s, y)
     return nothing
 end
 
-materialise(m::LBFGSModel, nlp, x) = Matrix(m.op)
+dense_hessian(m::LBFGSModel, nlp, x) = Matrix(m.op)
 Base.show(io::IO, m::LBFGSModel) = print(io, "L-BFGS(mem=", m.mem, ")")
 
 # -----------------------------------------------------------------------------
@@ -128,7 +128,7 @@ Base.show(io::IO, m::LBFGSModel) = print(io, "L-BFGS(mem=", m.mem, ")")
 """
     SR1Model(; mem = 5)
 
-Symmetric rank-one model Hessian, backed by `LinearOperators.SR1Operator`.
+Symmetric rank-one model Hessian, backed by `LinearOperators.LSR1Operator`.
 
 Unlike L-BFGS, SR1 may be indefinite — which is the point: it can represent
 negative curvature, so a subsolver that exploits it (truncated CG detecting
@@ -142,7 +142,7 @@ mutable struct SR1Model <: ModelHessian
 end
 
 function reset_model!(m::SR1Model, n::Int)
-    m.op = SR1Operator(Float64, n, mem = m.mem)
+    m.op = LSR1Operator(Float64, n, mem = m.mem)
     return nothing
 end
 
@@ -154,7 +154,7 @@ function update_model!(m::SR1Model, s, y)
     return nothing
 end
 
-materialise(m::SR1Model, nlp, x) = Matrix(m.op)
+dense_hessian(m::SR1Model, nlp, x) = Matrix(m.op)
 Base.show(io::IO, m::SR1Model) = print(io, "SR1(mem=", m.mem, ")")
 
 # -----------------------------------------------------------------------------
@@ -178,7 +178,7 @@ struct ScaledIdentity <: ModelHessian
 end
 
 hessian_op(m::ScaledIdentity, nlp, x) = m.c * I     # UniformScaling: `B * v` works
-materialise(m::ScaledIdentity, nlp, x) =
+dense_hessian(m::ScaledIdentity, nlp, x) =
     Matrix(m.c * I, nlp.meta.nvar, nlp.meta.nvar)
 Base.show(io::IO, m::ScaledIdentity) = print(io, m.c, "·I")
 
@@ -229,7 +229,7 @@ construction exists at `x` if and only if `φ(x) < 0`.
 """
 phi_target(m::SPDTarget, nlp, x) = dot(grad(nlp, x), m.target .- x)
 
-function materialise(m::SPDTarget, nlp, x)
+function dense_hessian(m::SPDTarget, nlp, x)
     d  = m.target .- x
     nd = norm(d)
     nd < 1e-14 && return Matrix{Float64}(I, 2, 2)
@@ -244,5 +244,33 @@ function materialise(m::SPDTarget, nlp, x)
     return a * (u * u') + b * (u * v' + v * u') + c * (v * v')
 end
 
-hessian_op(m::SPDTarget, nlp, x) = materialise(m, nlp, x)
+hessian_op(m::SPDTarget, nlp, x) = dense_hessian(m, nlp, x)
 Base.show(io::IO, m::SPDTarget) = print(io, "SPD→", m.target)
+
+# -----------------------------------------------------------------------------
+# model_hprod!
+# -----------------------------------------------------------------------------
+
+"""
+    model_hprod!(model, nlp, x, v, Hv)
+
+Write `H_k · v` into `Hv`, where `H_k` is the **model** Hessian.
+
+Used for the predicted reduction `-gᵀs - ½ sᵀH_k s`. Using `∇²f` here instead
+would make `ρ` measure agreement between the true function and a model the
+algorithm never minimised, so `ρ` would stop being the quantity the acceptance
+test and the radius rules are stated in terms of.
+"""
+model_hprod!(::ExactHessian, nlp, x, v, Hv) = hprod!(nlp, x, v, Hv)
+
+function model_hprod!(model::ModelHessian, nlp, x, v, Hv)
+    B = hessian_op(model, nlp, x)
+    # `mul!` is not defined for every operator/eltype pair (a `UniformScaling`
+    # supports `*` but not always the three-argument form), so fall back.
+    try
+        mul!(Hv, B, v)
+    catch
+        copyto!(Hv, B * v)
+    end
+    return Hv
+end

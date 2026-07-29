@@ -24,8 +24,8 @@ Hessian, and subproblem solver, together with the solver parameters.
 L-BFGS/SR1), so `run_matrix` deep-copies them per run; a single `TRConfig` can
 therefore be reused across problems without contamination.
 """
-struct TRConfig{R <: AbstractRadiusUpdate, M <: ModelHessian,
-                S <: AbstractTRSubproblemSolver, P}
+struct TRConfig{R <: RadiusRule, M <: ModelHessian,
+                S <: SubproblemSolver, P}
     label::String
     rule::R
     model::M
@@ -34,10 +34,10 @@ struct TRConfig{R <: AbstractRadiusUpdate, M <: ModelHessian,
 end
 
 function TRConfig(label::AbstractString;
-                  rule::AbstractRadiusUpdate = R1ClassicalUpdate(),
+                  rule::RadiusRule = RDelta(),
                   model::ModelHessian = ExactHessian(),
-                  subsolver::AbstractTRSubproblemSolver = SteihaugTointCG(),
-                  params = TRSolverParams())
+                  subsolver::SubproblemSolver = SteihaugCG(),
+                  params = TRParams())
     TRConfig(String(label), rule, model, subsolver, params)
 end
 
@@ -105,10 +105,10 @@ function run_matrix(problems, configs; cost::Symbol = :iter, verbose::Bool = tru
             sub   = deepcopy(cfg.subsolver)
             try
                 NLPModels.reset!(nlp)
-                stats = trust_region_radius(nlp; rule = rule, model = model,
-                                            subsolver = sub, params = cfg.params)
+                stats = tr_solve(nlp; rule = rule, model = model,
+                                 subsolver = sub, params = cfg.params)
                 S[i, j] = stats
-                if stats.status == :first_order
+                if stats.status === :first_order
                     T[i, j] = cost === :iter  ? stats.iter          :
                               cost === :obj   ? neval_obj(nlp)      :
                               cost === :grad  ? neval_grad(nlp)     :
@@ -180,7 +180,7 @@ Build one `TRConfig` per parameter value, labelled `name = value`.
 `mkrule(v)` must return a fresh rule for the value `v`.
 
 ```julia
-configs = sweep_configs("ζ", [0.1, 1.0, 10.0], ζ -> RDFO(0.25, 0.5, 2.0, ζ))
+configs = sweep_configs("ζ", [0.1, 1.0, 10.0], ζ -> RDFO(ζ = ζ))
 T, _    = run_matrix(problems, configs)
 ```
 
@@ -191,8 +191,8 @@ on a given family of problems.
 """
 function sweep_configs(name::AbstractString, values, mkrule;
                        model::ModelHessian = ExactHessian(),
-                       subsolver::AbstractTRSubproblemSolver = SteihaugTointCG(),
-                       params = TRSolverParams())
+                       subsolver::SubproblemSolver = SteihaugCG(),
+                       params = TRParams())
     [TRConfig(string(name, " = ", v); rule = mkrule(v), model = model,
               subsolver = subsolver, params = params) for v in values]
 end

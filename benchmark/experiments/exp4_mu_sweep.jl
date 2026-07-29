@@ -20,6 +20,7 @@
 # =============================================================================
 
 using Plots
+using LinearAlgebra
 include(joinpath(@__DIR__, "..", "archive.jl"))
 include(joinpath(@__DIR__, "..", "harness.jl"))
 include(joinpath(@__DIR__, "..", "config.jl"))
@@ -33,9 +34,11 @@ function main()
                 () -> (rule = RGradCapped(μ = μ, μ_max = μ),
                        model = DEFAULT_MODEL(), subsolver = DEFAULT_SUBSOLVER()))
                for μ in MUS]
-    push!(configs, ("uncapped",
-                    () -> (rule = RGrad(μ = 1.0), model = DEFAULT_MODEL(),
-                           subsolver = DEFAULT_SUBSOLVER())))
+    # println("type of configs: ", typeof(configs))
+    # println("eltype of configs: ", eltype(configs))
+    # # push!(configs, ("uncapped",
+    #                 () -> (rule = RGrad(μ = 1.0), model = DEFAULT_MODEL(),
+    #                        subsolver = DEFAULT_SUBSOLVER())))
 
     save_config(arch; params = SOLVER_PARAMS, problem_selection = PROBLEM_SELECTION,
                 rules = vcat([(@sprintf("mu_max=%g", μ), () -> RGradCapped(μ = μ, μ_max = μ))
@@ -96,4 +99,6 @@ function main()
         """)
 end
 
-abspath(PROGRAM_FILE) == @__FILE__ && main()
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end

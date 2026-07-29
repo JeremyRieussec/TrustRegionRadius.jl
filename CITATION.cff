@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software in academic work, please cite both the software and
+  the survey it accompanies.
+title: "TrustRegionRadius.jl: a testbed for trust-region radius update mechanisms"
+type: software
+authors:
+  - family-names: Rieussec
+    given-names: Jérémy
+    affiliation: "Université de Montréal, DIRO"
+  - family-names: Bastin
+    given-names: Fabian
+    affiliation: "Université de Montréal, DIRO"
+    email: bastin@iro.umontreal.ca
+repository-code: "https://github.com/JeremyRieussec/TrustRegionRadius.jl"
+license: MIT
+version: 0.1.0
+# Uncomment once a release has been archived on Zenodo:
+# doi: 10.5281/zenodo.XXXXXXX
+# date-released: 2026-01-01
+keywords:
+  - optimization
+  - trust-region methods
+  - nonlinear programming
+  - Julia
+preferred-citation:
+  type: article
+  title: "A survey of trust-region radius update mechanisms. Part I: First-order analysis"
+  authors:
+    - family-names: Rieussec
+      given-names: Jérémy
+    - family-names: Bastin
+      given-names: Fabian
+  year: 2026
+  journal: "arXiv preprint"
+  doi: 10.48550/arXiv.2606.30202

@@ -101,13 +101,15 @@ function _steihaug!(sub::SteihaugCG, B, g::V, Δ::T, s::V, Hbuf::V) where {T, V}
         _apply!(Hbuf, B, d)
         dBd = dot(d, Hbuf)
         if dBd <= 0                                   # negative curvature
-            @. s += _to_boundary(s, d, Δ) * d
+            temp = _to_boundary(s, d, Δ)
+            @. s += temp * d
             return true
         end
         α = rs / dBd
         @. cand = s + α * d
         if norm(cand) >= Δ                            # boundary
-            @. s += _to_boundary(s, d, Δ) * d
+            temp = _to_boundary(s, d, Δ)
+            @. s += temp * d
             return true
         end
         @. s = cand
@@ -325,13 +327,15 @@ function cg_step_info(sub::SteihaugCG, model::ModelHessian,
         _apply!(Hbuf, B, d)
         dBd = dot(d, Hbuf)
         if dBd <= 0
-            @. s += _to_boundary(s, d, Δ) * d
+            temp =  _to_boundary(s, d, Δ)
+            @. s += temp * d
             return (cg_iters = j, active = true, cos_cauchy = dot(s, -g)/(norm(s)*gn))
         end
         α = rs / dBd
         @. cand = s + α * d
         if norm(cand) >= Δ
-            @. s += _to_boundary(s, d, Δ) * d
+            temp =  _to_boundary(s, d, Δ)
+            @. s += temp * d
             return (cg_iters = j, active = true, cos_cauchy = dot(s, -g)/(norm(s)*gn))
         end
         @. s = cand

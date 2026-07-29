@@ -4,8 +4,7 @@
 # The JSO-compatible solver.
 #
 # One parameter type (`TRParams`) and one result type (`TRResult`, an alias of
-# the JSO `GenericExecutionStats`), rather than the earlier split between
-# `TRSolverParams`/`TROutput` and a second set of survey-facing names.
+# the JSO `GenericExecutionStats`), rather than two parallel sets of names.
 #
 # Three orthogonal axes are threaded through the loop:
 #   rule      :: RadiusRule            -- how Δ moves

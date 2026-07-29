@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+  pull_request:
+
+concurrency:
+  # Cancel superseded runs on the same branch, but never on main.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['1.10', '1']      # LTS and latest stable
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        arch: [x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+      - uses: julia-actions/julia-processcoverage@v1
+      - uses: codecov/codecov-action@v4
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+        continue-on-error: true
+
+  # The benchmark environment is deliberately NOT in the matrix: CUTEst needs a
+  # SIF decoder and compiler toolchain that will not build on a runner in
+  # reasonable time, and the analytic fallback would end up testing the harness
+  # rather than the package.  This job checks only that the scripts parse and
+  # that the harness loads, which is what actually breaks when the API changes.
+  benchmark-smoke:
+    name: benchmark scripts parse
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+      - name: Parse every experiment script
+        run: |
+          julia -e '
+            files = vcat(
+              filter(f -> endswith(f, ".jl"),
+                     readdir("benchmark/experiments", join = true)),
+              ["benchmark/archive.jl", "benchmark/harness.jl", "benchmark/config.jl"])
+            for f in files
+              Meta.parse("begin\n" * read(f, String) * "\nend")
+              println("  parsed ", f)
+            end'

@@ -26,7 +26,7 @@ const ZETAS = [0.01, 0.1, 0.5, 1.0, 2.0, 10.0, 100.0]
 function main()
     arch = ExperimentArchive(tag = "zeta_sweep")
     configs = [(@sprintf("zeta=%g", ζ),
-                () -> (rule = RDFO(ζ = ζ), model = DEFAULT_MODEL(),
+                () -> (rule = RDFO(ζ = ζ),  model = DEFAULT_MODEL(),
                        subsolver = DEFAULT_SUBSOLVER()))
                for ζ in ZETAS]
 
@@ -93,4 +93,6 @@ function main()
         """)
 end
 
-abspath(PROGRAM_FILE) == @__FILE__ && main()
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end

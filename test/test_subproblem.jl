@@ -4,11 +4,11 @@
     nlp = ADNLPModel(x -> 0.5x[1]^2 + x[2]^2, [1.0, 1.0])
     x = [1.0, 1.0]
     g = grad(nlp, x)
-    s = similar(g); H = similar(g)
+    s = similar(g); H_buf = similar(g)
 
     @testset "interior step is the Newton step" begin
         for sub in (SteihaugCG(), ExactMS())
-            active = solve_subproblem!(sub, ExactHessian(), nlp, x, g, 100.0, s, H)
+            active = solve_subproblem!(sub, ExactHessian(), nlp, x, g, 100.0, s, H_buf)
             @test !active
             @test s ≈ -(Symmetric(dense_hessian(ExactHessian(), nlp, x)) \ g) atol=1e-6
         end
@@ -16,7 +16,7 @@
 
     @testset "small radius: step is on the boundary" begin
         for sub in (SteihaugCG(), ExactMS())
-            active = solve_subproblem!(sub, ExactHessian(), nlp, x, g, 0.01, s, H)
+            active = solve_subproblem!(sub, ExactHessian(), nlp, x, g, 0.01, s, H_buf)
             @test active
             @test norm(s) ≈ 0.01 atol=1e-8
         end

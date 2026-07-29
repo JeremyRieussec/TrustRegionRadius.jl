@@ -9,6 +9,7 @@
 
 using TrustRegionRadius
 using NLPModels
+using ADNLPModels        # analytic_problems() builds ADNLPModel thunks
 using Printf
 using JLD2
 
@@ -16,47 +17,62 @@ using JLD2
 # Problem sets
 # -----------------------------------------------------------------------------
 
+# -----------------------------------------------------------------------------
+# CUTEst
+#
+# CUTEst is loaded at TOP LEVEL, not inside `cutest_problems`.
+#
+# Loading a package from inside a function body (with `Base.require` or a
+# dynamic `import`) defines new methods and advances the world age.  The
+# function doing the loading was compiled in the *previous* world, so it cannot
+# call anything the load just defined; Julia reports
+#
+#     The applicable method may be too new: running in world age N,
+#     while current world is M.
+#
+# Loading here instead means every method CUTEst defines is already in the world
+# by the time the functions below are compiled.  `HAS_CUTEST` still gives the
+# graceful fallback to the analytic set when CUTEst cannot be built, which is
+# common on Windows.
+# -----------------------------------------------------------------------------
+
+const HAS_CUTEST = try
+    @eval using CUTEst
+    true
+catch err
+    @warn """CUTEst is unavailable; the analytic problem set will be used instead.
+             Experiments will still run, on a smaller and less varied test set.""" err
+    false
+end
+
 """
     cutest_problems(; min_var, max_var, max_con = 0, limit = nothing) -> Vector
 
-CUTEst problems as **thunks**, each returning a fresh `CUTEstModel`.
+Unconstrained CUTEst problems as **thunks**, each returning a fresh
+`CUTEstModel`.
 
 Thunks rather than models because each `CUTEstModel` holds a handle to a
 compiled SIF problem and only one may be live at a time; the runner opens and
 finalises them one by one.
 
-Returns an empty vector with a warning if `CUTEst` is not installed, so an
-experiment file can degrade to its analytic problem set rather than failing.
+Returns an empty vector (with a warning) when CUTEst is unavailable, so an
+experiment degrades to `analytic_problems()` rather than failing.
 """
 function cutest_problems(; min_var::Int = 2, max_var::Int = 500,
                            max_con::Int = 0, limit = nothing)
-    if !_has_cutest()
-        @warn "CUTEst.jl not available -- skipping the CUTEst problem set"
+    if !HAS_CUTEST
+        @warn "CUTEst unavailable -- skipping the CUTEst problem set"
         return Tuple{String, Function}[]
     end
-    CUTEst = Base.require(Base.PkgId(
-        Base.UUID("1b53aba6-35b6-5f92-a507-53c67d53f819"), "CUTEst"))
-    names = try
-        CUTEst.select_sif_problems(min_var = min_var, max_var = max_var,
-                                   max_con = max_con, only_free_var = true)
-    catch
-        CUTEst.select(min_var = min_var, max_var = max_var,
-                      max_con = max_con, only_free_var = true)
-    end
+
+    names = CUTEst.select_sif_problems(; min_var     = min_var,
+                                         max_var     = max_var,
+                                         max_con     = max_con,
+                                         only_free_var = true)
     sort!(names)
     limit === nothing || (names = names[1:min(limit, length(names))])
     @info "CUTEst: $(length(names)) problems selected"
-    return [(nm, () -> CUTEst.CUTEstModel(nm)) for nm in names]
-end
-
-function _has_cutest()
-    try
-        Base.require(Base.PkgId(
-            Base.UUID("1b53aba6-35b6-5f92-a507-53c67d53f819"), "CUTEst"))
-        true
-    catch
-        false
-    end
+    return [(nm, () -> CUTEstModel(nm)) for nm in names]
 end
 
 """

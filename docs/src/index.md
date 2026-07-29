@@ -1,71 +1,67 @@
 # TrustRegionRadius.jl
 
-Companion code for *A survey of trust-region radius update mechanisms*.
+A testbed for **trust-region radius update mechanisms**, built on the
+[JuliaSmoothOptimizers](https://jso.dev) stack.
 
-See the [README](https://github.com/…/TrustRegionRadius.jl) for a tour, and
-`INTEGRATION.md` for the design notes and the record of what changed when the
-package was restructured.
+Companion code for *A survey of trust-region radius update mechanisms*, Parts I–III.
 
-## API
+## Why this package exists
 
-```@docs
-RadiusRule
-RDelta
-RStep
-RDFO
-RGrad
-RGradCapped
-RAdaptiveStep
-RAdaptiveGrad
-RAdaptiveFanYuan
-RRTR
-RRTRGrad
-initial_radius
-update_radius!
-reset_rule!
-needs_retrospective
-is_criticality_anchored
-retrospective_ratio
+Most trust-region codes fix one radius rule and vary everything else. This package does the
+opposite: the radius rule is a first-class, swappable component, and so are the two things it
+interacts with. Three orthogonal axes:
+
+| axis | choices |
+|---|---|
+| [radius rule](rules.md) | `RDelta`, `RStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RAdaptiveFanYuan`, `RRTR`, `RRTRGrad` |
+| [model Hessian](models.md) | `ExactHessian`, `LBFGSModel`, `SR1Model`, `ScaledIdentity`, `SPDTarget` |
+| [subproblem solver](subsolvers.md) | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCGLanczos` |
+
+Every combination runs through one driver, so a comparison measures the axis you varied
+rather than the difference between two code bases. That single-driver design is the main
+methodological control behind the numerical results in Part III.
+
+## Installation
+
+```julia
+using Pkg
+Pkg.add(url = "https://github.com/USER/TrustRegionRadius.jl")
 ```
 
-```@docs
-ModelHessian
-ExactHessian
-LBFGSModel
-SR1Model
-ScaledIdentity
-SPDTarget
-hessian_op
-dense_hessian
-model_hprod!
-update_model!
-reset_model!
-phi_target
+## Thirty seconds
+
+```julia
+using TrustRegionRadius, ADNLPModels
+
+nlp = ADNLPModel(x -> (1 - x[1])^2 + 100(x[2] - x[1]^2)^2, [-1.2, 1.0])
+
+stats = tr_solve(nlp;
+    rule      = RGrad(),
+    model     = SR1Model(mem = 5),
+    subsolver = SteihaugCG(),
+    params    = TRParams(tol = 1e-8),
+    trace     = true)
+
+stats.status                                       # :first_order
+count(stats.solver_specific[:active_trajectory])   # iterations with ‖s‖ = Δ
 ```
 
-```@docs
-SubproblemSolver
-SteihaugCG
-ExactMS
-KrylovCG
-KrylovCGLanczos
-solve_subproblem!
-cg_step_info
-```
+Continue with [Getting started](quickstart.md).
 
-```@docs
-TRParams
-TRResult
-TRSolver
-tr_solve
-```
+## Two results worth knowing before you choose a rule
 
-```@docs
-performance_profile
-data_profile
-profile_to_pgfplots
-run_matrix
-summarise
-TRConfig
-sweep_configs
-```
+**`RGrad` is uncapped; `RGradCapped` is not.** For `RGrad` the multiplier ``\mu_k`` is exactly
+the ratio ``\Delta_k/\|g_k\|``, and it grows geometrically past any threshold, so the
+trust-region constraint eventually stops binding with no side condition. `RGradCapped`
+supplies the bound the asymptotic theory assumes, at the cost of requiring
+``\bar\mu > \bar\kappa = 4/\lambda^*_{\min}`` — a constant that depends on the solution and
+so cannot be chosen in advance. Below that threshold the constraint binds forever and the
+method degrades to linear convergence while every first-order diagnostic looks healthy.
+
+**The activity flag is the observable that matters.** Whether the constraint eventually stops
+binding separates mechanisms whose first-order behaviour is indistinguishable: both groups
+drive ``\|g_k\| \to 0``. Pass `trace = true` and read `:active_trajectory`.
+
+## Citing
+
+See `CITATION.cff`, or cite Part I of the survey directly.
