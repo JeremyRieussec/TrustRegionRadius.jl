@@ -48,7 +48,7 @@ count(stats.solver_specific[:active_trajectory])   # iterations with ‖s‖ = �
 
 Continue with [Getting started](quickstart.md).
 
-## Two results worth knowing before you choose a rule
+## Three results worth knowing before you choose a rule
 
 **`RGrad` is uncapped; `RGradCapped` is not.** For `RGrad` the multiplier ``\mu_k`` is exactly
 the ratio ``\Delta_k/\|g_k\|``, and it grows geometrically past any threshold, so the
@@ -60,7 +60,24 @@ method degrades to linear convergence while every first-order diagnostic looks h
 
 **The activity flag is the observable that matters.** Whether the constraint eventually stops
 binding separates mechanisms whose first-order behaviour is indistinguishable: both groups
-drive ``\|g_k\| \to 0``. Pass `trace = true` and read `:active_trajectory`.
+drive ``\|g_k\| \to 0``. Pass `trace = true` and read `:active_trajectory`; for *when* it
+stopped rather than *whether*, count the active iterations still ahead of each index, as in
+[Getting started](quickstart.md#When-the-constraint-stopped-binding).
+
+**Acceptance and scaling answer different questions.** ``\eta`` decides whether a step is
+worth taking; ``\eta_1`` and ``\eta_2`` decide only whether the region should shrink or grow,
+and are the only two any rule sees. Coupling them, as the classical statement does, hides the
+fact that ``\eta = 0`` is admissible and that ``\rho_k \in [\eta, \eta_1)`` accepts a step
+while still contracting the radius. See [Thresholds and factors](thresholds.md).
+
+## Interface changes
+
+Acceptance is decoupled from scaling, `update_radius!` takes an `accepted::Bool` third
+argument, and every rule obeys ``0 < \gamma_1 \le \gamma_2 < 1 < \gamma_3``. Because ``\eta``
+defaults to ``\eta_1``, existing `TRParams` calls are unaffected; four rules had their
+factors renumbered and will now throw rather than be silently reinterpreted.
+[Thresholds and factors](thresholds.md) explains both conventions, and `MIGRATION.md` in the
+repository root lists what to edit.
 
 ## Citing
 

@@ -16,6 +16,7 @@ makedocs(
     pages = [
         "Home"          => "index.md",
         "Getting started" => "quickstart.md",
+        "Thresholds and factors" => "thresholds.md",
         "The three axes"  => [
             "Radius mechanisms"   => "rules.md",
             "Model Hessians"      => "models.md",

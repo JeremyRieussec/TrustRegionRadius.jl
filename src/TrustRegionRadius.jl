@@ -31,7 +31,7 @@ include("Benchmark/main.jl")          # profiles and the run matrix
 # ---- Axis 1: radius mechanisms ----------------------------------------------
 export RadiusRule
 export RDelta, RStep, RDFO, RGrad, RGradCapped
-export RAdaptiveStep, RAdaptiveGrad, RAdaptiveFanYuan
+export RAdaptiveStep, RAdaptiveGrad
 export RRTR, RRTRGrad
 export initial_radius, update_radius!, reset_rule!
 export needs_retrospective, is_criticality_anchored, retrospective_ratio

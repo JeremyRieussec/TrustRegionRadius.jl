@@ -9,8 +9,7 @@
 #   RGrad         gradient-scaled, Δ = μ‖g‖, μ uncapped  (Fan-Yuan)
 #   RGradCapped   gradient-scaled with μ ≤ μ_max
 #   RAdaptiveStep step-anchored, exponential factor      (Hei 2003)
-#   RAdaptiveGrad gradient-anchored, exponential factor
-#   RAdaptiveFanYuan  μ *= R(ρ), Δ = μ‖g‖                (Hei + Fan-Yuan)
+#   RAdaptiveGrad  μ *= R(ρ), Δ = μ‖g‖                (Hei + Fan-Yuan)
 #   RRTR          retrospective                          (Bastin et al. 2010)
 #   RRTRGrad      retrospective gradient-scaled          (Fan-Pan-Song 2016)
 #
@@ -574,50 +573,7 @@ function validate_thresholds(::RAdaptiveStep, ::Real, η₁::Real, ::Real)
 end
 
 """
-    RAdaptiveGrad(; γ₁, γ₂, γ₃, λ₁, λ₂)
-
-Gradient-anchored Hei variant:
-
-    Δ_{k+1} = min{ R_{η₁}(ρ_k) · ‖g_{k+1}‖ ,  γ₂ Δ_k }  if ρ_k < η₁
-              R_{η₁}(ρ_k) · ‖g_{k+1}‖                    otherwise
-
-Uses the gradient *after* the accept/reject decision. Criticality-anchored, so
-`Δ_k → 0`.
-
-The `min` on the first branch is not in the source rule and is not decorative.
-`R` here *replaces* the multiplier rather than scaling it, so the realised ratio
-is `Δ_{k+1}/Δ_k = R(ρ_k)/R(ρ_{k-1})` on a rejected step (‖g‖ being unchanged),
-which exceeds one whenever the previous iteration was worse than this one. The
-radius would then grow on an unsuccessful iteration and the contraction
-condition would fail. Compare [`RAdaptiveFanYuan`](@ref), which scales `μ`
-multiplicatively and needs no such guard.
-"""
-mutable struct RAdaptiveGrad <: RadiusRule
-    γ₁::Float64
-    γ₂::Float64
-    γ₃::Float64
-    λ₁::Float64
-    λ₂::Float64
-    function RAdaptiveGrad(; γ₁::Float64 = HEI_DEFAULTS.γ₁, γ₂::Float64 = HEI_DEFAULTS.γ₂,
-                             γ₃::Float64 = HEI_DEFAULTS.γ₃, λ₁::Float64 = HEI_DEFAULTS.λ₁,
-                             λ₂::Float64 = HEI_DEFAULTS.λ₂)
-        check_hei_factors(:RAdaptiveGrad, γ₁, γ₂, γ₃, λ₁, λ₂)
-        new(γ₁, γ₂, γ₃, λ₁, λ₂)
-    end
-end
-
-function update_radius!(r::RAdaptiveGrad, Δ::Float64, ρ::Float64, ::Bool,
-                        η₁::Float64, ::Float64,
-                        ::Float64, ::Float64, g_norm_new::Float64)
-    Δnew = _r_exp(ρ, η₁, r.γ₁, r.γ₂, r.γ₃, r.λ₁, r.λ₂) * g_norm_new
-    return ρ < η₁ ? min(Δnew, r.γ₂ * Δ) : Δnew
-end
-
-is_criticality_anchored(::RAdaptiveGrad) = true
-asymptotic_regime(::RAdaptiveGrad) = :vanishing
-
-"""
-    RAdaptiveFanYuan(; μ = 1.0, γ₁, γ₂, γ₃, λ₁, λ₂)
+    RAdaptiveGrad(; μ = 1.0, γ₁, γ₂, γ₃, λ₁, λ₂)
 
 Hei factor driving a Fan-Yuan multiplier:
 
@@ -629,7 +585,7 @@ continuously in ρ rather than by one of three constants. Because the scaling is
 multiplicative and `R ≤ γ₂ < 1` below `η₁`, contraction on unsuccessful
 iterations holds without a guard.
 """
-mutable struct RAdaptiveFanYuan <: RadiusRule
+mutable struct RAdaptiveGrad <: RadiusRule
     μ::Float64
     μ₀::Float64
     γ₁::Float64
@@ -637,22 +593,22 @@ mutable struct RAdaptiveFanYuan <: RadiusRule
     γ₃::Float64
     λ₁::Float64
     λ₂::Float64
-    function RAdaptiveFanYuan(; μ::Float64 = 1.0,
+    function RAdaptiveGrad(; μ::Float64 = 1.0,
                                 γ₁::Float64 = HEI_DEFAULTS.γ₁, γ₂::Float64 = HEI_DEFAULTS.γ₂,
                                 γ₃::Float64 = HEI_DEFAULTS.γ₃, λ₁::Float64 = HEI_DEFAULTS.λ₁,
                                 λ₂::Float64 = HEI_DEFAULTS.λ₂)
-        check_hei_factors(:RAdaptiveFanYuan, γ₁, γ₂, γ₃, λ₁, λ₂)
-        μ > 0 || throw(ArgumentError("RAdaptiveFanYuan: need μ > 0, got $μ"))
+        check_hei_factors(:RAdaptiveGrad, γ₁, γ₂, γ₃, λ₁, λ₂)
+        μ > 0 || throw(ArgumentError("RAdaptiveGrad: need μ > 0, got $μ"))
         new(μ, μ, γ₁, γ₂, γ₃, λ₁, λ₂)
     end
 end
 
-initial_radius(r::RAdaptiveFanYuan, ::Float64, g_norm::Float64) = r.μ * g_norm
-reset_rule!(r::RAdaptiveFanYuan) = (r.μ = r.μ₀; nothing)
-is_criticality_anchored(::RAdaptiveFanYuan) = true
-asymptotic_regime(::RAdaptiveFanYuan) = :vanishing
+initial_radius(r::RAdaptiveGrad, ::Float64, g_norm::Float64) = r.μ * g_norm
+reset_rule!(r::RAdaptiveGrad) = (r.μ = r.μ₀; nothing)
+is_criticality_anchored(::RAdaptiveGrad) = true
+asymptotic_regime(::RAdaptiveGrad) = :vanishing
 
-function update_radius!(r::RAdaptiveFanYuan, ::Float64, ρ::Float64, ::Bool,
+function update_radius!(r::RAdaptiveGrad, ::Float64, ρ::Float64, ::Bool,
                         η₁::Float64, ::Float64,
                         ::Float64, ::Float64, g_norm_new::Float64)
     r.μ *= _r_exp(ρ, η₁, r.γ₁, r.γ₂, r.γ₃, r.λ₁, r.λ₂)

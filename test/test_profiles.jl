@@ -15,6 +15,20 @@
         @test all(diff(prof[:, 1]) .>= -1e-12)   # non-decreasing in τ
     end
 
+    @testset "a cost of zero counts as a failure" begin
+        # A problem already critical at x₀ returns :first_order with zero
+        # iterations, so its cost is 0. That is not a statement about any
+        # mechanism, and the two reporting paths disagree about it: the profile
+        # treats it as a failure (below), while `success_table` counts the run as
+        # solved. Pinned here so the convention is a choice rather than an
+        # accident, and as a reminder to screen such problems out of a test set
+        # before building the cost matrix.
+        T = [0.0 0.0 0.0;
+             2.0 1.0 4.0]
+        _, prof = performance_profile(T)
+        @test all(prof[end, :] .≈ 0.5)      # row 1 contributes to no solver
+    end
+
     @testset "performance_profile: failures are Inf" begin
         T = [1.0 Inf; 1.0 Inf]
         _, prof = performance_profile(T)

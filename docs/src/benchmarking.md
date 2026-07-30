@@ -22,6 +22,14 @@ efficiency untouched while collapsing reliability.
     the curves (Gould & Scott, 2016). Report pairwise profiles against a fixed baseline
     alongside the full comparison.
 
+!!! warning "Problems that cost nothing"
+    A problem already critical at `x₀` returns `:first_order` with zero iterations. A cost of
+    `0` is treated as a failure here, while `success_table` counts the same run as solved, so
+    one such problem lowers every reliability asymptote *and* every median — and neither
+    number says anything about a radius rule. Screen these out of the problem list before
+    building the cost matrix, and log the names dropped. Several CUTEst `*NE` variants have a
+    null objective, so `∇f ≡ 0` everywhere and every mechanism reports zero iterations.
+
 [`data_profile`](@ref) is the complementary instrument: it reports the fraction solved within
 a budget measured in units of `n+1` evaluations, is not normalised by the best solver, and so
 does not suffer that set-dependence.
@@ -55,6 +63,10 @@ finalises each before opening the next.
 Only runs ending `:first_order` count as solved. A solver that stops early with a large
 gradient has not solved the problem, whatever its iteration count.
 
+Rules and quasi-Newton models carry mutable state, so a sweep passes **factories** rather
+than instances: `ζ -> RDFO(ζ = ζ)` above, not a vector of built rules. Reusing one instance
+across problems makes the results depend on the order they were visited.
+
 ## The experiment suite
 
 ```bash
@@ -72,6 +84,20 @@ julia --project=benchmark benchmark/experiments/run_all.jl 1 3 5   # a subset
 | `exp5_inactivity` | fraction of late iterations with ‖s‖ = Δ |
 | `exp6_interaction` | rule × model grid; additivity residuals |
 | `exp7_convergence_rate` | local order, conditioned on inactivity |
+| `exp8_single_problem` | one problem in detail: Δ, ‖g‖, ρ and the inactivity countdown |
+
+Experiment 8 takes a problem name, so it can be pointed anywhere without editing the script:
+
+```bash
+julia --project=benchmark benchmark/experiments/exp8_single_problem.jl WOOD
+TRR_PROBLEM=ROSENBR julia --project=benchmark benchmark/experiments/exp8_single_problem.jl
+```
+
+It looks in the analytic set first and falls through to `CUTEstModel`, and writes one figure
+per quantity plus a stacked panel sharing an iteration axis. The countdown panel plots the
+number of active iterations still ahead of each index, so the onset of inactivity can be read
+against what Δ, `‖g‖` and ρ were doing at the time; a run whose staircase never reaches zero
+is labelled `[never]`.
 
 Each run writes a self-documenting archive:
 
@@ -85,7 +111,16 @@ benchmark/results/exp_2026-04-16_02-08-34_zeta_sweep/
 ```
 
 Recover a past configuration with `load_config(dir)`, or the most recent with
-`latest_archive()`.
+`latest_archive()`. An interrupted campaign resumes in place:
+
+```bash
+TRR_RESUME=benchmark/results/exp_2026-07-29_02-15-23_comparison \
+  julia --project=benchmark benchmark/experiments/exp1_comparison.jl
+```
+
+`run_experiment` then skips any `(problem, configuration)` whose `.jld2` already exists, and
+does not open a model at all when every configuration for that problem is cached — on CUTEst
+the SIF decode dominates the cost of a resume. See `RESUME.md` for the details.
 
 !!! warning "Experiment 7 conditions on inactivity"
     The convergence order is estimated only over the final run of *inactive* iterations.
