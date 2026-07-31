@@ -151,7 +151,7 @@ end
 # Figures
 # -----------------------------------------------------------------------------
 
-"Δ_k against k, log scale. Iteration axis is 0:K, since Δ₀ precedes iteration 1."
+"Δ_k against k, log scale. Iteration axis is 0:K, since Δ0 precedes iteration 1."
 function plot_delta(rs, pname)
     plt = plot(; xlabel = "iteration k", ylabel = "Δ_k", yscale = :log10,
                  title = "$pname: trust-region radius", legend = :best, lw = 2)
@@ -179,10 +179,10 @@ end
 """
     plot_ratio(rs, pname, params)
 
-ρ_k against k, clipped to [`RHO_CLIP`], with η, η₁ and η₂ marked.
+ρ_k against k, clipped to [`RHO_CLIP`], with η, η1 and η2 marked.
 
 The three lines are worth drawing separately now that acceptance is decoupled
-from scaling: points in [η, η₁) are accepted steps that still contract the
+from scaling: points in [η, η1) are accepted steps that still contract the
 radius, a band that does not exist in the coupled formulation.
 """
 function plot_ratio(rs, pname, params)
@@ -196,10 +196,10 @@ function plot_ratio(rs, pname, params)
               label = r.config)
     end
     hline!(plt, [Float64(params.η)];  ls = :solid, c = :black, label = "η (accept)")
-    if params.η₁ != params.η
-        hline!(plt, [Float64(params.η₁)]; ls = :dash, c = :black, label = "η₁")
+    if params.η1 != params.η
+        hline!(plt, [Float64(params.η1)]; ls = :dash, c = :black, label = "η1")
     end
-    hline!(plt, [Float64(params.η₂)]; ls = :dashdot, c = :black, label = "η₂")
+    hline!(plt, [Float64(params.η2)]; ls = :dashdot, c = :black, label = "η2")
     return plt
 end
 
@@ -353,7 +353,7 @@ function main(args = String[])
         [never].
 
         Read the countdown against the first two panels. Every mechanism here
-        drives ‖g_k‖ below the tolerance with ρ_k mostly above η₂, so the
+        drives ‖g_k‖ below the tolerance with ρ_k mostly above η2, so the
         gradient and ratio panels look much the same for all of them; the
         countdown is where they separate. That is the content of the claim that
         first-order diagnostics cannot see the distinction between mechanisms

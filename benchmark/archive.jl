@@ -35,12 +35,12 @@ without surprises.
 Unmapped symbols fall through to `string(sym)`.
 """
 const UNICODE_TO_ASCII = Dict{Symbol, String}(
-    :η₁ => "eta1",   :η₂ => "eta2",   :η  => "eta",
+    :η1 => "eta1",   :η2 => "eta2",   :η  => "eta",
     :η̃₁ => "eta1_t", :η̃₂ => "eta2_t",
-    :γ₀ => "gamma0", :γ₁ => "gamma1", :γ₂ => "gamma2", :γ₃ => "gamma3",
-    :Δ₀ => "Delta0", :Δmax => "Delta_max", :Δmin => "Delta_min",
-    :ζ  => "zeta",   :μ  => "mu",     :μ₀ => "mu0",    :μ_max => "mu_max",
-    :β  => "beta",   :λ₁ => "lambda1", :λ₂ => "lambda2", :M => "M",
+    :γ0 => "gamma0", :γ1 => "gamma1", :γ2 => "gamma2", :γ3 => "gamma3",
+    :Δ0 => "Delta0", :Δmax => "Delta_max", :Δmin => "Delta_min",
+    :ζ  => "zeta",   :μ  => "mu",     :μ0 => "mu0",    :μ_max => "mu_max",
+    :β  => "beta",   :λ1 => "lambda1", :λ2 => "lambda2", :M => "M",
     :max_iterations => "max_iterations", :tol => "tol", :max_time => "max_time",
     :half_test => "half_test",
 )

@@ -7,9 +7,9 @@
         # ArgumentError, not AssertionError: @assert is documented as liable to be
         # disabled, and these are argument checks. The threshold chain itself is
         # covered in test_thresholds.jl.
-        @test_throws ArgumentError TRParams(η₁ = 0.9, η₂ = 0.1)
-        @test_throws ArgumentError TRParams(Δ₀ = -1.0)
-        @test_throws ArgumentError TRParams(Δmax = 0.5, Δ₀ = 1.0)
+        @test_throws ArgumentError TRParams(η1 = 0.9, η2 = 0.1)
+        @test_throws ArgumentError TRParams(Δ0 = -1.0)
+        @test_throws ArgumentError TRParams(Δmax = 0.5, Δ0 = 1.0)
         @test_throws ArgumentError TRParams(max_iterations = 0)
         @test_throws ArgumentError TRParams(tol = 0.0)
         p = TRParams(tol = 1e-8)
@@ -18,7 +18,7 @@
 
     @testset "the solver validates thresholds against the rule" begin
         nlp = ADNLPModel(rosen, [-1.2, 1.0])
-        bad = TRParams(η = 0.0, η₁ = 0.0, η₂ = 0.9)
+        bad = TRParams(η = 0.0, η1 = 0.0, η2 = 0.9)
         @test_throws ArgumentError TRSolver(nlp; rule = RStep(),         params = bad)
         @test_throws ArgumentError TRSolver(nlp; rule = RAdaptiveStep(), params = bad)
         @test TRSolver(nlp; rule = RDelta(), params = bad) isa TRSolver
@@ -105,8 +105,8 @@
 
     @testset "acceptance follows ρ ≥ η and nothing else" begin
         nlp = ADNLPModel(rosen, [-1.2, 1.0])
-        for p in (TRParams(η₁ = 0.1, η₂ = 0.9, tol = 1e-6),
-                  TRParams(η = 0.0, η₁ = 0.1, η₂ = 0.9, tol = 1e-6))
+        for p in (TRParams(η1 = 0.1, η2 = 0.9, tol = 1e-6),
+                  TRParams(η = 0.0, η1 = 0.1, η2 = 0.9, tol = 1e-6))
             st = tr_solve(nlp; rule = RDelta(), trace = true, params = p)
             ss = st.solver_specific
             @test ss[:accepted_trajectory] ==
@@ -121,8 +121,8 @@
         for rule in (RDelta(), RStep(), RDFO(ζ = 1.0), RGrad(), RGradCapped(μ_max = 8.0),
                      RAdaptiveStep(), RAdaptiveGrad(), 
                      RRTR(), RRTRGrad())
-            for p in (TRParams(η₁ = 0.1, η₂ = 0.9, tol = 1e-6, max_iterations = 2_000),
-                      TRParams(η = 0.0, η₁ = 0.1, η₂ = 0.9, tol = 1e-6,
+            for p in (TRParams(η1 = 0.1, η2 = 0.9, tol = 1e-6, max_iterations = 2_000),
+                      TRParams(η = 0.0, η1 = 0.1, η2 = 0.9, tol = 1e-6,
                                max_iterations = 2_000))
                 nlp = ADNLPModel(rosen, [-1.2, 1.0])
                 st = tr_solve(nlp; rule = rule, trace = true, params = p)
@@ -158,7 +158,7 @@
         solver = TRSolver(nlp; rule = RGrad(μ = 1.0))
         SolverCore.solve!(solver, nlp)
         SolverCore.reset!(solver)
-        @test solver.rule.μ == solver.rule.μ₀
+        @test solver.rule.μ == solver.rule.μ0
     end
 
     @testset "a config can be reused across problems" begin

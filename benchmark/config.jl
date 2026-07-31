@@ -14,9 +14,9 @@
 # -----------------------------------------------------------------------------
 const SOLVER_PARAMS = TRParams(
     η              = 0.1,   # acceptance:  step taken iff ρ ≥ η
-    η₁             = 0.1,   # scaling:     contract below this
-    η₂             = 0.9,   # scaling:     "very successful" above this
-    Δ₀             = 1.0,
+    η1             = 0.1,   # scaling:     contract below this
+    η2             = 0.9,   # scaling:     "very successful" above this
+    Δ0             = 1.0,
     max_iterations = 10_000,
     tol            = 1e-5,
     max_time       = 120.0,
@@ -26,15 +26,14 @@ const SOLVER_PARAMS = TRParams(
 # The mechanisms under comparison
 # -----------------------------------------------------------------------------
 const RULES = [
-    ("RDelta",  () -> RDelta(γ₁ = 0.25, γ₂ = 0.50, γ₃ = 2.0)),
-    ("RStep",   () -> RStep( γ₁ = 0.25, γ₂ = 0.80, γ₃ = 2.0)),
-    ("RDFO",    () -> RDFO(  γ₁ = 0.25, γ₂ = 0.50, γ₃ = 2.0, ζ = 100.0)),
-    ("RGrad",   () -> RGrad( γ₁ = 0.25, γ₂ = 0.50, γ₃ = 2.0, μ = 1.0)),
-    ("RGradCapped", () -> RGradCapped(γ₁ = 0.25, γ₂ = 0.50, γ₃ = 2.0,
+    ("RDelta",  () -> RDelta(γ1 = 0.25, γ2 = 0.50, γ3 = 2.0)),
+    ("RStep",   () -> RStep( γ1 = 0.25, γ2 = 0.80, γ3 = 2.0)),
+    ("RDFO",    () -> RDFO(  γ1 = 0.25, γ2 = 0.50, γ3 = 2.0, ζ = 100.0)),
+    ("RGrad",   () -> RGrad( γ1 = 0.25, γ2 = 0.50, γ3 = 2.0, μ = 1.0)),
+    ("RGradCapped", () -> RGradCapped(γ1 = 0.25, γ2 = 0.50, γ3 = 2.0,
                                      μ = 1.0, μ_max = 128.0)),
     ("RAdaptiveStep",    () -> RAdaptiveStep()),
-    # ("RAdaptiveGrad",    () -> RAdaptiveGrad()),
-    ("RAdaptiveFanYuan", () -> RAdaptiveFanYuan(μ = 1.0)),
+    ("RAdaptiveGrad",    () -> RAdaptiveGrad()),
     # ("RRTR",             () -> RRTR()),
     # ("RRTRGrad",         () -> RRTRGrad(μ = 1.0)),
 ]

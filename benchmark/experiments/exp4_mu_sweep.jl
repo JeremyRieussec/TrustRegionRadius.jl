@@ -14,7 +14,7 @@
 #
 # 2. Uncapped RGrad crosses any threshold on its own, since μ grows
 #    geometrically, so its inactivity is unconditional. It should recover from
-#    a starting μ far below the threshold at a cost of O(log(κ̄/μ₀)) iterations.
+#    a starting μ far below the threshold at a cost of O(log(κ̄/μ0)) iterations.
 #
 #   julia --project=benchmark benchmark/experiments/exp4_mu_sweep.jl
 # =============================================================================

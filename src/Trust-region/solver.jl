@@ -17,34 +17,34 @@
 # -----------------------------------------------------------------------------
 
 """
-    TRParams{T}(; η, η₁, η₂, Δ₀, Δmax, max_iterations, tol, max_time)
+    TRParams{T}(; η, η1, η2, Δ0, Δmax, max_iterations, tol, max_time)
 
 Solver parameters, parametric on the element type so `Float32` and `BigFloat`
 models keep their precision.
 
 # Fields
-- `η`:   **acceptance** threshold; the step is taken when `ρ ≥ η`  (default `η₁`)
-- `η₁`:  first **scaling** threshold, passed to the radius rule    (default 0.1)
-- `η₂`:  second scaling threshold, "very successful"               (default 0.9)
-- `Δ₀`:  initial radius; ignored by rules of the form `Δ = μ‖g‖`   (default 1)
+- `η`:   **acceptance** threshold; the step is taken when `ρ ≥ η`  (default `η1`)
+- `η1`:  first **scaling** threshold, passed to the radius rule    (default 0.1)
+- `η2`:  second scaling threshold, "very successful"               (default 0.9)
+- `Δ0`:  initial radius; ignored by rules of the form `Δ = μ‖g‖`   (default 1)
 - `Δmax`: hard cap on the radius                                  (default `Inf`)
 - `max_iterations`:                                               (default 10 000)
 - `tol`: first-order tolerance on `‖g‖`                           (default `√eps`)
 - `max_time`: wall-clock budget in seconds                        (default `Inf`)
 
-The thresholds satisfy `0 ≤ η ≤ η₁ ≤ η₂ < 1`.
+The thresholds satisfy `0 ≤ η ≤ η1 ≤ η2 < 1`.
 
 # Acceptance is decoupled from scaling
 
-`η` governs whether the trial point is taken; `η₁` and `η₂` govern only how the
-radius is scaled. Taking `η < η₁` opens a middle regime, `ρ ∈ [η, η₁)`, in which
+`η` governs whether the trial point is taken; `η1` and `η2` govern only how the
+radius is scaled. Taking `η < η1` opens a middle regime, `ρ ∈ [η, η1)`, in which
 the step is accepted and the radius nonetheless contracts — a combination the
 coupled formulation cannot express. `η = 0` is admissible and accepts every
 non-increase in `f`; it is covered by the first-order framework of Part I but
 not by the Curtis-Scheinberg analysis, so it is worth a column of its own in any
 comparison.
 
-`η` defaults to `η₁`, which reproduces the coupled behaviour exactly. Pass `η`
+`η` defaults to `η1`, which reproduces the coupled behaviour exactly. Pass `η`
 explicitly to decouple.
 
 !!! note "Hold these fixed across mechanisms"
@@ -55,30 +55,30 @@ explicitly to decouple.
 """
 struct TRParams{T}
     η::T
-    η₁::T
-    η₂::T
-    Δ₀::T
+    η1::T
+    η2::T
+    Δ0::T
     Δmax::T
     max_iterations::Int
     tol::T
     max_time::Float64
 
-    function TRParams{T}(; η₁::Real = T(0.1),
-                           η₂::Real = T(0.9),
+    function TRParams{T}(; η1::Real = T(0.1),
+                           η2::Real = T(0.9),
                            η::Union{Real, Nothing} = nothing,
-                           Δ₀::Real = T(1),
+                           Δ0::Real = T(1),
                            Δmax::Real = T(Inf),
                            max_iterations::Int = 10_000,
                            tol::Real = sqrt(eps(T)),
                            max_time::Real = Inf) where {T}
-        ηa = η === nothing ? η₁ : η
-        0 <= ηa <= η₁ <= η₂ < 1 || throw(ArgumentError(
-            "TRParams: need 0 ≤ η ≤ η₁ ≤ η₂ < 1, got η = $ηa, η₁ = $η₁, η₂ = $η₂"))
-        Δ₀ > 0     || throw(ArgumentError("TRParams: need Δ₀ > 0, got $Δ₀"))
-        Δmax >= Δ₀ || throw(ArgumentError("TRParams: need Δmax ≥ Δ₀"))
+        ηa = η === nothing ? η1 : η
+        0 <= ηa <= η1 <= η2 < 1 || throw(ArgumentError(
+            "TRParams: need 0 ≤ η ≤ η1 ≤ η2 < 1, got η = $ηa, η1 = $η1, η2 = $η2"))
+        Δ0 > 0     || throw(ArgumentError("TRParams: need Δ0 > 0, got $Δ0"))
+        Δmax >= Δ0 || throw(ArgumentError("TRParams: need Δmax ≥ Δ0"))
         max_iterations > 0 || throw(ArgumentError("TRParams: need max_iterations > 0"))
         tol > 0    || throw(ArgumentError("TRParams: need tol > 0"))
-        new{T}(T(ηa), T(η₁), T(η₂), T(Δ₀), T(Δmax), max_iterations,
+        new{T}(T(ηa), T(η1), T(η2), T(Δ0), T(Δmax), max_iterations,
                T(tol), Float64(max_time))
     end
 end
@@ -88,10 +88,10 @@ TRParams(; kwargs...) = TRParams{Float64}(; kwargs...)
 function Base.show(io::IO, p::TRParams{T}) where {T}
     println(io, "TRParams{$T}:")
     println(io, "  η  = ", p.η, "   (acceptance)")
-    println(io, "  η₁ = ", p.η₁, ",  η₂ = ", p.η₂, "   (scaling)")
-    p.η < p.η₁ && println(io, "  acceptance decoupled from scaling: ρ ∈ [",
-                          p.η, ", ", p.η₁, ") accepts but contracts")
-    println(io, "  Δ₀ = ", p.Δ₀, ",  Δmax = ", p.Δmax)
+    println(io, "  η1 = ", p.η1, ",  η2 = ", p.η2, "   (scaling)")
+    p.η < p.η1 && println(io, "  acceptance decoupled from scaling: ρ ∈ [",
+                          p.η, ", ", p.η1, ") accepts but contracts")
+    println(io, "  Δ0 = ", p.Δ0, ",  Δmax = ", p.Δmax)
     println(io, "  max_iterations = ", p.max_iterations)
     println(io, "  tol = ", p.tol, ",  max_time = ", p.max_time)
 end
@@ -171,9 +171,9 @@ function TRSolver(nlp::AbstractNLPModel{T, V};
     rule_c = deepcopy(rule)
     mod_c  = deepcopy(model)
     sub_c  = deepcopy(subsolver)
-    # Some rules need more of (η, η₁, η₂) than the ordering: the step-driven
-    # ones require η₁ > 0. Check once, here, rather than per iteration.
-    validate_thresholds(rule_c, params.η, params.η₁, params.η₂)
+    # Some rules need more of (η, η1, η2) than the ordering: the step-driven
+    # ones require η1 > 0. Check once, here, rather than per iteration.
+    validate_thresholds(rule_c, params.η, params.η1, params.η2)
     # Only retrospective rules need the second Hessian-vector buffer.
     Hs_new = needs_retrospective(rule_c) ? similar(nlp.meta.x0) : similar(nlp.meta.x0, 0)
     reset_model!(mod_c, n)
@@ -221,7 +221,7 @@ Two of these are worth recording even when nothing else is. The activity flag
 decides whether the constraint eventually stops binding, which is the
 distinction between mechanisms that a first-order convergence test cannot see.
 The acceptance flag cannot be reconstructed from `:ratio_trajectory` once
-`η < η₁`, because the rule's own thresholds no longer coincide with the one that
+`η < η1`, because the rule's own thresholds no longer coincide with the one that
 decided the step; it is the only record of which iterations belong to `𝒮`.
 
 # Statuses
@@ -249,7 +249,7 @@ function SolverCore.solve!(solver::TRSolver{T, V, R, M, S},
     f = obj(nlp, solver.x)
     grad!(nlp, solver.x, solver.g)
     g_norm = norm(solver.g)
-    Δ = T(initial_radius(solver.rule, Float64(p.Δ₀), Float64(g_norm)))
+    Δ = T(initial_radius(solver.rule, Float64(p.Δ0), Float64(g_norm)))
     Δ = min(Δ, p.Δmax)
 
     Δ_tr = trace ? Float64[Δ]      : Float64[]
@@ -306,9 +306,9 @@ function SolverCore.solve!(solver::TRSolver{T, V, R, M, S},
         end
 
         g_norm_old = g_norm
-        # Acceptance is decided by η alone. The rule receives η₁ and η₂ and
+        # Acceptance is decided by η alone. The rule receives η1 and η2 and
         # scales the radius on its own reading of ρ, so an accepted step with
-        # ρ ∈ [η, η₁) still contracts.
+        # ρ ∈ [η, η1) still contracts.
         accepted = ρ >= p.η
 
         if accepted
@@ -332,7 +332,7 @@ function SolverCore.solve!(solver::TRSolver{T, V, R, M, S},
         end
 
         Δ = T(update_radius!(solver.rule, Float64(Δ), Float64(ρ_rule), accepted,
-                             Float64(p.η₁), Float64(p.η₂),
+                             Float64(p.η1), Float64(p.η2),
                              Float64(s_norm), Float64(g_norm_old), Float64(g_norm)))
         Δ = min(Δ, p.Δmax)
 

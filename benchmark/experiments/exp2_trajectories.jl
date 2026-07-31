@@ -64,7 +64,7 @@ function main()
             isempty(r.ratio_traj) && continue
             plot!(plt, clamp.(r.ratio_traj, -0.5, 2.0); label = r.config)
         end
-        hline!(plt, [SOLVER_PARAMS.η₁, SOLVER_PARAMS.η₂];
+        hline!(plt, [SOLVER_PARAMS.η1, SOLVER_PARAMS.η2];
                ls = :dash, c = :black, label = "")
         savefig_archived(arch, "exp2_ratio_traj_$(pname).pdf", plt)
     end

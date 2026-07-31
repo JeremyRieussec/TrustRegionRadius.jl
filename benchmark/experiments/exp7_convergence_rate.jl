@@ -50,8 +50,8 @@ function main()
     problems = default_problems()
     configs  = rule_configs()
     # A tight tolerance is essential: the asymptotic regime is what is measured.
-    params = TRParams(η₁ = SOLVER_PARAMS.η₁, η₂ = SOLVER_PARAMS.η₂,
-                      Δ₀ = SOLVER_PARAMS.Δ₀,
+    params = TRParams(η1 = SOLVER_PARAMS.η1, η2 = SOLVER_PARAMS.η2,
+                      Δ0 = SOLVER_PARAMS.Δ0,
                       max_iterations = SOLVER_PARAMS.max_iterations,
                       tol = 1e-10, max_time = SOLVER_PARAMS.max_time)
 
