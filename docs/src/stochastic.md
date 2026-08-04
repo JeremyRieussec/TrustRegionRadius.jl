@@ -1,0 +1,166 @@
+# Sampling
+
+For a problem given as an expectation, `f(x) = E[F(x,ξ)]`, the sampling rule is a
+**fourth axis** alongside the radius mechanism, the model Hessian and the
+subproblem solver. [`SampledNLP`](@ref) satisfies the ordinary NLP interface, so
+every mechanism, model and subsolver in the package runs over it unchanged.
+
+```julia
+prob = PerturbedSum(base_nlp, 4_000; σg = 1.0)      # mean is exactly base_nlp
+nlp  = SampledNLP(prob, RadiusProportional(κ_g = 1.0))
+
+stats = tr_solve(nlp; rule = RDelta(), model = ExactHessian(),
+                 subsolver = ExactMS(), trace = true)
+
+stats.solver_specific[:samples_total]              # the cost measure that matters
+norm(true_gradient(prob, stats.solution))          # score on the truth, not on ĝ
+```
+
+## The cost inversion
+
+The accuracy requirements for convergence (Chen, Menickelly & Scheinberg 2018) are
+stated in terms of the radius: gradient error `O(Δ_k)`, function error `O(Δ_k²)`.
+For a Monte Carlo estimator that means
+
+```math
+N_k^{\text{grad}} = \Theta(\Delta_k^{-2}), \qquad
+N_k^{\text{obj}}  = \Theta(\Delta_k^{-4}),
+```
+
+so the total work is `Σ_k Δ_k^{-2}` — the **reciprocal** of the `Σ_k Δ_k²` tables
+of Part II. The deterministic ranking of the mechanisms therefore inverts. On the
+running example of Part II, over 60 iterations:
+
+| rule | `Σ Δ_k²` | `Σ Δ_k^{-2}` | `Σ Δ_k^{-4}` |
+|---|---|---|---|
+| `RDelta` | 4.4e+35 | **1.3e+00** | **1.1e+00** |
+| `RStep` | 2.4e+02 | 1.6e+01 | 4.7e+00 |
+| `RDFO` | **1.4e+00** | 2.0e+05 | 2.0e+09 |
+| `RGrad` | **1.4e+00** | 7.5e+04 | 1.7e+08 |
+
+The mechanisms that the summability criteria favour are the most expensive to run
+stochastically, by five to nine orders of magnitude.
+
+!!! warning "Iteration counts assume `FixedSample`"
+    Every profile in Parts I–II counts iterations, which is proportional to work
+    only when `N_k` is constant. Under any adaptive rule the same runs order
+    differently. Report `:samples_total`.
+
+## The feedback loop
+
+[`couples_to_radius`](@ref) marks the rules whose `N_k` depends on `Δ_k`. When it
+does, the radius mechanism and the sampling rule stop being independent axes: for
+a criticality-anchored rule, `ĝ_k` sets `Δ_k` sets `N_k` sets the accuracy of
+`ĝ_{k+1}`. A noisy gradient shrinks the radius, which demands more samples, which
+are spent recovering the accuracy the shrinking presumed. `RDelta` has no such
+loop. [`NormTest`](@ref) is the control: it also drives `N_k → ∞`, but through
+`‖ĝ_k‖ → 0` rather than through the radius, so the coupling can be switched off
+without switching off the growth.
+
+## The rules
+
+| rule | `N_k` from | reads `Δ_k`? |
+|---|---|---|
+| [`FixedSample`](@ref) | nothing | no |
+| [`RadiusProportional`](@ref) | `(σ/(κΔ_k))²` | **yes** |
+| [`NormTest`](@ref) | `σ_g²/(θ²‖ĝ‖²)` | no |
+| [`InnerProductTest`](@ref) | `Var(∇Fᵢᵀĝ)/(θ²‖ĝ‖⁴)` | no |
+| [`OrthogonalityTest`](@ref) | `E‖proj⊥∇Fᵢ‖²/(ν²‖ĝ‖²)` | no |
+| [`AugmentedInnerProduct`](@ref) | the maximum of the previous two | no |
+| [`GeometricSample`](@ref) | `N₀·rate^k`, fixed in advance | no |
+| [`SequentialEstimation`](@ref) | `2z²σ_f²/(κ²·pred²)` | **yes**, through `pred` |
+
+### Why the inner-product tests are cheaper
+
+Split the gradient variance along and across the estimated direction:
+
+```math
+\sigma_g^2 = \frac{\mathrm{ip}^2}{\|\hat g\|^2} + \mathrm{orth}^2,
+\qquad
+\mathrm{ip}^2 = \operatorname{Var}(\nabla F_i^\top \hat g),
+\quad
+\mathrm{orth}^2 = \mathbb E\bigl\|\text{proj}_\perp \nabla F_i\bigr\|^2 .
+```
+
+The norm test bounds the sum. But only the component **along** `ĝ` decides whether the
+sampled gradient still points downhill — error orthogonal to it rotates the direction
+without threatening descent. So bounding the sum is stricter than the descent property
+requires, and [`InnerProductTest`](@ref) reaches the same guarantee at a smaller sample.
+[`OrthogonalityTest`](@ref) caps the rotation, which the inner-product test alone does
+not; [`AugmentedInnerProduct`](@ref) applies both.
+
+[`batch_stats`](@ref) computes all four moments in one pass over the score matrix, and
+the identity above holds to rounding — so the tests are comparable on the same batch.
+
+### Sequential estimation
+
+[`SequentialEstimation`](@ref) sizes the sample against the **predicted decrease**
+rather than the gradient: enough samples that the noise in the estimated decrease is
+small beside the decrease the model claims,
+
+```math
+N_k \;\ge\; \frac{2 z_{\alpha/2}^2\,\hat\sigma_f^2}{\kappa^2\,\mathrm{pred}_{k-1}^2}.
+```
+
+The accuracy demanded therefore tracks *progress* rather than *criticality*. It is
+monotone by default, because a batch that shrinks makes `f̂` jump for reasons unrelated
+to the step and ρ̂ then measures the change of estimator rather than of objective; the
+`growth` factor bounds the rise per iteration, measured from `N_start` on the first
+adaptive call, so one small `pred` cannot demand the whole population at once.
+
+## Common random numbers
+
+The batch is drawn once per iteration and held fixed, so `f̂(x_k)`, `f̂(x_k + s_k)`
+and any retrospective evaluation use the same realisations. This is not an
+optimisation. With independent draws the error in `f̂(x_k) − f̂(x_k + s_k)` does not
+shrink with the step, so ρ̂ is pure noise once `‖s_k‖` falls below the sampling
+error, and every mechanism stalls for a reason external to it:
+
+| `‖s‖` | shared batch | independent batches |
+|---|---|---|
+| `1e-1` | 1.3e-02 | 1.8e-01 |
+| `1e-3` | 1.3e-04 | 1.8e-01 |
+
+The solver re-evaluates `f` and `g` at the incumbent after every resample, so the
+numerator and denominator of ρ̂ always come from one batch.
+
+## Score on the truth
+
+`‖ĝ_k‖ ≤ tol` is a statement about one batch, and a mechanism that shrinks the
+radius fast enough will meet it on noise alone. [`PerturbedSum`](@ref) has mean
+exactly the base model, so [`true_gradient`](@ref) is available at every iterate;
+use it for every reported number.
+
+## API
+
+```@docs
+StochasticProblem
+ScoredProblem
+FiniteSum
+PerturbedSum
+SamplingRule
+SamplingState
+SampleStats
+batch_stats
+FixedSample
+RadiusProportional
+NormTest
+InnerProductTest
+OrthogonalityTest
+AugmentedInnerProduct
+GeometricSample
+SequentialEstimation
+record_prediction!
+reset_sampling_rule!
+couples_to_radius
+grad_sample_size
+obj_sample_size
+SampledNLP
+resample!
+prepare_iteration!
+update_variances!
+samples_used
+reset_sampling!
+true_objective
+true_gradient
+```

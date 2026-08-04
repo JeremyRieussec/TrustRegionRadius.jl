@@ -15,7 +15,7 @@
 #
 # All are concrete subtypes of `RadiusRule` and implement
 #
-#     initial_radius(rule, Δ₀, g_norm)                            -> Float64
+#     initial_radius(rule, Δ0, g_norm)                            -> Float64
 #     update_radius!(rule, Δ, ρ, accepted, η1, η2,
 #                    s_norm, g_norm_old, g_norm_new)              -> Float64
 #     reset_rule!(rule)                                           -> nothing
@@ -49,7 +49,7 @@ Abstract supertype for trust-region radius update mechanisms.
 
 A concrete `MyRule <: RadiusRule` must implement
 
-    initial_radius(rule, Δ₀, g_norm) -> Float64
+    initial_radius(rule, Δ0, g_norm) -> Float64
     update_radius!(rule, Δ, ρ, accepted, η1, η2,
                    s_norm, g_norm_old, g_norm_new) -> Float64
 
@@ -85,12 +85,12 @@ rules can ignore `accepted`.
 abstract type RadiusRule end
 
 """
-    initial_radius(rule, Δ₀, g_norm) -> Float64
+    initial_radius(rule, Δ0, g_norm) -> Float64
 
-Radius at iteration 0. Most rules return `Δ₀`; those of the form
-`Δ = μ‖g‖` return `μ0 · g_norm` and so ignore `Δ₀` entirely.
+Radius at iteration 0. Most rules return `Δ0`; those of the form
+`Δ = μ‖g‖` return `μ0 · g_norm` and so ignore `Δ0` entirely.
 """
-initial_radius(::RadiusRule, Δ₀::Float64, ::Float64) = Δ₀
+initial_radius(::RadiusRule, Δ0::Float64, ::Float64) = Δ0
 
 """
     update_radius!(rule, Δ, ρ, accepted, η1, η2, s_norm, g_norm_old, g_norm_new)

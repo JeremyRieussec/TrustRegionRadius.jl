@@ -17,34 +17,35 @@
 # -----------------------------------------------------------------------------
 
 """
-    TRParams{T}(; η, η1, η2, Δ0, Δmax, max_iterations, tol, max_time)
+    TRParams{T}(; η, η₁, η₂, Δ₀, Δmax, max_iterations, tol, max_time)
 
 Solver parameters, parametric on the element type so `Float32` and `BigFloat`
 models keep their precision.
 
 # Fields
-- `η`:   **acceptance** threshold; the step is taken when `ρ ≥ η`  (default `η1`)
-- `η1`:  first **scaling** threshold, passed to the radius rule    (default 0.1)
-- `η2`:  second scaling threshold, "very successful"               (default 0.9)
-- `Δ0`:  initial radius; ignored by rules of the form `Δ = μ‖g‖`   (default 1)
+- `η`:   **acceptance** threshold; the step is taken when `ρ ≥ η`  (default `η₁`)
+- `η₁`:  first **scaling** threshold, passed to the radius rule    (default 0.1)
+- `η₂`:  second scaling threshold, "very successful"               (default 0.9)
+- `Δ₀`:  initial radius; ignored by rules of the form `Δ = μ‖g‖`   (default 1)
 - `Δmax`: hard cap on the radius                                  (default `Inf`)
 - `max_iterations`:                                               (default 10 000)
 - `tol`: first-order tolerance on `‖g‖`                           (default `√eps`)
+- `tol_H`: second-order tolerance on `λ_min(B)`; `-1` disables it  (default `-1`)
 - `max_time`: wall-clock budget in seconds                        (default `Inf`)
 
-The thresholds satisfy `0 ≤ η ≤ η1 ≤ η2 < 1`.
+The thresholds satisfy `0 ≤ η ≤ η₁ ≤ η₂ < 1`.
 
 # Acceptance is decoupled from scaling
 
-`η` governs whether the trial point is taken; `η1` and `η2` govern only how the
-radius is scaled. Taking `η < η1` opens a middle regime, `ρ ∈ [η, η1)`, in which
+`η` governs whether the trial point is taken; `η₁` and `η₂` govern only how the
+radius is scaled. Taking `η < η₁` opens a middle regime, `ρ ∈ [η, η₁)`, in which
 the step is accepted and the radius nonetheless contracts — a combination the
 coupled formulation cannot express. `η = 0` is admissible and accepts every
 non-increase in `f`; it is covered by the first-order framework of Part I but
 not by the Curtis-Scheinberg analysis, so it is worth a column of its own in any
 comparison.
 
-`η` defaults to `η1`, which reproduces the coupled behaviour exactly. Pass `η`
+`η` defaults to `η₁`, which reproduces the coupled behaviour exactly. Pass `η`
 explicitly to decouple.
 
 !!! note "Hold these fixed across mechanisms"
@@ -55,31 +56,36 @@ explicitly to decouple.
 """
 struct TRParams{T}
     η::T
-    η1::T
-    η2::T
-    Δ0::T
+    η₁::T
+    η₂::T
+    Δ₀::T
     Δmax::T
     max_iterations::Int
     tol::T
+    tol_H::T
     max_time::Float64
 
-    function TRParams{T}(; η1::Real = T(0.1),
-                           η2::Real = T(0.9),
+    function TRParams{T}(; η₁::Real = T(0.1),
+                           η₂::Real = T(0.9),
                            η::Union{Real, Nothing} = nothing,
-                           Δ0::Real = T(1),
+                           Δ₀::Real = T(1),
                            Δmax::Real = T(Inf),
                            max_iterations::Int = 10_000,
                            tol::Real = sqrt(eps(T)),
+                           tol_H::Real = T(-1),
                            max_time::Real = Inf) where {T}
-        ηa = η === nothing ? η1 : η
-        0 <= ηa <= η1 <= η2 < 1 || throw(ArgumentError(
-            "TRParams: need 0 ≤ η ≤ η1 ≤ η2 < 1, got η = $ηa, η1 = $η1, η2 = $η2"))
-        Δ0 > 0     || throw(ArgumentError("TRParams: need Δ0 > 0, got $Δ0"))
-        Δmax >= Δ0 || throw(ArgumentError("TRParams: need Δmax ≥ Δ0"))
+        ηa = η === nothing ? η₁ : η
+        0 <= ηa <= η₁ <= η₂ < 1 || throw(ArgumentError(
+            "TRParams: need 0 ≤ η ≤ η₁ ≤ η₂ < 1, got η = $ηa, η₁ = $η₁, η₂ = $η₂"))
+        Δ₀ > 0     || throw(ArgumentError("TRParams: need Δ₀ > 0, got $Δ₀"))
+        Δmax >= Δ₀ || throw(ArgumentError("TRParams: need Δmax ≥ Δ₀"))
         max_iterations > 0 || throw(ArgumentError("TRParams: need max_iterations > 0"))
         tol > 0    || throw(ArgumentError("TRParams: need tol > 0"))
-        new{T}(T(ηa), T(η1), T(η2), T(Δ0), T(Δmax), max_iterations,
-               T(tol), Float64(max_time))
+        tol_H == -1 || tol_H > 0 || throw(ArgumentError(
+            "TRParams: need tol_H > 0 to request the second-order test, " *
+            "or tol_H = -1 to disable it; got $tol_H"))
+        new{T}(T(ηa), T(η₁), T(η₂), T(Δ₀), T(Δmax), max_iterations,
+               T(tol), T(tol_H), Float64(max_time))
     end
 end
 
@@ -88,12 +94,15 @@ TRParams(; kwargs...) = TRParams{Float64}(; kwargs...)
 function Base.show(io::IO, p::TRParams{T}) where {T}
     println(io, "TRParams{$T}:")
     println(io, "  η  = ", p.η, "   (acceptance)")
-    println(io, "  η1 = ", p.η1, ",  η2 = ", p.η2, "   (scaling)")
-    p.η < p.η1 && println(io, "  acceptance decoupled from scaling: ρ ∈ [",
-                          p.η, ", ", p.η1, ") accepts but contracts")
-    println(io, "  Δ0 = ", p.Δ0, ",  Δmax = ", p.Δmax)
+    println(io, "  η₁ = ", p.η₁, ",  η₂ = ", p.η₂, "   (scaling)")
+    p.η < p.η₁ && println(io, "  acceptance decoupled from scaling: ρ ∈ [",
+                          p.η, ", ", p.η₁, ") accepts but contracts")
+    println(io, "  Δ₀ = ", p.Δ₀, ",  Δmax = ", p.Δmax)
     println(io, "  max_iterations = ", p.max_iterations)
     println(io, "  tol = ", p.tol, ",  max_time = ", p.max_time)
+    p.tol_H > 0 ?
+        println(io, "  tol_H = ", p.tol_H, "   (second-order test: λ_min ≥ −tol_H)") :
+        println(io, "  tol_H disabled: stops at ‖g‖ ≤ tol, whatever the curvature")
 end
 
 """
@@ -171,9 +180,9 @@ function TRSolver(nlp::AbstractNLPModel{T, V};
     rule_c = deepcopy(rule)
     mod_c  = deepcopy(model)
     sub_c  = deepcopy(subsolver)
-    # Some rules need more of (η, η1, η2) than the ordering: the step-driven
-    # ones require η1 > 0. Check once, here, rather than per iteration.
-    validate_thresholds(rule_c, params.η, params.η1, params.η2)
+    # Some rules need more of (η, η₁, η₂) than the ordering: the step-driven
+    # ones require η₁ > 0. Check once, here, rather than per iteration.
+    validate_thresholds(rule_c, params.η, params.η₁, params.η₂)
     # Only retrospective rules need the second Hessian-vector buffer.
     Hs_new = needs_retrospective(rule_c) ? similar(nlp.meta.x0) : similar(nlp.meta.x0, 0)
     reset_model!(mod_c, n)
@@ -213,6 +222,13 @@ With `trace = true` the per-iteration trajectories are collected into
 | `:step_trajectory`       | `k`    | `‖s_i‖`                            |
 | `:active_trajectory`     | `k`    | `‖s_i‖ = Δ_i`                      |
 | `:accepted_trajectory`   | `k`    | `ρ_i ≥ η`                          |
+| `:lambda_min_trajectory` | `k+1`  | `λ_min(B_{i-1})`                   |
+| `:tau_trajectory`        | `k+1`  | `τ_{i-1}`, the measure the rule saw |
+
+The last two appear only when a curvature estimate was computed at all, i.e. when
+the rule is wrapped in `SecondOrder` or `tol_H > 0`. Comparing them is the cheapest
+second-order diagnostic there is: wherever `τ > ‖g‖` the run is somewhere the
+gradient alone calls critical and the curvature does not.
 
 The first three are one entry longer than the rest, since they have a value
 before the first iteration; align on the tail when plotting them together.
@@ -221,7 +237,7 @@ Two of these are worth recording even when nothing else is. The activity flag
 decides whether the constraint eventually stops binding, which is the
 distinction between mechanisms that a first-order convergence test cannot see.
 The acceptance flag cannot be reconstructed from `:ratio_trajectory` once
-`η < η1`, because the rule's own thresholds no longer coincide with the one that
+`η < η₁`, because the rule's own thresholds no longer coincide with the one that
 decided the step; it is the only record of which iterations belong to `𝒮`.
 
 # Statuses
@@ -242,6 +258,7 @@ function SolverCore.solve!(solver::TRSolver{T, V, R, M, S},
     p = solver.params
     reset_rule!(solver.rule)
     reset_model!(solver.model, nlp.meta.nvar)
+    nlp isa SampledNLP && reset_sampling!(nlp)
     retro = needs_retrospective(solver.rule)
 
     t0 = time()
@@ -249,12 +266,24 @@ function SolverCore.solve!(solver::TRSolver{T, V, R, M, S},
     f = obj(nlp, solver.x)
     grad!(nlp, solver.x, solver.g)
     g_norm = norm(solver.g)
-    Δ = T(initial_radius(solver.rule, Float64(p.Δ0), Float64(g_norm)))
+
+    # λ_min(B_k) is needed by a τ-anchored rule, by the second-order stopping
+    # test, or by neither — in which case it is never computed. `crit` is what
+    # the rule measures its radius against: ‖g_k‖ for a first-order rule,
+    # τ_k = max{‖g_k‖, −λ_min} for one wrapped in `SecondOrder`.
+    want_curv = needs_curvature(solver.rule) || p.tol_H > 0
+    λmin = want_curv ? T(lambda_min_estimate(solver.model, nlp, solver.x)) : T(NaN)
+    crit = T(criticality(solver.rule, Float64(g_norm),
+                         want_curv ? Float64(λmin) : 0.0))
+
+    Δ = T(initial_radius(solver.rule, Float64(p.Δ₀), Float64(crit)))
     Δ = min(Δ, p.Δmax)
 
     Δ_tr = trace ? Float64[Δ]      : Float64[]
     g_tr = trace ? Float64[g_norm] : Float64[]
     f_tr = trace ? Float64[f]      : Float64[]
+    λ_tr = (trace && want_curv) ? Float64[λmin] : Float64[]
+    τ_tr = (trace && want_curv) ? Float64[crit] : Float64[]
     ρ_tr = Float64[]
     s_tr = Float64[]
     a_tr = Bool[]
@@ -269,7 +298,12 @@ function SolverCore.solve!(solver::TRSolver{T, V, R, M, S},
     k = 0
     while true
         if g_norm <= p.tol
-            set_status!(stats, :first_order); break
+            # With tol_H set, a critical point is only a stopping point when the
+            # model reports no usable negative curvature; otherwise the run
+            # continues and the anchored rules see τ = −λ_min > 0.
+            if p.tol_H <= 0 || λmin >= -p.tol_H
+                set_status!(stats, p.tol_H > 0 ? :second_order : :first_order); break
+            end
         end
         if k >= p.max_iterations
             set_status!(stats, :max_iter); break
@@ -278,6 +312,24 @@ function SolverCore.solve!(solver::TRSolver{T, V, R, M, S},
             set_status!(stats, :max_time); break
         end
         k += 1
+
+        # --- resample, if the model is stochastic ---
+        # `prepare_iteration!` is a no-op for an ordinary NLP. For a SampledNLP it
+        # chooses N_k from the sampling rule and draws the batch, after which the
+        # incumbent f and g belong to the previous batch and must be recomputed:
+        # ared and pred have to be formed from the same realisations, or ρ̂ is
+        # dominated by the difference between two batches rather than by the step.
+        if prepare_iteration!(nlp, k, Float64(Δ), Float64(g_norm))
+            f = obj(nlp, solver.x)
+            grad!(nlp, solver.x, solver.g)
+            g_norm = norm(solver.g)
+            update_variances!(nlp, solver.x)
+            if want_curv
+                λmin = T(lambda_min_estimate(solver.model, nlp, solver.x))
+            end
+            crit = T(criticality(solver.rule, Float64(g_norm),
+                                 want_curv ? Float64(λmin) : 0.0))
+        end
 
         # --- subproblem ---
         local active::Bool
@@ -298,6 +350,11 @@ function SolverCore.solve!(solver::TRSolver{T, V, R, M, S},
         actual = f - f_cand
         ρ = (isfinite(f_cand) && predicted > 0) ? actual / predicted : T(-Inf)
 
+        # Hand the predicted reduction back to the sampling rule. Only
+        # SequentialEstimation reads it — it sizes the next batch so the noise in
+        # the estimated decrease stays small beside the decrease the model claims.
+        record_prediction!(nlp, Float64(predicted))
+
         # Stagnation: |actual| at the rounding level of f and a numerically nil
         # step. ρ is then noise, every step is rejected, and the radius
         # collapses for ever; report it rather than spin.
@@ -306,21 +363,31 @@ function SolverCore.solve!(solver::TRSolver{T, V, R, M, S},
         end
 
         g_norm_old = g_norm
-        # Acceptance is decided by η alone. The rule receives η1 and η2 and
+        crit_old = crit
+        # Acceptance is decided by η alone. The rule receives η₁ and η₂ and
         # scales the radius on its own reading of ρ, so an accepted step with
-        # ρ ∈ [η, η1) still contracts.
+        # ρ ∈ [η, η₁) still contracts.
         accepted = ρ >= p.η
 
         if accepted
             copyto!(solver.g_old, solver.g)
             copyto!(solver.x, solver.x_cand)
-            f = f_cand
+            f = f_cand          # same batch as ared: consistent within the iteration
             grad!(nlp, solver.x, solver.g)
             g_norm = norm(solver.g)
             # quasi-Newton update with y_k = g_{k+1} − g_k
             @. solver.g_old = solver.g - solver.g_old
             update_model!(solver.model, solver.s, solver.g_old)
         end
+
+        # The curvature belongs to the model at the *new* iterate, so it is
+        # re-estimated after the model has been updated — on a rejected step
+        # neither has moved and the previous value still stands.
+        if want_curv && accepted
+            λmin = T(lambda_min_estimate(solver.model, nlp, solver.x))
+        end
+        crit = T(criticality(solver.rule, Float64(g_norm),
+                             want_curv ? Float64(λmin) : 0.0))
 
         # --- the ratio that drives the radius ---
         # Retrospective rules judge the NEW model on the SAME step, so they need
@@ -332,12 +399,13 @@ function SolverCore.solve!(solver::TRSolver{T, V, R, M, S},
         end
 
         Δ = T(update_radius!(solver.rule, Float64(Δ), Float64(ρ_rule), accepted,
-                             Float64(p.η1), Float64(p.η2),
-                             Float64(s_norm), Float64(g_norm_old), Float64(g_norm)))
+                             Float64(p.η₁), Float64(p.η₂),
+                             Float64(s_norm), Float64(crit_old), Float64(crit)))
         Δ = min(Δ, p.Δmax)
 
         if trace
             push!(Δ_tr, Δ); push!(g_tr, g_norm); push!(f_tr, f)
+            want_curv && (push!(λ_tr, Float64(λmin)); push!(τ_tr, Float64(crit)))
             push!(ρ_tr, ρ); push!(s_tr, s_norm); push!(a_tr, active)
             push!(acc_tr, accepted)
         end
@@ -366,6 +434,16 @@ function SolverCore.solve!(solver::TRSolver{T, V, R, M, S},
         set_solver_specific!(stats, :step_trajectory,   s_tr)
         set_solver_specific!(stats, :active_trajectory, a_tr)
         set_solver_specific!(stats, :accepted_trajectory, acc_tr)
+        if nlp isa SampledNLP
+            set_solver_specific!(stats, :grad_sample_trajectory, copy(nlp.Ng_hist))
+            set_solver_specific!(stats, :obj_sample_trajectory,  copy(nlp.Nf_hist))
+            set_solver_specific!(stats, :samples_total, samples_used(nlp).total)
+            set_solver_specific!(stats, :sample_cap_hits, nlp.capped)
+        end
+        if want_curv
+            set_solver_specific!(stats, :lambda_min_trajectory, λ_tr)
+            set_solver_specific!(stats, :tau_trajectory,        τ_tr)
+        end
         set_solver_specific!(stats, :final_delta,       Float64(Δ))
     end
     return stats

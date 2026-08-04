@@ -9,6 +9,23 @@
 - [ ] decouple acceptance $\eta$ from scaling parameters $\eta_1$, and $\eta_2$ in rules.
 - [ ] make notebook tutorial for benchmarking the algorithm on various test problems.
 - [ ] make documentation for using benchmarking. 
+- [ ] make documentation for using the algorithm on new problems.
+- [ ] add second-order convergence radius mechanism to the algorithm.
+- [ ] add second-order convergence tests to the benchmarking suite.
+- [ ] add stochastic setting
+- [ ] add stochastic setting tests to the benchmarking suite:
+  - [ ] likelihood
+  - [ ] least-squares regression
+  - [ ] logistic regression
+  - [ ] neural network training
+  - [ ] SVM training 
+- [ ] add sampling mechanism to the algorithm for stochastic setting:
+  - [ ] geomimetric sampling
+  - [ ] uniform sampling
+  - [ ] importance sampling
+  - [ ] adaptive sampling
+  - [ ] variance reduction techniques
+  - [ ] adaptive sampling with variance reduction techniques  
 ---
 
 ## Bibliography

@@ -85,6 +85,7 @@ julia --project=benchmark benchmark/experiments/run_all.jl 1 3 5   # a subset
 | `exp6_interaction` | rule × model grid; additivity residuals |
 | `exp7_convergence_rate` | local order, conditioned on inactivity |
 | `exp8_single_problem` | one problem in detail: Δ, ‖g‖, ρ and the inactivity countdown |
+| `exp9_second_order` | ‖g‖- vs τ-anchoring at a saddle; measure × subsolver grid |
 
 Experiment 8 takes a problem name, so it can be pointed anywhere without editing the script:
 
