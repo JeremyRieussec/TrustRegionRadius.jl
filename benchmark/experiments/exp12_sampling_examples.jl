@@ -3,6 +3,20 @@
 #
 # EXPERIMENT 12 -- the three worked examples under every sampling rule.
 #
+# Adapted to the problem-class split. Three changes, all forced by the fact that
+# these examples are FINITE SUMS rather than expectations:
+#
+#   * `SampledNLP` -> `FiniteSumNLP`. The oracle now names its class, and the
+#     expectation branch (`ExpectationNLP`) is a different type with a different
+#     solver.
+#   * `N_max` dropped from every rule. On a finite sum the cap is M, imposed by
+#     the problem, and a rule carrying a user N_max is now REJECTED at oracle
+#     construction -- because there it is either redundant (≥ M) or a deliberate
+#     sub-population budget (< M), and those are different intentions. NMAX is
+#     kept below and passed as the oracle's `budget` where a genuine budget is
+#     wanted.
+#   * `LikelihoodNLP` -> `FullBatchNLP`, as in experiment 11.
+#
 #   least squares   linear (Gauss-Newton exact) and exponential fitting
 #   likelihood      logistic regression, correctly specified
 #   classification  one-hidden-layer softmax network
@@ -37,12 +51,12 @@
 #      axes, and the mechanism pays for its own radius policy.
 #
 #   julia --project=benchmark benchmark/experiments/exp12_sampling_examples.jl
+#
+# Format note: no `using` and no `include` here. `initialisation.jl` loads the
+# packages, `harness.jl`, `archive.jl` and `config.jl` once, in order, exactly as
+# it does for experiments 1-7. Re-including them per file re-ran `config.jl` and
+# so re-evaluated its `const`s, which Julia either warns about or rejects.
 # =============================================================================
-
-using Plots, Printf, LinearAlgebra, Random, Statistics
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
 
 const SEEDS  = 1:5
 const MAXIT  = 300
@@ -80,18 +94,22 @@ const EXAMPLES = [
 
 const SAMPLERS = [
     ("FixedSample(64)",      () -> FixedSample(64)),
-    ("RadiusProportional",   () -> RadiusProportional(κ_g = 1.0, κ_f = 1.0, N_max = NMAX)),
-    ("NormTest(0.5)",        () -> NormTest(θ = 0.5, N_max = NMAX)),
-    ("InnerProduct(0.9)",    () -> InnerProductTest(θ = 0.9, N_min = 8, N_max = NMAX)),
-    ("Orthogonality(2.0)",   () -> OrthogonalityTest(ν = 2.0, N_min = 8, N_max = NMAX)),
+    ("RadiusProportional",   () -> RadiusProportional(κ_g = 1.0, κ_f = 1.0)),
+    ("NormTest(0.5)",        () -> NormTest(θ = 0.5)),
+    ("InnerProduct(0.9)",    () -> InnerProductTest(θ = 0.9, N_min = 8)),
+    ("Orthogonality(2.0)",   () -> OrthogonalityTest(ν = 2.0, N_min = 8)),
     ("Augmented(0.9,2.0)",   () -> AugmentedInnerProduct(θ = 0.9, ν = 2.0,
-                                                         N_min = 8, N_max = NMAX)),
-    ("Geometric(8,1.06)",    () -> GeometricSample(N₀ = 8, rate = 1.06, N_max = NMAX)),
+                                                         N_min = 8)),
+    ("Geometric(8,1.06)",    () -> GeometricSample(N₀ = 8, rate = 1.06)),
     ("Sequential(0.25)",     () -> SequentialEstimation(κ = 0.25, α = 0.05,
-                                                        N_min = 8, N_max = NMAX)),
+                                                        N_min = 8)),
 ]
 
-const RULES = [("RDelta", () -> RDelta()), ("RGrad", () -> RGrad(μ = 1.0))]
+# The two radius mechanisms this experiment varies. NOT `RULES`: that name is
+# config.jl's full list of eight, and redefining it here shadowed the mechanisms
+# every other experiment runs on -- a `const` redefinition Julia warns about and
+# whose effect depends on include order.
+const TR_RULES = [("RDelta", () -> RDelta()), ("RGrad", () -> RGrad(μ = 1.0))]
 
 # --- one run -----------------------------------------------------------------
 
@@ -106,7 +124,7 @@ end
 
 function one_run(exf, samplerf, rulef, seed)
     ex  = exf(seed)
-    nlp = SampledNLP(ex.prob, samplerf(); x0 = copy(ex.x0), seed = seed)
+    nlp = FiniteSumNLP(ex.prob, samplerf(); x0 = copy(ex.x0), seed = seed)
     st = tr_solve(nlp; rule = rulef(), model = ex.model(), subsolver = SteihaugCG(),
                   trace = true,
                   params = TRParams(tol = 1e-7, max_iterations = MAXIT))
@@ -122,9 +140,9 @@ end
 
 med(v) = isempty(v) ? NaN : sort(collect(skipmissing(v)))[max(1, cld(length(v), 2))]
 
-function run_grid()
+function sampling_grid()
     rows = NamedTuple[]
-    for (ename, exf) in EXAMPLES, (sname, sf) in SAMPLERS, (rname, rf) in RULES
+    for (ename, exf) in EXAMPLES, (sname, sf) in SAMPLERS, (rname, rf) in TR_RULES
         runs = [one_run(exf, sf, rf, s) for s in SEEDS]
         push!(rows, (example = ename, sampler = sname, rule = rname,
                      iters   = med([r.iters   for r in runs]),
@@ -139,7 +157,7 @@ function run_grid()
     return rows
 end
 
-function grid_table(rows)
+function sampling_table(rows)
     io = IOBuffer()
     @printf(io, "%-10s %-22s %-7s %7s %11s %11s %7s %8s\n",
             "example", "sampling rule", "rule", "iters", "samples", "true ‖g‖",
@@ -168,7 +186,7 @@ function cost_ratio_table(rows)
     @printf(io, "%-10s %-7s %12s %12s %12s\n",
             "example", "rule", "InnerProd", "Orthog", "Augmented")
     println(io, "-"^58)
-    for (ename, _) in EXAMPLES, (rname, _) in RULES
+    for (ename, _) in EXAMPLES, (rname, _) in TR_RULES
         base = findfirst(r -> r.example == ename && r.rule == rname &&
                               r.sampler == "NormTest(0.5)", rows)
         base === nothing && continue
@@ -223,7 +241,7 @@ function gn_table()
     for mf in (0.0, 0.1, 0.3, 1.0)
         p  = exponential_fit(n_terms_model = 2, M = 2_000, noise = 0.05,
                              misfit = mf, seed = 1)
-        st = tr_solve(LikelihoodNLP(p; x0 = [0.8, 0.4, 1.2, 1.2]);
+        st = tr_solve(FullBatchNLP(p; x0 = [0.8, 0.4, 1.2, 1.2]);
                       rule = RDelta(), model = GaussNewtonModel(ridge = 1e-8),
                       subsolver = SteihaugCG(),
                       params = TRParams(tol = 1e-9, max_iterations = 500))
@@ -250,19 +268,19 @@ end
 
 # --- main --------------------------------------------------------------------
 
-function main()
+function sampling_examples()
     arch = ExperimentArchive(tag = "sampling_examples")
-    save_config(arch; rules = [r[1] for r in RULES],
+    save_config(arch; rules = [r[1] for r in TR_RULES],
                 params = "tol=1e-7, maxit=$MAXIT, seeds=$(length(SEEDS))",
                 extra = Dict("experiment" => "exp12_sampling_examples",
                              "examples" => join([e[1] for e in EXAMPLES], ", "),
                              "samplers" => join([s[1] for s in SAMPLERS], ", ")))
 
-    println("running $(length(EXAMPLES))×$(length(SAMPLERS))×$(length(RULES)) cells, "
+    println("running $(length(EXAMPLES))×$(length(SAMPLERS))×$(length(TR_RULES)) cells, "
             * "$(length(SEEDS)) seeds each\n")
-    rows = run_grid()
+    rows = sampling_grid()
 
-    save_table(arch, "exp12_grid.txt", grid_table(rows));       print(grid_table(rows))
+    save_table(arch, "exp12_grid.txt", sampling_table(rows));       print(sampling_table(rows))
     save_table(arch, "exp12_cost_ratio.txt", cost_ratio_table(rows)); print(cost_ratio_table(rows))
     save_table(arch, "exp12_gauss_newton.txt", gn_table());     print(gn_table())
 
@@ -311,5 +329,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    sampling_examples()
 end

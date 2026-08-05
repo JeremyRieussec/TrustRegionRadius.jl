@@ -14,11 +14,6 @@
 #   julia --project=benchmark benchmark/experiments/exp5_inactivity.jl
 # =============================================================================
 
-using Plots
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
-
 "Fraction of the last `frac` of iterations on which the constraint bound."
 function tail_active(r::RunRecord; frac::Float64 = 0.1)
     isempty(r.active_traj) && return NaN
@@ -27,7 +22,7 @@ function tail_active(r::RunRecord; frac::Float64 = 0.1)
     return count(tail) / length(tail)
 end
 
-function main()
+function inactivity()
     arch = ExperimentArchive(tag = "inactivity")
 
     # Rules spanning both families, plus a deliberately-too-small parameter.
@@ -103,5 +98,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    inactivity()
 end

@@ -16,12 +16,6 @@
 #   julia --project=benchmark benchmark/experiments/exp7_convergence_rate.jl
 # =============================================================================
 
-using Plots
-using StatsPlots         # `boxplot` below is StatsPlots, not Plots
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
-
 """
     inactive_tail(r) -> Vector{Float64}
 
@@ -41,7 +35,7 @@ function inactive_tail(r::RunRecord)
     return r.grad_traj[lo:end]
 end
 
-function main()
+function CVRate()
     arch = ExperimentArchive(tag = "convergence_rate")
     save_config(arch; rules = RULES, params = SOLVER_PARAMS,
                 problem_selection = PROBLEM_SELECTION,
@@ -124,5 +118,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    CVRate()
 end

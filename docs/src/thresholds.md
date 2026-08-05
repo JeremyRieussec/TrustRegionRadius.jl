@@ -30,9 +30,12 @@ and nothing else in the package compares `ρ` with it. `η₁` and `η₂` never
 step is taken.
 
 ```julia
-TRParams(η = 0.0, η₁ = 0.1, η₂ = 0.9)     # decoupled
-TRParams(η₁ = 0.1, η₂ = 0.9)              # η defaults to η₁: the classical algorithm
+TRParams(η = 0.0, η1 = 0.1, η2 = 0.9)     # decoupled
+TRParams(η1 = 0.1, η2 = 0.9)              # η defaults to η1: the classical algorithm
 ```
+
+The keywords are ASCII, matching `update_radius!`. `η₁`, `η₂` and `Δ₀` are accepted as
+aliases and readable as properties either way, so `TRParams(η₁ = 0.2).η1 == 0.2`.
 
 Because `η` defaults to `η₁`, existing code is unaffected until it asks for something else.
 
@@ -55,7 +58,7 @@ positive acceptance threshold; it is worth a column of its own in any comparison
     ```julia
     ss  = stats.solver_specific
     ρ, acc = ss[:ratio_trajectory], ss[:accepted_trajectory]
-    count(i -> acc[i] && ρ[i] < params.η₁, eachindex(acc))
+    count(i -> acc[i] && ρ[i] < params.η1, eachindex(acc))
     ```
 
     The count is zero by construction whenever `η = η₁`.
@@ -63,7 +66,7 @@ positive acceptance threshold; it is worth a column of its own in any comparison
 ### Why the rules are told the outcome
 
 ```julia
-update_radius!(rule, Δ, ρ, accepted, η₁, η₂, s_norm, g_norm_old, g_norm_new)
+update_radius!(rule, Δ, ρ, accepted, η1, η2, s_norm, g_norm_old, g_norm_new)
 ```
 
 `accepted` is passed rather than recomputed. A rule cannot derive it: acceptance is decided by
@@ -79,8 +82,9 @@ Part I degenerates. [`validate_thresholds`](@ref) is called once when the solver
 the failure is a constructor error rather than a silent change of behaviour:
 
 ```julia
-TRSolver(nlp; rule = RStep(), params = TRParams(η = 0.0, η₁ = 0.0, η₂ = 0.9))
-# ArgumentError: RStep: needs η₁ > 0 …
+DeterministicTRSolver(nlp; rule = RStep(),
+                      params = TRParams(η = 0.0, η1 = 0.0, η2 = 0.9))
+# ArgumentError: RStep: the step-driven update needs η1 > 0
 ```
 
 Rules with no such requirement accept `η₁ = 0` unchanged. To add a requirement for a new
@@ -129,9 +133,19 @@ and `γ₁ ≤ γ₂` were previously unverified. Old keyword calls now throw, s
 pass silently. `MIGRATION.md` in the repository root lists the one case that can — a
 four-argument positional `RGrad(...)` written against the old signature.
 
+## Radius bounds
+
+Every rule carries `Δmin` and `Δmax` and applies them on **every** branch. Previously
+`Δmax` was honoured only on the expansion branch of some rules and absent from others, so
+the field meant different things in different rules and the solver's global cap hid the
+inconsistency. [`check_bounds`](@ref) enforces `0 ≤ Δmin ≤ Δmax` at construction — the old
+`clamp` threw from inside the iteration instead.
+
 ## API
 
 ```@docs
+TRParams
 validate_thresholds
 check_factors
+check_bounds
 ```

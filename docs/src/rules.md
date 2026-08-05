@@ -14,7 +14,7 @@ thresholds `η₁` and `η₂` and none reads the acceptance threshold `η`; see
 | [`RGrad`](@ref) | `‖gₖ‖` via `μₖ`, uncapped | `:vanishing` | **no** |
 | [`RGradCapped`](@ref) | `‖gₖ‖` via `μₖ ≤ μ_max` | `:vanishing` | **yes** (`μ_max > κ̄`) |
 | [`RAdaptiveStep`](@ref) | `‖sₖ‖`, smooth factor | `:step_summable` | no |
-| [`RAdaptiveGrad`](@ref) | `‖gₖ₊₁‖` via `μₖ` | `:vanishing` | no |
+| [`RAdaptiveGrad`](@ref) | `‖gₖ₊₁‖` via `μₖ`, accumulated | `:vanishing` | no |
 | [`RRTR`](@ref) | `‖sₖ‖`, driven by ρ̃ | `:step_summable` | no |
 | [`RRTRGrad`](@ref) | `‖gₖ₊₁‖` via `μₖ`, driven by ρ̃ | `:vanishing` | no |
 
@@ -22,8 +22,8 @@ thresholds `η₁` and `η₂` and none reads the acceptance threshold `η`; see
 on exceeding it cannot be configured reliably in advance. That is the single most useful fact
 in the table.
 
-`RAdaptiveGrad` accumulates instead, and so
-climbs past any threshold as `RGrad` does.
+`RAdaptiveGrad` accumulates its multiplier, and so climbs past any threshold as `RGrad`
+does. 
 
 ## The three regimes
 
@@ -47,8 +47,7 @@ no side condition, but the radius carries no asymptotic information about critic
 carry a `Δmin` floor, and it is not cosmetic — see the warning below. All require `η₁ > 0`,
 which [`validate_thresholds`](@ref) enforces when the solver is built.
 
-**Criticality-anchored** (`RDFO`, `RGrad`, `RGradCapped`, 
-`RAdaptiveGrad`, `RRTRGrad`). The radius is tied to `‖gₖ‖`, so `Δₖ → 0`. These are the
+**Criticality-anchored** (`RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveGrad`,  `RRTRGrad`). The radius is tied to `‖gₖ‖`, so `Δₖ → 0`. These are the
 rules for which the `κ̄` threshold matters. Query with [`is_criticality_anchored`](@ref).
 
 **Retrospective** (`RRTR`, `RRTRGrad`). The radius update is judged by ρ̃, computed from the
@@ -91,7 +90,9 @@ the safeguard factor `max[γ₁, θₖ]` of Part I, held at a constant here.
     rejection, and the run continues to `max_iterations` making no progress. It also violates
     the contraction condition, so the convergence theorem of Part I does not cover it. A rule
     added outside the package must contract on every unsuccessful iteration;
-    `test/test_thresholds.jl` checks this for all ten rules at five values of ρ below `η`.
+    `test/test_thresholds.jl` checks this for all ten rules at six values of ρ below `η`,
+including `-Inf` — which is what the solver passes whenever the predicted reduction is
+non-positive.
 
 On an accepted step the first branch is the interesting one, `max(γ₃‖sₖ‖, Δₖ)`:
 simultaneously step-driven *and* non-decreasing, which is what lets `RRTR` secure eventual
@@ -137,8 +138,8 @@ constant in `(0,1)` serves; `half_test = false` disables the guard and breaks th
 
 ## The Hei family
 
-`RAdaptiveStep` and `RAdaptiveGrad` scale by a smooth factor `R_{η₁}(ρₖ)`
-instead of one of three constants. The factor is parameterised by the same `γ₁, γ₂, γ₃` as
+`RAdaptiveStep` and `RAdaptiveGrad` scale by a smooth factor
+`R_{η₁}(ρₖ)` instead of one of three constants. The factor is parameterised by the same `γ₁, γ₂, γ₃` as
 every other rule, plus two shape rates `λ₁, λ₂ > 0`:
 
 ```math

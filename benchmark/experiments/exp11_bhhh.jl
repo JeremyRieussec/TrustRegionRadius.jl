@@ -3,6 +3,14 @@
 #
 # EXPERIMENT 11 -- outer-product Hessians, where they are justified and where not.
 #
+# Adapted to the problem-class split: `LikelihoodNLP` is now `FullBatchNLP`, the
+# deterministic (all-terms) view of a finite sum. The old name survives as an
+# alias, but the new one says what it is -- deterministic -- while still carrying
+# the LikelihoodProblem underneath, which is what keeps BHHHModel legal over it.
+# `required_problem(::BHHHModel) === LikelihoodProblem` is now enforced at solver
+# construction, so a BHHH run against a non-likelihood is an ArgumentError naming
+# both types rather than a positive semidefinite matrix that means nothing.
+#
 #  (a) THE IDENTITY, MEASURED. On logistic regression -- correctly specified by
 #      construction -- ‖B − ∇²f‖/‖∇²f‖ decays like M^{-1/2} at β*, and does not
 #      decay at all at β* + δ. Swept over the number of parameters K and the
@@ -23,13 +31,13 @@
 #      the run converges to saddles without complaint.
 #
 #   julia --project=benchmark benchmark/experiments/exp11_bhhh.jl
+#
+# Format note: no `using` and no `include` here. `initialisation.jl` loads the
+# packages, `harness.jl`, `archive.jl` and `config.jl` once, in order, exactly as
+# it does for experiments 1-7. Re-including them per file re-ran `config.jl` and
+# so re-evaluated its `const`s, which Julia either warns about or rejects.
 #   julia --project=benchmark benchmark/experiments/exp11_bhhh.jl mnist
 # =============================================================================
-
-using Plots, Printf, LinearAlgebra, Random
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
 
 # -----------------------------------------------------------------------------
 # (a) the identity
@@ -93,7 +101,7 @@ function mechanism_grid(; K = 10, M = 4_000)
     p   = LogisticRegression(K = K, M = M, seed = 2)
     rows = NamedTuple[]
     for (mname, mf) in MODELS, (rname, rf) in RULES_MINIMAL()
-        nlp = LikelihoodNLP(p; x0 = zeros(K))
+        nlp = FullBatchNLP(p; x0 = zeros(K))
         st = tr_solve(nlp; rule = rf(), model = mf(), subsolver = SteihaugCG(),
                       trace = true,
                       params = TRParams(tol = 1e-7, max_iterations = 500))
@@ -211,7 +219,7 @@ function nn_run(which::Symbol; hidden = 8, n_train = 1_500, downsample = 3,
     p.n > 2_000 && @info "n = $(p.n) > 2000: skipping ExactHessian, which needs O(n) gradient evaluations and an n×n array"
 
     for (mname, mf) in models, (rname, rf) in RULES_MINIMAL()
-        nlp = LikelihoodNLP(p; x0 = copy(θ0))
+        nlp = FullBatchNLP(p; x0 = copy(θ0))
         st = tr_solve(nlp; rule = rf(), model = mf(), subsolver = SteihaugCG(),
                       params = TRParams(tol = 1e-5, max_iterations = maxit))
         push!(rows, (model = mname, rule = rname, status = st.status, iters = st.iter,
@@ -246,7 +254,7 @@ _fmt(v) = isfinite(v) ? @sprintf("%.4f", v) : "n/a (exact Hessian out of reach)"
 
 # -----------------------------------------------------------------------------
 
-function main(args = String[])
+function bhhh_study(args = String[])
     arch = ExperimentArchive(tag = "bhhh")
     save_config(arch; rules = [r[1] for r in RULES_MINIMAL()],
                 params = "tol=1e-7", extra = Dict("experiment" => "exp11_bhhh"))
@@ -290,5 +298,5 @@ function main(args = String[])
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main(ARGS)
+    bhhh_study(ARGS)
 end

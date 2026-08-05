@@ -5,6 +5,12 @@
 #
 #   LogisticRegression   correctly specified by construction, so the information
 #                        identity holds and BHHH is justified. The controlled case.
+#
+# Both are `LikelihoodProblem`s, which is what makes `BHHHModel` legal over them:
+# the requirement is a statement about f being a negative log-likelihood, and the
+# type carries it. Whether the model is *correctly specified* — the other half of
+# the justification — is a property of the data that no type can assert, which is
+# what `information_identity_error` is for.
 #   MLPClassifier        softmax cross-entropy over a one-hidden-layer network.
 #                        Misspecified by construction, so it is not. The realistic
 #                        case, and the contrast is the point.
@@ -19,7 +25,7 @@
 
 """
     LogisticRegression(X, y)
-    LogisticRegression(; K = 5, M = 2_000, β_true = nothing, seed = 0, intercept = true)
+    LogisticRegression(; K = 5, M = 2_000, β_star = nothing, seed = 0, intercept = true)
 
 Binary logistic regression: minimise the average negative log-likelihood
 
@@ -32,6 +38,10 @@ The keyword form generates synthetic data with the model **correctly specified**
 `xₙ ~ N(0, I)` (first coordinate 1 if `intercept`), and `yₙ ~ Bernoulli(σ(xₙᵀβ*))`
 drawn from the very model being fitted. `K` sets the number of parameters, so the
 identity can be watched as the dimension grows.
+
+The generating parameters are passed as `β_star` and retrieved with
+[`β_true`](@ref); the keyword was previously `β_true` as well, colliding with the
+accessor of the same name.
 
 # Why the identity holds here, exactly
 
@@ -48,33 +58,31 @@ two agree to `O(M^{-1/2})`, which is what
 fails, because `E[(y−p̂)²] = p(1−p) + (p − p̂)²`, and the gap `(p − p̂)²` does not
 shrink with `M` at all. That extra term is precisely why BHHH takes poor steps far
 from the optimum and good ones near it.
-
-`β_true(prob)` returns the generating parameters, so a run can be scored against
-them rather than against its own stopping test.
 """
-struct LogisticRegression <: ScoredProblem
+struct LogisticRegression <: LikelihoodProblem
     n::Int
     M::Int
     X::Matrix{Float64}          # M × n
     y::Vector{Float64}
-    β_true::Union{Vector{Float64}, Nothing}
+    β_star::Union{Vector{Float64}, Nothing}
 end
 
-function LogisticRegression(X::AbstractMatrix, y::AbstractVector; β_true = nothing)
+function LogisticRegression(X::AbstractMatrix, y::AbstractVector; β_star = nothing)
     size(X, 1) == length(y) || throw(DimensionMismatch("LogisticRegression: rows of X must match y"))
     all(v -> v == 0 || v == 1, y) || throw(ArgumentError("LogisticRegression: y must be 0/1"))
     return LogisticRegression(size(X, 2), size(X, 1), Matrix{Float64}(X),
-                              Vector{Float64}(y), β_true)
+                              Vector{Float64}(y),
+                              β_star === nothing ? nothing : Vector{Float64}(β_star))
 end
 
 function LogisticRegression(; K::Int = 5, M::Int = 2_000,
-                              β_true::Union{AbstractVector, Nothing} = nothing,
+                              β_star::Union{AbstractVector, Nothing} = nothing,
                               seed::Int = 0, intercept::Bool = true,
                               signal::Real = 1.0)
     K >= 1 || throw(ArgumentError("LogisticRegression: need K ≥ 1"))
     rng = MersenneTwister(seed)
-    β = β_true === nothing ? signal .* randn(rng, K) : Vector{Float64}(β_true)
-    length(β) == K || throw(DimensionMismatch("LogisticRegression: β_true must have length K"))
+    β = β_star === nothing ? signal .* randn(rng, K) : Vector{Float64}(β_star)
+    length(β) == K || throw(DimensionMismatch("LogisticRegression: β_star must have length K"))
     X = randn(rng, M, K)
     intercept && (X[:, 1] .= 1.0)
     p = _σ.(X * β)
@@ -84,7 +92,7 @@ end
 
 @inline _σ(z) = z >= 0 ? 1 / (1 + exp(-z)) : (e = exp(z); e / (1 + e))
 
-n_terms(p::LogisticRegression) = p.M
+population(p::LogisticRegression) = p.M
 
 """
     β_true(prob) -> Vector or nothing
@@ -96,7 +104,7 @@ though note the maximum-likelihood estimate for a finite sample differs from the
 by the usual `O(M^{-1/2})` sampling error, so `‖β̂ − β*‖` does not go to zero at
 the optimum.
 """
-β_true(p::LogisticRegression) = p.β_true
+β_true(p::LogisticRegression) = p.β_star
 
 function loss_terms(p::LogisticRegression, x, batch)
     out = Vector{Float64}(undef, length(batch))
@@ -119,34 +127,53 @@ function scores(p::LogisticRegression, x, batch)
     return S
 end
 
-function batch_hess(p::LogisticRegression, x, batch)
-    H = zeros(p.n, p.n)
-    for i in batch
-        xi = view(p.X, i, :)
-        w = (q = _σ(dot(xi, x)); q * (1 - q))
-        BLAS.ger!(w, Vector(xi), Vector(xi), H)
-    end
-    return H ./ length(batch)
-end
+"""
+    batch_hess(p::LogisticRegression, x, batch)
 
-true_objective(p::LogisticRegression, x) = batch_obj(p, x, 1:p.M)
-true_gradient(p::LogisticRegression, x)  =
-    (g = zeros(p.n); batch_grad!(p, x, 1:p.M, g); g)
+`(1/N) Σ pₙ(1−pₙ) xₙxₙᵀ`, the exact Hessian.
+
+Built with one `syrk`-style rank-`N` update rather than `N` `ger!` calls, each of
+which previously allocated two copies of the row.
+"""
+function batch_hess(p::LogisticRegression, x, batch)
+    N = length(batch)
+    Xb = Matrix{Float64}(undef, N, p.n)
+    for (j, i) in enumerate(batch)
+        xi = view(p.X, i, :)
+        q = _σ(dot(xi, x))
+        w = sqrt(max(q * (1 - q), 0.0))
+        @. Xb[j, :] = w * xi
+    end
+    H = (Xb' * Xb) ./ N
+    return (H .+ H') ./ 2
+end
 
 # -----------------------------------------------------------------------------
 # One-hidden-layer classifier
 # -----------------------------------------------------------------------------
 
 """
-    MLPClassifier(X, y, n_class; hidden = 16, seed = 0, λ = 0.0)
+    MLPClassifier(X, y, n_class; hidden = 16, λ = 0.0)
 
 Softmax cross-entropy over a one-hidden-layer `tanh` network, with per-observation
 scores so that BHHH applies.
 
 `X` is `M × d`, `y` holds labels in `1:n_class`. The parameter vector packs
 `(W₁, b₁, W₂, b₂)` in that order, so `n = hidden·d + hidden + n_class·hidden + n_class`.
-`λ > 0` adds `λ‖x‖²/2`, which makes the objective strongly convex in a neighbourhood
-and is often what keeps a second-order method well posed here.
+`λ > 0` adds `λ‖θ‖²/2`.
+
+!!! note "The penalty is not in the score matrix"
+    `scores` returns the **likelihood** scores only; the `λθ` term is added to the
+    gradient in `batch_grad!`, after averaging. Folding it into every column
+    instead — which is what this file used to do — leaves the objective and
+    gradient correct but makes BHHH form
+
+        B = (1/N) Σ (sᵢ + λθ)(sᵢ + λθ)ᵀ,
+
+    whose regularisation contribution is a rank-one `λ²θθᵀ` plus cross terms,
+    where the true Hessian contribution is `λI`. The BHHH-versus-exact comparison
+    on a regularised network then measures the discrepancy rather than the
+    information identity. To regularise the *model*, use `BHHHModel(ridge = λ)`.
 
 !!! warning "The information identity does not hold"
     This model is misspecified — the data were not generated by a tanh network — and
@@ -156,10 +183,10 @@ and is often what keeps a second-order method well posed here.
     should not be described as one. [`information_identity_error`](@ref) reports
     the gap; on a network it does not shrink with the sample.
 
-    Two consequences follow for this package specifically. `B ⪰ 0` means the model
-    can never report negative curvature, so a run converges contentedly to saddles
-    — which for a network are the dominant critical points. And `SecondOrder` over
-    a `BHHHModel` gives `τ ≡ ‖g‖`, so a `:second_order` status certifies nothing.
+    Two consequences follow. `B ⪰ 0` means the model can never report negative
+    curvature, so a run converges contentedly to saddles — which for a network are
+    the dominant critical points. And `SecondOrder` over a `BHHHModel` gives
+    `τ ≡ ‖g‖`, so a `:second_order` status certifies nothing; the solver now warns.
     Use `ExactHessian` when the second-order question is the question.
 
 !!! note "Dimensions"
@@ -169,7 +196,7 @@ and is often what keeps a second-order method well posed here.
     controls the switch. `ExactMS` is out of the question at this scale, which is
     itself worth reporting: the subsolver axis is constrained by the model axis.
 """
-struct MLPClassifier <: ScoredProblem
+struct MLPClassifier <: LikelihoodProblem
     n::Int
     M::Int
     d::Int
@@ -185,12 +212,13 @@ function MLPClassifier(X::AbstractMatrix, y::AbstractVector{<:Integer}, n_class:
     M, d = size(X)
     M == length(y) || throw(DimensionMismatch("MLPClassifier: rows of X must match y"))
     all(v -> 1 <= v <= n_class, y) || throw(ArgumentError("MLPClassifier: labels must lie in 1:n_class"))
+    λ >= 0 || throw(ArgumentError("MLPClassifier: need λ ≥ 0"))
     n = hidden * d + hidden + n_class * hidden + n_class
     return MLPClassifier(n, M, d, hidden, n_class, Matrix{Float64}(X),
                          Vector{Int}(y), float(λ))
 end
 
-n_terms(p::MLPClassifier) = p.M
+population(p::MLPClassifier) = p.M
 
 "Unpack the flat parameter vector into (W₁, b₁, W₂, b₂) as views."
 function _unpack(p::MLPClassifier, θ)
@@ -224,7 +252,8 @@ end
 """
     scores(p::MLPClassifier, θ, batch) -> Matrix (n × |batch|)
 
-Per-observation gradients by explicit backpropagation.
+Per-observation **likelihood** gradients by explicit backpropagation. The L2
+penalty is *not* included here; see the note on [`MLPClassifier`](@ref).
 
 Standard backprop accumulates the *sum* over a batch; BHHH needs the terms kept
 apart, so each column is formed from one forward and one backward pass. That is
@@ -235,34 +264,52 @@ function scores(p::MLPClassifier, θ, batch)
     W1, b1, W2, b2 = _unpack(p, θ)
     S = zeros(p.n, length(batch))
     a1 = Vector{Float64}(undef, p.h); z2 = Vector{Float64}(undef, p.c)
-    dz1 = Vector{Float64}(undef, p.h)
+    dz1 = Vector{Float64}(undef, p.h); dz2 = Vector{Float64}(undef, p.c)
     oW1 = 0; ob1 = p.h * p.d; oW2 = ob1 + p.h; ob2 = oW2 + p.c * p.h
     for (j, i) in enumerate(batch)
         xi = view(p.X, i, :)
         mul!(a1, W1, xi); a1 .+= b1; a1 .= tanh.(a1)
         mul!(z2, W2, a1); z2 .+= b2
-        dz2 = _softmax!(copy(z2)); dz2[p.y[i]] -= 1.0        # ∂ℓ/∂z₂
+        copyto!(dz2, z2); _softmax!(dz2); dz2[p.y[i]] -= 1.0        # ∂ℓ/∂z₂
         col = view(S, :, j)
         @views mul!(reshape(col[oW2+1:oW2+p.c*p.h], p.c, p.h), dz2, a1')
         @views col[ob2+1:ob2+p.c] .= dz2
         mul!(dz1, W2', dz2); @. dz1 *= (1 - a1^2)
         @views mul!(reshape(col[oW1+1:oW1+p.h*p.d], p.h, p.d), dz1, xi')
         @views col[ob1+1:ob1+p.h] .= dz1
-        p.λ > 0 && (col .+= p.λ .* θ)
     end
     return S
 end
 
 """
+    batch_grad!(p::MLPClassifier, θ, batch, g)
+
+The mean of the likelihood scores, **plus** `λθ`.
+
+Overrides the `ScoredProblem` default so that the penalty enters the gradient
+once, after averaging, rather than being folded into every score column.
+"""
+function batch_grad!(p::MLPClassifier, θ, batch, g)
+    S = scores(p, θ, batch)
+    g .= vec(sum(S; dims = 2)) ./ length(batch)
+    p.λ > 0 && (g .+= p.λ .* θ)
+    return nothing
+end
+
+"""
     batch_hess(p::MLPClassifier, θ, batch)
 
-The exact Hessian by finite differences of the analytic gradient.
+The exact Hessian by central differences of the analytic gradient.
 
 `O(n)` gradient evaluations, so it is for the small configurations only — which is
 exactly the regime where the comparison against BHHH is worth making, since it is
-the only regime where the truth is available at all. For anything larger, run
-`ExactHessian` against a Hessian-vector product or accept that BHHH is being used
-without a reference.
+the only regime where the truth is available at all. `LikelihoodNLP` and
+`SampledNLP` cache the result per iterate, so it is paid once per iteration rather
+than once per Hessian-vector product.
+
+Central rather than forward differences: the step `ε = ∛eps · max(1, ‖θ‖)` is the
+optimal choice for the central formula, and was previously being used with the
+one-sided one.
 """
 function batch_hess(p::MLPClassifier, θ, batch)
     n = p.n
@@ -271,14 +318,14 @@ function batch_hess(p::MLPClassifier, θ, batch)
         "evaluations and an n×n matrix). Use BHHHModel/GaussNewtonModel with " *
         "SteihaugCG, or shrink `hidden` / the input dimension."))
     H = zeros(n, n)
-    g0 = zeros(n); batch_grad!(p, θ, batch, g0)
     ε = cbrt(eps()) * max(1.0, norm(θ))
-    gp = zeros(n); θp = Vector{Float64}(θ)
+    gp = zeros(n); gm = zeros(n); θw = Vector{Float64}(θ)
     for j in 1:n
-        old = θp[j]; θp[j] = old + ε
-        batch_grad!(p, θp, batch, gp)
-        @. H[:, j] = (gp - g0) / ε
-        θp[j] = old
+        old = θw[j]
+        θw[j] = old + ε; batch_grad!(p, θw, batch, gp)
+        θw[j] = old - ε; batch_grad!(p, θw, batch, gm)
+        θw[j] = old
+        @. H[:, j] = (gp - gm) / (2ε)
     end
     return (H .+ H') ./ 2
 end
@@ -292,7 +339,7 @@ unsaturated. Biases start at zero.
 function init_params(p::MLPClassifier; seed::Int = 0)
     rng = MersenneTwister(seed)
     θ = zeros(p.n)
-    W1, b1, W2, b2 = _unpack(p, θ)
+    W1, _, W2, _ = _unpack(p, θ)
     W1 .= randn(rng, p.h, p.d) ./ sqrt(p.d)
     W2 .= randn(rng, p.c, p.h) ./ sqrt(p.h)
     return θ

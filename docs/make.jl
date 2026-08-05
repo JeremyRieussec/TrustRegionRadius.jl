@@ -17,14 +17,15 @@ makedocs(
         "Home"          => "index.md",
         "Getting started" => "quickstart.md",
         "Thresholds and factors" => "thresholds.md",
-        "The three axes"  => [
+        "Problem classes" => "problem_classes.md",
+        "The four axes"  => [
             "Radius mechanisms"   => "rules.md",
             "Model Hessians"      => "models.md",
             "Subproblem solvers"  => "subsolvers.md",
             "Outer-product Hessians" => "likelihood.md",
+            "Sampling rules"      => "stochastic.md",
         ],
         "Second-order variants" => "second_order.md",
-        "Sampling" => "stochastic.md",
         "Benchmarking"  => "benchmarking.md",
         "API reference" => "api.md",
     ],

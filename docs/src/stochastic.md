@@ -1,20 +1,31 @@
-# Sampling
+# Sampling rules
 
-For a problem given as an expectation, `f(x) = E[F(x,ξ)]`, the sampling rule is a
-**fourth axis** alongside the radius mechanism, the model Hessian and the
-subproblem solver. [`SampledNLP`](@ref) satisfies the ordinary NLP interface, so
-every mechanism, model and subsolver in the package runs over it unchanged.
+The sampling rule is the **fourth axis**, alongside the radius mechanism, the model
+Hessian and the subproblem solver. It applies in the two sampled
+[problem classes](problem_classes.md) and not in the deterministic one, so which
+solver runs is decided by the oracle you build:
 
 ```julia
-prob = PerturbedSum(base_nlp, 4_000; σg = 1.0)      # mean is exactly base_nlp
-nlp  = SampledNLP(prob, RadiusProportional(κ_g = 1.0))
+# finite sum: N_k ≤ M, imposed by the problem
+prob = PerturbedSum(base_nlp, 4_000; σg = 1.0)       # mean is exactly base_nlp
+nlp  = FiniteSumNLP(prob, RadiusProportional(κ_g = 1.0))
 
 stats = tr_solve(nlp; rule = RDelta(), model = ExactHessian(),
                  subsolver = ExactMS(), trace = true)
 
-stats.solver_specific[:samples_total]              # the cost measure that matters
-norm(true_gradient(prob, stats.solution))          # score on the truth, not on ĝ
+stats.solver_specific[:samples_total]               # the cost measure that matters
+stats.solver_specific[:full_batch_trajectory]       # which iterations were exact
+norm(true_gradient(prob, stats.solution))           # score on the truth, not on ĝ
+
+# expectation: no M, so the cap is a budget you choose
+eprob = PerturbedExpectation(base_nlp; σg = 1.0)
+enlp  = ExpectationNLP(eprob, RadiusProportional(); budget = 50_000)
+tr_solve(enlp; rule = RDelta(), subsolver = ExactMS(), trace = true)
 ```
+
+Both oracles satisfy the ordinary NLP interface, so every mechanism, model and
+subsolver runs over them unchanged. What differs is the cap on `N_k` and whether a
+full batch exists at all — see [Problem classes](problem_classes.md).
 
 ## The cost inversion
 
@@ -46,6 +57,42 @@ stochastically, by five to nine orders of magnitude.
     only when `N_k` is constant. Under any adaptive rule the same runs order
     differently. Report `:samples_total`.
 
+## Where the cap comes from
+
+A rule computes a *requirement*; it does not decide the *budget*. The two were
+previously conflated in an `N_max` field, which meant the same keyword expressed two
+different things depending on the class:
+
+| class | population | `N_max` on the rule |
+|---|---|---|
+| expectation | unbounded | **is** your budget — allowed and meaningful |
+| finite sum | `M` | **rejected**: the cap belongs to the problem |
+
+```julia
+FiniteSumNLP(prob, RadiusProportional(N_max = 500))     # ArgumentError
+FiniteSumNLP(prob, RadiusProportional(); budget = 500)  # a deliberate experiment
+ExpectationNLP(prob, RadiusProportional(N_max = 500))   # fine
+```
+
+The effective cap is `min(sample_cap(rule), budget, population(prob))`, and hitting it
+is counted in `:sample_cap_hits`. A run spent at the cap is no longer meeting the
+accuracy requirement the convergence theory assumes, so it is not a run the theory
+describes.
+
+`N_min` stays on the rule: a floor is a property of the estimator, not of the budget —
+you cannot estimate a variance from one sample.
+
+## The full-batch reference
+
+On a finite sum, [`FullBatch`](@ref) gives `N_k = M` at every iteration, which is the
+deterministic run exactly: `ρ̂ = ρ`, the stopping test is the real one, and the accuracy
+hypotheses are discharged rather than assumed. It is the reference every other sampling
+rule should be scored against.
+
+It is **rejected on an expectation**, where there is no full batch and the hypotheses
+can never be discharged by sampling harder. That refusal is the type system carrying the
+substantive difference between the two classes.
+
 ## The feedback loop
 
 [`couples_to_radius`](@ref) marks the rules whose `N_k` depends on `Δ_k`. When it
@@ -61,6 +108,7 @@ without switching off the growth.
 
 | rule | `N_k` from | reads `Δ_k`? |
 |---|---|---|
+| [`FullBatch`](@ref) | `M` — finite sums only | no |
 | [`FixedSample`](@ref) | nothing | no |
 | [`RadiusProportional`](@ref) | `(σ/(κΔ_k))²` | **yes** |
 | [`NormTest`](@ref) | `σ_g²/(θ²‖ĝ‖²)` | no |
@@ -127,18 +175,30 @@ numerator and denominator of ρ̂ always come from one batch.
 ## Score on the truth
 
 `‖ĝ_k‖ ≤ tol` is a statement about one batch, and a mechanism that shrinks the
-radius fast enough will meet it on noise alone. [`PerturbedSum`](@ref) has mean
-exactly the base model, so [`true_gradient`](@ref) is available at every iterate;
-use it for every reported number.
+radius fast enough will meet it on noise alone. [`PerturbedSum`](@ref) has mean exactly
+the base model, so [`true_gradient`](@ref) is available at every iterate; use it for
+every reported number, and set `TRParams(true_stop = true)` when the *status* itself
+needs to mean something.
+
+Every finite sum has a truth, at one full pass. An expectation has one only when the
+construction supplies it — [`PerturbedExpectation`](@ref) does, a general one does not —
+so [`has_truth`](@ref) is a trait and `true_stop` on a problem without truth is an
+`ArgumentError` rather than a silent fallback to the batch test.
 
 ## API
 
 ```@docs
-StochasticProblem
-ScoredProblem
 FiniteSum
 PerturbedSum
+PerturbedExpectation
+GaussianDraw
+batch_obj
+batch_grad!
+batch_hess
+grad_variance
+obj_variance
 SamplingRule
+FullBatch
 SamplingState
 SampleStats
 batch_stats
@@ -153,14 +213,16 @@ SequentialEstimation
 record_prediction!
 reset_sampling_rule!
 couples_to_radius
+needs_scores
+requires_finite_population
+sample_cap
 grad_sample_size
 obj_sample_size
-SampledNLP
 resample!
-prepare_iteration!
 update_variances!
 samples_used
 reset_sampling!
+draw_batch
 true_objective
 true_gradient
 ```

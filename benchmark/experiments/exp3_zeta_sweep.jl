@@ -16,14 +16,9 @@
 #   julia --project=benchmark benchmark/experiments/exp3_zeta_sweep.jl
 # =============================================================================
 
-using Plots
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
-
 const ZETAS = [0.01, 0.1, 0.5, 1.0, 2.0, 10.0, 100.0]
 
-function main()
+function zeta_sweep()
     arch = ExperimentArchive(tag = "zeta_sweep")
     configs = [(@sprintf("zeta=%g", ζ),
                 () -> (rule = RDFO(ζ = ζ),  model = DEFAULT_MODEL(),
@@ -94,5 +89,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    zeta_sweep()
 end

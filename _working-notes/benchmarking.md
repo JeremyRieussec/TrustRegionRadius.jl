@@ -60,23 +60,8 @@ Problems are **thunks**, not models. This matters for CUTEst, where each `CUTEst
 an open handle to a compiled SIF problem and only one may be live at a time; `run_matrix`
 finalises each before opening the next.
 
-Runs ending `:first_order` or `:second_order` count as solved. A solver that stops early
-with a large gradient has not solved the problem, whatever its iteration count — but a run
-that reached a *certified second-order* point has solved it more strongly than one that
-stopped at `‖g‖ ≤ tol`, so counting `:second_order` as a failure would zero the reliability
-of exactly the columns doing best.
-
-`cost = :samples` fills the matrix with cumulative term evaluations, and is the measure to
-use whenever the columns differ in sampling rule — `:iter` is proportional to work only
-under `FixedSample`. It raises on a deterministic problem rather than returning zero.
-
-The sampling rule lives on the **oracle**, not on `TRConfig`, so a sweep over sampling rules
-varies the problem thunks:
-
-```julia
-problems = [() -> FiniteSumNLP(prob, r) for r in (FixedSample(64), RadiusProportional())]
-T, _ = run_matrix(problems, [TRConfig("R-delta"; rule = RDelta())]; cost = :samples)
-```
+Only runs ending `:first_order` count as solved. A solver that stops early with a large
+gradient has not solved the problem, whatever its iteration count.
 
 Rules and quasi-Newton models carry mutable state, so a sweep passes **factories** rather
 than instances: `ζ -> RDFO(ζ = ζ)` above, not a vector of built rules. Reusing one instance

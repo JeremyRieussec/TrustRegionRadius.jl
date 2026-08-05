@@ -12,6 +12,21 @@
 # model) rather than as models. This matters for CUTEst, where each
 # `CUTEstModel` holds an open handle to a compiled SIF problem and must be
 # finalised before the next one is opened.
+#
+# ---------------------------------------------------------------------------
+# The thunk is also where the problem CLASS is chosen
+#
+# `tr_solve` now dispatches on the oracle, so a thunk returning a plain NLP gets
+# `DeterministicTRSolver`, one returning a `FiniteSumNLP` gets
+# `FiniteSumTRSolver`, and one returning an `ExpectationNLP` gets
+# `ExpectationTRSolver`. Nothing here needs to know which — but two consequences
+# do land in this file:
+#
+#   * the sampling rule lives on the ORACLE, not on `TRConfig`, so a sweep over
+#     sampling rules varies the *problem* thunk rather than the configuration:
+#         [() -> FiniteSumNLP(prob, r) for r in rules]
+#   * iteration and evaluation counts are not comparable across sampling rules;
+#     `cost = :samples` is the measure that is. See the `cost` table below.
 # =============================================================================
 
 """
@@ -23,6 +38,28 @@ Hessian, and subproblem solver, together with the solver parameters.
 `rule` and `model` carry mutable state (μ for `RGrad`, the operator for
 L-BFGS/SR1), so `run_matrix` deep-copies them per run; a single `TRConfig` can
 therefore be reused across problems without contamination.
+
+The solver constructor deep-copies its three axes as well, so the copy here is
+now belt-and-braces rather than load-bearing. It is kept deliberately: it makes
+this file correct on its own terms rather than by relying on an invariant
+maintained two modules away, and one `deepcopy` of a rule is free beside a solve.
+
+The **sampling** rule is not a field here. It lives on the oracle, because it
+decides what the oracle returns — so a sweep over sampling rules varies the
+problem thunks, not the configurations:
+
+```julia
+problems = [() -> FiniteSumNLP(prob, r) for r in (FixedSample(64),
+                                                  RadiusProportional(),
+                                                  NormTest())]
+configs  = [TRConfig("R-delta"; rule = RDelta())]
+T, _ = run_matrix(problems, configs; cost = :samples)
+```
+
+Note that this puts the sampling rules down the *rows*, where `performance_profile`
+treats them as different problems rather than different solvers. To profile them
+as solvers, transpose `T` — or build one thunk per problem and one config per
+rule and accept that the sampling rule is then fixed across the matrix.
 """
 struct TRConfig{R <: RadiusRule, M <: ModelHessian,
                 S <: SubproblemSolver, P}
@@ -44,6 +81,18 @@ end
 Base.show(io::IO, c::TRConfig) = print(io, "TRConfig(", c.label, ")")
 
 """
+    _SOLVED_STATUSES
+
+Statuses that count as having solved the problem.
+
+`:second_order` joins `:first_order` here. A run with `tol_H > 0` that reaches a
+certified second-order point reports `:second_order`, and treating that as a
+failure would have scored the *strongest* possible outcome as `Inf` — silently
+zeroing the reliability of every second-order column in a profile.
+"""
+const _SOLVED_STATUSES = (:first_order, :second_order)
+
+"""
     run_matrix(problems, configs; cost = :iter, verbose = true)
         -> (T, stats_matrix)
 
@@ -56,18 +105,35 @@ Run every configuration on every problem.
 - `configs`:  vector of [`TRConfig`](@ref).
 
 # Keyword arguments
-- `cost`:    which quantity fills the matrix — `:iter`, `:obj`, `:grad`,
-             `:hprod` or `:time`.
+- `cost`:    which quantity fills the matrix.
+
+  | `cost` | measures | valid on |
+  |:--|:--|:--|
+  | `:iter` | `stats.iter` | any |
+  | `:obj`, `:grad`, `:hprod` | `neval_*(nlp)` | any |
+  | `:time` | `stats.elapsed_time` | any |
+  | `:samples` | cumulative term evaluations | sampled oracles only |
+
+  **`:iter` is proportional to work only under `FixedSample`.** Under any
+  adaptive sampling rule, `N_k` varies per iteration and the same runs order
+  differently by the two measures — which is the whole point of the sampling
+  axis. Use `:samples` whenever the columns differ in sampling rule; it raises
+  on a deterministic problem rather than returning a meaningless zero.
 - `verbose`: print one line per problem as it completes.
 
 # Returns
 - `T[p, c]`: the cost, or `Inf` where the run did not reach `:first_order`.
 - `stats_matrix[p, c]`: the `GenericExecutionStats`, or `nothing` on error.
 
-Only runs terminating with status `:first_order` are counted as solved;
-`:max_iter`, `:user` and any thrown error give `Inf`. That convention keeps the
-profile honest: a solver that stops early with a large gradient has not solved
-the problem, whatever its iteration count.
+Runs terminating `:first_order` **or `:second_order`** count as solved;
+`:max_iter`, `:stalled`, `:user`, `:exception` and any thrown error give `Inf`.
+That convention keeps the profile honest: a solver that stops early with a large
+gradient has not solved the problem, whatever its iteration count.
+
+A configuration rejected by the class checks — `BHHHModel` on a problem that is
+not a likelihood, a rule carrying `N_max` on a finite sum — raises from the
+solver constructor and is recorded as `Inf` with a warning, so one illegal cell
+does not abort the matrix.
 
 # Example
 ```julia
@@ -79,8 +145,8 @@ summarise(T, [c.label for c in configs])
 ```
 """
 function run_matrix(problems, configs; cost::Symbol = :iter, verbose::Bool = true)
-    cost in (:iter, :obj, :grad, :hprod, :time) || throw(ArgumentError(
-        "run_matrix: cost must be one of :iter, :obj, :grad, :hprod, :time"))
+    cost in (:iter, :obj, :grad, :hprod, :time, :samples) || throw(ArgumentError(
+        "run_matrix: cost must be one of :iter, :obj, :grad, :hprod, :time, :samples"))
 
     npb, ns = length(problems), length(configs)
     T = fill(Inf, npb, ns)
@@ -105,15 +171,12 @@ function run_matrix(problems, configs; cost::Symbol = :iter, verbose::Bool = tru
             sub   = deepcopy(cfg.subsolver)
             try
                 NLPModels.reset!(nlp)
+                nlp isa SampledNLP && reset_sampling!(nlp)   # batches, RNG, counters
                 stats = tr_solve(nlp; rule = rule, model = model,
                                  subsolver = sub, params = cfg.params)
                 S[i, j] = stats
-                if stats.status === :first_order
-                    T[i, j] = cost === :iter  ? stats.iter          :
-                              cost === :obj   ? neval_obj(nlp)      :
-                              cost === :grad  ? neval_grad(nlp)     :
-                              cost === :hprod ? neval_hprod(nlp)    :
-                                                stats.elapsed_time
+                if stats.status in _SOLVED_STATUSES
+                    T[i, j] = _cost_of(cost, stats, nlp)
                 end
             catch err
                 err isa InterruptException && rethrow()
@@ -130,6 +193,31 @@ function run_matrix(problems, configs; cost::Symbol = :iter, verbose::Bool = tru
         finalize(nlp)
     end
     return T, S
+end
+
+"""
+    _cost_of(cost, stats, nlp) -> Float64
+
+The requested cost of one completed run.
+
+`:samples` is the only entry that inspects the oracle rather than the stats, and
+the only one restricted by problem class: term evaluations exist only where terms
+are sampled, so asking for it on a deterministic problem is an error rather than
+a zero — a column of zeros in a cost matrix reads as "free", which is the
+opposite of what it would mean.
+"""
+function _cost_of(cost::Symbol, stats, nlp)
+    cost === :iter  && return float(stats.iter)
+    cost === :obj   && return float(neval_obj(nlp))
+    cost === :grad  && return float(neval_grad(nlp))
+    cost === :hprod && return float(neval_hprod(nlp))
+    cost === :time  && return float(stats.elapsed_time)
+    # :samples
+    nlp isa SampledNLP || throw(ArgumentError(
+        "run_matrix: cost = :samples needs a sampled oracle, but this problem is " *
+        "$(nameof(typeof(nlp))) ($(problem_class(nlp))). Use :iter, :grad or " *
+        ":time for a deterministic run."))
+    return float(samples_used(nlp).total)
 end
 
 """
@@ -188,6 +276,12 @@ A sweep of this kind is the right way to study `ζ` or `μ_max`: the survey's
 thresholds involve `κ̄ = 4/λ*_min`, which is a property of the solution and so
 cannot be chosen a priori, and only a sweep reveals where the transition sits
 on a given family of problems.
+
+`mkrule` may return any `RadiusRule`, including a `SecondOrder` wrapper — in which
+case pair it with `params = TRParams(tol_H = 1e-6)` and a model that can report
+negative curvature, or the sweep measures an expensive no-op. Runs reaching a
+certified second-order point report `:second_order`, which `run_matrix` counts as
+solved.
 """
 function sweep_configs(name::AbstractString, values, mkrule;
                        model::ModelHessian = ExactHessian(),

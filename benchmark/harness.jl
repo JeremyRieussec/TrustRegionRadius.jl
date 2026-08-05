@@ -129,9 +129,44 @@ struct RunRecord
     obj_traj::Vector{Float64}
     ratio_traj::Vector{Float64}
     active_traj::Vector{Bool}
+    # --- second order: present only when the run carried a curvature estimate
+    tau_traj::Vector{Float64}
+    lambda_traj::Vector{Float64}
+    # --- sampling: 0 on a deterministic run
+    samples::Int
 end
 
-solved(r::RunRecord) = r.status === :first_order
+"""
+    solved(r) -> Bool
+
+Whether the run reached a critical point.
+
+**`:second_order` counts.** A run with `tol_H > 0` that certifies
+`λ_min(B) ≥ −tol_H` reports `:second_order`, which is a *stronger* outcome than
+`:first_order`, not a different kind of failure. Testing `=== :first_order` — as
+this did — scored every successful τ-anchored run as unsolved, which would have
+made experiment 9 report that second-order anchoring never works: the columns
+doing best would have been the ones with zero reliability.
+"""
+solved(r::RunRecord) = r.status === :first_order || r.status === :second_order
+
+"""
+    certified_second_order(r) -> Bool
+
+Whether the run stopped because the *second-order* test was met, as distinct from
+merely reaching a small gradient. Only meaningful when `tol_H > 0`; a first-order
+run never sets it.
+"""
+certified_second_order(r::RunRecord) = r.status === :second_order
+
+"""
+    has_curvature(r) -> Bool
+
+Whether the run recorded `λ_min(B_k)`, i.e. whether any of the rule, the
+subsolver or `tol_H` asked for a curvature estimate. `false` for a plain
+first-order run, where `tau_traj` and `lambda_traj` are empty rather than zero.
+"""
+has_curvature(r::RunRecord) = !isempty(r.lambda_traj)
 
 """
     run_experiment(problems, configs; params, trace, archive, verbose) -> Vector{RunRecord}
@@ -213,13 +248,16 @@ function run_experiment(problems, configs;
                           get(ss, :grad_trajectory,   Float64[]),
                           get(ss, :obj_trajectory,    Float64[]),
                           get(ss, :ratio_trajectory,  Float64[]),
-                          get(ss, :active_trajectory, Bool[]))
+                          get(ss, :active_trajectory, Bool[]),
+                          get(ss, :tau_trajectory,        Float64[]),
+                          get(ss, :lambda_min_trajectory, Float64[]),
+                          get(ss, :samples_total, 0))
             catch err
                 err isa InterruptException && rethrow()
                 verbose && @warn "run failed" problem=pname config=cname err
                 RunRecord(pname, cname, nlp.meta.nvar, :exception, 0, 0, 0, 0,
                           NaN, NaN, 0.0, Float64[], Float64[], Float64[],
-                          Float64[], Bool[])
+                          Float64[], Bool[], Float64[], Float64[], 0)
             end
             push!(records, rec)
             push!(row, solved(rec) ? @sprintf("%14d", rec.iterations) :
@@ -266,7 +304,10 @@ function save_record(a, rec::RunRecord)
         grad_norm_trajectory = rec.grad_traj,
         obj_trajectory       = rec.obj_traj,
         ratio_trajectory     = rec.ratio_traj,
-        active_trajectory    = rec.active_traj)
+        active_trajectory    = rec.active_traj,
+        tau_trajectory        = rec.tau_traj,
+        lambda_min_trajectory = rec.lambda_traj,
+        samples_total         = rec.samples)
 end
 
 """
@@ -274,8 +315,9 @@ end
 
 Reconstruire un `RunRecord` depuis le dictionnaire rendu par `JLD2.load`.
 
-`h_evals` est absent des fichiers écrits avant l'ajout de ce champ ; il est
-alors mis à zéro plutôt que de faire échouer la relecture. Les autres champs
+`h_evals`, `tau_trajectory`, `lambda_min_trajectory` et `samples_total` sont
+absents des fichiers écrits avant l'ajout de ces champs ; ils reçoivent alors une
+valeur par défaut plutôt que de faire échouer la relecture. Les autres champs
 sont obligatoires : leur absence signale un fichier tronqué, et l'exception
 remonte à l'appelant qui recalculera.
 """
@@ -286,7 +328,12 @@ function _record_from_data(d::AbstractDict)
         d["f_evals"], d["g_evals"], get(d, "h_evals", 0),
         d["final_grad_norm"], d["final_obj"], d["solve_time"],
         d["delta_trajectory"], d["grad_norm_trajectory"],
-        d["obj_trajectory"], d["ratio_trajectory"], d["active_trajectory"])
+        d["obj_trajectory"], d["ratio_trajectory"], d["active_trajectory"],
+        # Archives written before the second-order and sampling fields existed
+        # lack these keys; default rather than fail, exactly as h_evals does.
+        get(d, "tau_trajectory",        Float64[]),
+        get(d, "lambda_min_trajectory", Float64[]),
+        get(d, "samples_total",         0))
 end
 
 """
@@ -322,9 +369,15 @@ end
 
 Assemble the `(n_problems × n_configs)` matrix a profile consumes.
 
-`metric` is `:iter`, `:obj`, `:grad`, `:time`, or a function of a `RunRecord`.
-Unsolved entries get `failure`, which is what makes the right-hand asymptote of
-a performance profile read as reliability.
+`metric` is `:iter`, `:obj`, `:grad`, `:hprod`, `:time`, `:samples`, or a
+function of a `RunRecord`. Unsolved entries get `failure`, which is what makes
+the right-hand asymptote of a performance profile read as reliability.
+
+!!! note "`:iter` assumes a fixed sample size"
+    Iteration count is proportional to work only when `N_k` is constant. Under an
+    adaptive sampling rule the same runs order differently by `:iter` and by
+    `:samples`, and that divergence is the finding rather than a nuisance — use
+    `:samples` whenever the columns differ in sampling rule.
 """
 function metric_matrix(records::Vector{RunRecord}, problems, configs,
                        metric = :iter; failure::Float64 = Inf)
@@ -333,10 +386,12 @@ function metric_matrix(records::Vector{RunRecord}, problems, configs,
     idx = Dict((r.problem, r.config) => r for r in records)
 
     f = metric isa Function ? metric :
-        metric === :iter ? (r -> Float64(r.iterations)) :
-        metric === :obj  ? (r -> Float64(r.f_evals))    :
-        metric === :grad ? (r -> Float64(r.g_evals))    :
-        metric === :time ? (r -> r.solve_time)          :
+        metric === :iter    ? (r -> Float64(r.iterations)) :
+        metric === :obj     ? (r -> Float64(r.f_evals))    :
+        metric === :grad    ? (r -> Float64(r.g_evals))    :
+        metric === :hprod   ? (r -> Float64(r.h_evals))    :
+        metric === :time    ? (r -> r.solve_time)          :
+        metric === :samples ? (r -> Float64(r.samples))    :
         throw(ArgumentError("metric_matrix: unknown metric $metric"))
 
     M = fill(failure, length(pnames), length(cnames))
@@ -358,12 +413,25 @@ That last column is the one worth reading. Two configurations can have
 identical iteration counts and identical first-order behaviour while one keeps
 the constraint permanently active and the other does not, and only the activity
 column distinguishes them.
+
+`second_order = true` adds a column counting the runs that stopped with a
+*certified* `:second_order` status. Read it against `solved`: a configuration
+solving every problem while certifying none has been running a first-order method
+under a second-order name — which is what a τ-anchored rule over a positive
+semidefinite model does, and what the warning in `models.md` is about.
 """
-function success_table(records::Vector{RunRecord}, problems, configs)
+function success_table(records::Vector{RunRecord}, problems, configs;
+                       second_order::Bool = false)
     io = IOBuffer()
-    @printf(io, "%-22s %10s %10s %10s %12s\n",
-            "configuration", "solved", "median", "mean", "tail active")
-    println(io, "-"^70)
+    if second_order
+        @printf(io, "%-22s %10s %10s %10s %12s %10s\n",
+                "configuration", "solved", "median", "mean", "tail active", "2nd order")
+        println(io, "-"^82)
+    else
+        @printf(io, "%-22s %10s %10s %10s %12s\n",
+                "configuration", "solved", "median", "mean", "tail active")
+        println(io, "-"^70)
+    end
     npb = length(problems)
     for (cname, _) in configs
         rs = filter(r -> r.config == cname, records)
@@ -375,10 +443,17 @@ function success_table(records::Vector{RunRecord}, problems, configs)
             k0 = max(1, floor(Int, 0.9 * length(r.active_traj)))
             push!(acts, count(r.active_traj[k0:end]) / length(r.active_traj[k0:end]))
         end
-        @printf(io, "%-22s %5d/%-4d %10s %10s %12s\n", cname, length(ok), npb,
-                isempty(iters) ? "--" : @sprintf("%.1f", _median(iters)),
-                isempty(iters) ? "--" : @sprintf("%.1f", sum(iters)/length(iters)),
-                isempty(acts)  ? "--" : @sprintf("%.3f", sum(acts)/length(acts)))
+        med  = isempty(iters) ? "--" : @sprintf("%.1f", _median(iters))
+        mean = isempty(iters) ? "--" : @sprintf("%.1f", sum(iters)/length(iters))
+        act  = isempty(acts)  ? "--" : @sprintf("%.3f", sum(acts)/length(acts))
+        if second_order
+            n2 = count(certified_second_order, rs)
+            @printf(io, "%-22s %5d/%-4d %10s %10s %12s %5d/%-4d\n",
+                    cname, length(ok), npb, med, mean, act, n2, npb)
+        else
+            @printf(io, "%-22s %5d/%-4d %10s %10s %12s\n",
+                    cname, length(ok), npb, med, mean, act)
+        end
     end
     return String(take!(io))
 end
@@ -387,6 +462,22 @@ function _median(v::AbstractVector)
     s = sort(collect(v)); n = length(s)
     n == 0 && return NaN
     isodd(n) ? s[(n+1)÷2] : (s[n÷2] + s[n÷2+1]) / 2
+end
+
+"""
+    measure_gap(r) -> Vector{Float64}
+
+`τ_k / ‖g_k‖` along the run: 1 wherever the model is convex, and unbounded near a
+saddle, which is exactly where a first-order diagnostic reports success.
+
+Empty when the run carried no curvature estimate. The two trajectories are the
+same length by construction (both are recorded once per iterate), so no alignment
+is needed — unlike `:ratio_trajectory`, which is one shorter.
+"""
+function measure_gap(r::RunRecord)
+    (isempty(r.tau_traj) || isempty(r.grad_traj)) && return Float64[]
+    n = min(length(r.tau_traj), length(r.grad_traj))
+    return [r.tau_traj[k] / max(r.grad_traj[k], 1e-300) for k in 1:n]
 end
 
 """

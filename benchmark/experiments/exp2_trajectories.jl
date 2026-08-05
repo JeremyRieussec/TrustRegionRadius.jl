@@ -12,15 +12,10 @@
 #   julia --project=benchmark benchmark/experiments/exp2_trajectories.jl
 # =============================================================================
 
-using Plots
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
-
 "Problems to trace. Keep this short: one figure per problem per quantity."
 const TRACE_PROBLEMS = ["ROSENBR", "WOOD", "EXTROSEN3"]
 
-function main()
+function trajectories()
     arch = ExperimentArchive(tag = "trajectories")
     save_config(arch; rules = RULES, params = SOLVER_PARAMS,
                 extra = Dict("experiment" => "exp2_trajectories",
@@ -102,5 +97,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    trajectories()
 end

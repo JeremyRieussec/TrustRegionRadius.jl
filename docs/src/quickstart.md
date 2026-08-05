@@ -27,17 +27,34 @@ stats.iter
 `SolverBenchmark` and the rest of the ecosystem accept it unchanged. Evaluation counts live
 on the model — `neval_obj(nlp)`, `neval_grad(nlp)`, `neval_hprod(nlp)` — not on the result.
 
-## Choosing the three axes
+## Choosing the axes
 
 ```julia
 stats = tr_solve(nlp;
     rule      = RGrad(μ = 1.0),      # how Δ moves
     model     = SR1Model(mem = 5),   # what curvature the model reports
     subsolver = SteihaugCG(),        # how the subproblem is solved
-    params    = TRParams(η = 0.1, η₁ = 0.1, η₂ = 0.9, Δ₀ = 1.0, tol = 1e-8))
+    params    = TRParams(η = 0.1, η1 = 0.1, η2 = 0.9, Δ0 = 1.0, tol = 1e-8))
 ```
 
-Defaults are `RDelta()`, `ExactHessian()`, `SteihaugCG()`.
+Defaults are `RDelta()`, `ExactHessian()`, `SteihaugCG()`. The threshold keywords are
+ASCII (`η1`, `η2`, `Δ0`); the subscript spellings `η₁`, `η₂`, `Δ₀` are accepted as
+aliases and readable as properties either way.
+
+The fourth axis, the sampling rule, belongs to the *oracle* rather than to `tr_solve`,
+because it decides what the oracle returns:
+
+```julia
+prob = LogisticRegression(K = 5, M = 2_000)
+
+tr_solve(FullBatchNLP(prob);                        model = BHHHModel())  # exact
+tr_solve(FiniteSumNLP(prob, RadiusProportional());  model = BHHHModel())  # sampled
+```
+
+`tr_solve` picks the solver from the oracle: [`DeterministicTRSolver`](@ref),
+[`FiniteSumTRSolver`](@ref) or [`ExpectationTRSolver`](@ref). See
+[Problem classes](problem_classes.md) for what each one does differently and why the
+three are kept apart.
 
 !!! note "Hold `TRParams` fixed across mechanisms"
     In any comparison the thresholds and factors must be identical for every rule. Tuning
@@ -52,11 +69,11 @@ Defaults are `RDelta()`, `ExactHessian()`, `SteihaugCG()`.
 and are the only two a rule ever sees:
 
 ```julia
-TRParams(η₁ = 0.1, η₂ = 0.9)            # η defaults to η₁: the classical algorithm
-TRParams(η = 0.0, η₁ = 0.1, η₂ = 0.9)   # accept every step with positive predicted reduction
+TRParams(η1 = 0.1, η2 = 0.9)            # η defaults to η1: the classical algorithm
+TRParams(η = 0.0, η1 = 0.1, η2 = 0.9)   # accept every step with positive predicted reduction
 ```
 
-They must satisfy `0 ≤ η ≤ η₁ ≤ η₂ < 1`, checked in the constructor. Setting `η < η₁` opens a
+They must satisfy `0 ≤ η ≤ η1 ≤ η2 < 1`, checked in the constructor. Setting `η < η₁` opens a
 band where a step is accepted while the radius still contracts. [Thresholds and
 factors](thresholds.md) covers the consequences, and the matching convention
 `0 < γ₁ ≤ γ₂ < 1 < γ₃` on the scaling factors.
@@ -77,6 +94,11 @@ ss[:step_trajectory]       # ‖sₖ‖          length k
 ss[:active_trajectory]     # ‖sₖ‖ == Δₖ    length k  (Bool)
 ss[:accepted_trajectory]   # ρₖ ≥ η        length k  (Bool)
 ```
+
+A sampled run adds `:grad_sample_trajectory`, `:obj_sample_trajectory`,
+`:samples_total`, `:sample_cap_hits` and — where a truth exists —
+`:true_grad_trajectory`. A finite-sum run adds `:full_batch_trajectory`, marking the
+iterations at which `Nₖ = M` and the step was therefore exact.
 
 The first three are one entry longer than the rest, since they have a value before the first
 iteration; align on the tail when plotting them together.
@@ -191,7 +213,7 @@ scripts group by.
 ### The arguments in order
 
 ```julia
-update_radius!(rule, Δ, ρ, accepted, η₁, η₂, s_norm, g_norm_old, g_norm_new)
+update_radius!(rule, Δ, ρ, accepted, η1, η2, s_norm, g_norm_old, g_norm_new)
 ```
 
 `accepted` is third. It is passed rather than recomputed because a rule cannot derive it:

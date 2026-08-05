@@ -23,6 +23,7 @@
 #   criticality, needs_curvature      the interface the solver dispatches on
 #   SecondOrder, RGradTau, RDFOTau…   the wrapper and its aliases
 #   lambda_min_estimate               dense eigendecomposition or Lanczos
+#   curvature_estimate                the type-stable form the solver calls
 #   EigenPoint                        guarantees negative curvature is exploited
 # =============================================================================
 
@@ -66,9 +67,9 @@ criticality(::RadiusRule, g_norm::Real, ::Real) = float(g_norm)
 Whether `rule` needs `λ_min(B_k)`, and so whether the solver should pay for a
 curvature estimate at every iteration.
 
-`false` by default. The estimate is free when the subsolver already forms a dense
-eigendecomposition ([`ExactMS`](@ref)) and costs a short Lanczos run otherwise, so
-it is not levied unless a rule or the second-order stopping test asks for it.
+`false` by default. The estimate costs a dense symmetric eigendecomposition on
+small problems and a short Lanczos run otherwise, so it is not levied unless a
+rule, the second-order stopping test, or [`EigenPoint`](@ref) asks for it.
 """
 needs_curvature(::RadiusRule) = false
 
@@ -112,10 +113,15 @@ the other half of what makes it work.
 
 !!! warning "τ ≡ ‖g‖ for a positive definite model"
     `LBFGSModel` enforces `B ≻ 0`, so `λ_min > 0` always, so `τ = ‖g‖` identically
-    and `SecondOrder` is an expensive no-op. The same holds for `ScaledIdentity`
-    and `SPDTarget`. A second-order variant is only meaningful over a model that
-    can report negative curvature — `ExactHessian` or `SR1Model` — and the solver
-    warns once per run when it detects otherwise.
+    and `SecondOrder` is an expensive no-op. The same holds for `ScaledIdentity`,
+    `SPDTarget` and the outer-product models. A second-order variant is only
+    meaningful over a model that can report negative curvature — `ExactHessian`
+    or `SR1Model`.
+
+    This is now enforced rather than described: `reports_negative_curvature` is a
+    trait on `ModelHessian`, and `TRSolver` warns once at construction when a
+    τ-anchored rule or `tol_H > 0` meets a model that cannot supply the
+    information. The previous docstring claimed the solver warned; nothing did.
 
 # Fields
 
@@ -167,10 +173,10 @@ end
 Base.propertynames(r::SecondOrder) =
     (:inner, propertynames(getfield(r, :inner))...)
 
-Base.show(io::IO, r::SecondOrder) = print(io, "SecondOrder(", r.inner, ")")
+Base.show(io::IO, r::SecondOrder) = print(io, "SecondOrder(", getfield(r, :inner), ")")
 function Base.show(io::IO, ::MIME"text/plain", r::SecondOrder)
     println(io, "SecondOrder — radius anchored to τ = max{‖g‖, −λ_min(B)}")
-    show(io, MIME"text/plain"(), r.inner)
+    show(io, MIME"text/plain"(), getfield(r, :inner))
 end
 
 # -----------------------------------------------------------------------------
@@ -199,7 +205,7 @@ the trust region binding for ever.
 RGradCappedTau(; kwargs...) = SecondOrder(RGradCapped(; kwargs...))
 
 """
-    RDFOTau(; ζ = 1.0, γ1, γ2, γ3, Δmax)
+    RDFOTau(; ζ = 1.0, γ1, γ2, γ3, Δmin, Δmax)
 
 [`RDFO`](@ref) anchored to τ: contract on an unsuccessful iteration, otherwise
 shrink when `Δ_k > ζ τ_k` and expand when `Δ_k ≤ ζ τ_k`.
@@ -213,12 +219,13 @@ RDFOTau(; kwargs...) = SecondOrder(RDFO(; kwargs...))
 """
     RAdaptiveGradTau(; kwargs...)
 
-[`RAdaptiveGrad`](@ref) anchored to τ. Note the ceiling this rule already carries:
-it applies the smooth factor to the criticality measure rather than accumulating
-it, so the radius-to-criticality ratio is `R(ρ_k) ≤ γ3` at every iteration, and
-the second-order inactivity threshold is out of reach whenever it exceeds `γ3`.
+[`RAdaptiveGrad`](@ref) anchored to τ.
+
+The multiplier **accumulates** (`μ_{k+1} = μ_k R(ρ_k)`), so it is unbounded above
+and inherits `RGrad`'s unconditional eventual inactivity. 
 """
 RAdaptiveGradTau(; kwargs...) = SecondOrder(RAdaptiveGrad(; kwargs...))
+
 
 """
     RRTRGradTau(; kwargs...)
@@ -240,10 +247,12 @@ pair `(λ, v)` when `vector = true`.
 
 Two regimes:
 
-- `n ≤ nmax`: a dense symmetric eigendecomposition of `dense_hessian`. Exact, and
-  already paid for when the subsolver is [`ExactMS`](@ref).
+- `n ≤ nmax`: a dense symmetric eigendecomposition of `dense_hessian`. Exact.
 - `n > nmax`: `lanczos_k` steps of Lanczos with full reorthogonalisation against
   `hessian_op`, returning the smallest Ritz value and its Ritz vector.
+
+Prefer [`curvature_estimate`](@ref) inside the solver: it has a single return
+type, whereas this returns either a scalar or a tuple depending on a keyword.
 
 !!! note "The Lanczos value is an upper bound"
     A Ritz value satisfies `λ_Ritz ≥ λ_min`, so an under-resolved run *understates*
@@ -266,6 +275,30 @@ function lambda_min_estimate(model::ModelHessian, nlp, x;
         return Float64(eigvals(B)[1])
     end
     return _lanczos_min(hessian_op(model, nlp, x), n; k = lanczos_k, vector = vector)
+end
+
+"""
+    curvature_estimate(model, nlp, x, want_vector; nmax, lanczos_k)
+        -> (λ::Float64, v::Vector{Float64})
+
+Type-stable wrapper around [`lambda_min_estimate`](@ref): always returns a pair,
+with an empty `v` when the eigenvector was not requested.
+
+This is what the solver calls, once per iteration, and what it hands to
+`solve_subproblem!` through the `curv` keyword. `EigenPoint` previously computed
+its own estimate on top of the solver's, so a τ-anchored run with
+`EigenPoint(SteihaugCG())` paid for two dense eigendecompositions per iteration.
+"""
+function curvature_estimate(model::ModelHessian, nlp, x, want_vector::Bool;
+                            nmax::Int = 200, lanczos_k::Int = 40)
+    if want_vector
+        λ, v = lambda_min_estimate(model, nlp, x; nmax = nmax,
+                                   lanczos_k = lanczos_k, vector = true)
+        return Float64(λ), Vector{Float64}(v)
+    end
+    λ = lambda_min_estimate(model, nlp, x; nmax = nmax,
+                            lanczos_k = lanczos_k, vector = false)
+    return Float64(λ), Float64[]
 end
 
 """
@@ -337,6 +370,11 @@ with the sign chosen so that `gᵀd ≤ 0`, and returns whichever of `d` and the
 solver's step decreases the model more. When `λ_min ≥ 0` the inner step is
 returned untouched and nothing is spent beyond the curvature estimate.
 
+The estimate is taken from the `curv` argument when the solver has already
+computed it (which it has whenever the rule is τ-anchored or `tol_H > 0`), and
+computed here only otherwise. `needs_eigenvector` tells the solver to ask for the
+eigenvector as well, so the shared estimate is the one with `v`.
+
 # Why this is needed
 
 τ-anchoring keeps the radius *positive* near a saddle; it does not make the step
@@ -349,7 +387,8 @@ returned untouched and nothing is spent beyond the curvature estimate.
   achieves can be arbitrarily small.
 - [`ExactMS`](@ref) already solves the subproblem exactly, hard case included, so
   it satisfies the condition on its own and needs no wrapping. Wrapping it is
-  harmless and costs one redundant eigendecomposition.
+  harmless and now costs nothing extra when the solver is already estimating the
+  curvature.
 
 So `EigenPoint(SteihaugCG())` is the combination to use for second-order runs on
 anything but the smallest problems, and it is what makes the `O(max{ε_g^{-2},
@@ -366,32 +405,46 @@ EigenPoint(inner::SubproblemSolver = SteihaugCG();
            nmax::Int = 200, lanczos_k::Int = 40) =
     EigenPoint(inner, nmax, lanczos_k)
 
+needs_eigenvector(::EigenPoint) = true
+# Always true: even when the inner solver does not supply B·s, this wrapper needs
+# it to compare the two candidate decreases, so it can always leave it behind.
+returns_hprod(::EigenPoint) = true
+
 function solve_subproblem!(sub::EigenPoint, model::ModelHessian,
                            nlp::AbstractNLPModel{T, V},
-                           x::V, g::V, Δ::T, s::V, Hbuf::V) where {T, V}
-    active = solve_subproblem!(sub.inner, model, nlp, x, g, Δ, s, Hbuf)
+                           x::V, g::V, Δ::T, s::V, Hs::V,
+                           ws::SubWorkspace{V}; curv = nothing) where {T, V}
+    active = solve_subproblem!(sub.inner, model, nlp, x, g, Δ, s, Hs, ws; curv = curv)
 
-    λ, v = lambda_min_estimate(model, nlp, x; nmax = sub.nmax,
-                               lanczos_k = sub.lanczos_k, vector = true)
+    B = hessian_op(model, nlp, x)
+    # The inner solver may or may not have left B·s behind; make sure it is there.
+    returns_hprod(sub.inner) || _apply_op!(Hs, B, s)
+
+    # Reuse the solver's estimate when it supplied one with an eigenvector.
+    λ, v = if curv !== nothing && !isempty(curv[2])
+        curv
+    else
+        curvature_estimate(model, nlp, x, true; nmax = sub.nmax,
+                           lanczos_k = sub.lanczos_k)
+    end
     λ >= 0 && return active                       # no negative curvature to exploit
 
     # Model decrease of the inner step, m(0) − m(s) = −gᵀs − ½ sᵀBs.
-    B = hessian_op(model, nlp, x)
-    _apply!(Hbuf, B, s)
-    dec_inner = -dot(g, s) - T(0.5) * dot(s, Hbuf)
+    dec_inner = -dot(g, s) - T(0.5) * dot(s, Hs)
 
     # The eigenpoint, signed so that gᵀd ≤ 0 and scaled to the boundary.
-    d = similar(s)
+    d, Hd = ws.cand, ws.Hd            # the inner solver is done with both
     copyto!(d, v)
     nv = norm(d)
     nv == 0 && return active
     @. d *= Δ / nv
     dot(g, d) > 0 && (@. d = -d)
-    _apply!(Hbuf, B, d)
-    dec_eigen = -dot(g, d) - T(0.5) * dot(d, Hbuf)
+    _apply_op!(Hd, B, d)
+    dec_eigen = -dot(g, d) - T(0.5) * dot(d, Hd)
 
     if dec_eigen > dec_inner
         copyto!(s, d)
+        copyto!(Hs, Hd)                           # keep the B·s contract
         return true                               # the eigenpoint is on the boundary
     end
     return active

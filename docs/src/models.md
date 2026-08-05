@@ -11,6 +11,12 @@ be supplied as `LinearOperators` without changing the solver loop.
 | [`SR1Model`](@ref) | symmetric rank one | **yes**, and that is the point |
 | [`ScaledIdentity`](@ref) | `c·I`, i.e. none | no |
 | [`SPDTarget`](@ref) | constructed, minimiser pinned | no — positive definite by design |
+| [`BHHHModel`](@ref), [`BHHH2Model`](@ref) | outer product of scores | no — see [Outer-product Hessians](likelihood.md) |
+| [`GaussNewtonModel`](@ref) | `JᵀJ/N` | no — same |
+
+The last three are restricted to a [problem class](problem_classes.md):
+`required_problem` declares the narrowest class they are defined for, and the solver
+constructor rejects the rest.
 
 ## Which to use
 
@@ -74,6 +80,17 @@ TrustRegionRadius.dense_hessian(::MyModel, nlp, x) = # Matrix, for ExactMS and d
 Add `reset_model!` and `update_model!` if the model carries state; both default to no-ops.
 `update_model!` receives the secant pair `(sₖ, yₖ = gₖ₊₁ − gₖ)` on accepted steps only.
 
+Two further traits are worth declaring:
+
+```julia
+TrustRegionRadius.reports_negative_curvature(::MyModel) = false  # if B ⪰ 0 by construction
+TrustRegionRadius.required_problem(::MyModel) = LikelihoodProblem  # if it needs one
+```
+
+The first makes the solver warn when the model meets `SecondOrder` or `tol_H`, where it
+would be an expensive no-op reporting `:second_order` at a saddle. The second is checked
+at solver construction. Both default to the permissive answer.
+
 ## API
 
 ```@docs
@@ -89,4 +106,6 @@ model_hprod!
 update_model!
 reset_model!
 phi_target
+reports_negative_curvature
+model_eltype
 ```

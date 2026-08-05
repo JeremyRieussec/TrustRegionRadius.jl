@@ -32,7 +32,7 @@ the run silently degrades to a first-order one.
 | piece | what it supplies | what happens without it |
 |---|---|---|
 | `SecondOrder` / `τ` | a positive radius near a saddle | the radius collapses; see below |
-| `ExactHessian`, `SR1Model` | `λ_min < 0` when it exists | `τ ≡ ‖g‖`, an expensive no-op |
+| `ExactHessian`, `SR1Model` | `λ_min < 0` when it exists | `τ ≡ ‖g‖`, an expensive no-op — the solver now warns |
 | `EigenPoint`, `ExactMS` | a step along the negative direction | positive radius, nowhere to go |
 | `tol_H > 0` | refusal to stop at a saddle | `:first_order` reported at a saddle |
 
@@ -80,7 +80,8 @@ coherence, and never for a model constrained positive definite.
     `:second_order` at a saddle. The same holds for `ScaledIdentity` and `SPDTarget`.
     Pair `SecondOrder` with `ExactHessian` or `SR1Model`, and read
     `:lambda_min_trajectory` to confirm the model ever reported negative curvature at
-    all.
+    all. This is declared through [`reports_negative_curvature`](@ref) and the solver
+    emits a warning once per run when the two are paired, so the no-op is not silent.
 
 ## Why the subsolver matters
 
@@ -100,8 +101,10 @@ practice rather than only in principle.
 ## Curvature estimation
 
 [`lambda_min_estimate`](@ref) uses a dense symmetric eigendecomposition for `n ≤ nmax`
-(free when the subsolver is already `ExactMS`) and Lanczos with full
-reorthogonalisation above it.
+(free when the subsolver is already `ExactMS`) and Lanczos with full reorthogonalisation
+above it. [`curvature_estimate`](@ref) is the type-stable form the solver calls: it always
+returns a `(λ, v)` pair and hands it to the subsolver through `curv`, so `EigenPoint` no
+longer recomputes an eigendecomposition the solver has just done.
 
 !!! note "The Lanczos value is an upper bound"
     A Ritz value satisfies `λ_Ritz ≥ λ_min`, so an under-resolved estimate *understates*
@@ -131,12 +134,12 @@ RGradTau
 RGradCappedTau
 RDFOTau
 RAdaptiveGradTau
-RAdaptiveFanYuanTau
 RRTRGradTau
 criticality
 needs_curvature
 tau_criticality
 lambda_min_estimate
+curvature_estimate
 EigenPoint
 second_order_status
 ```

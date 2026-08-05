@@ -11,11 +11,6 @@
 #   julia --project=benchmark benchmark/experiments/exp6_interaction.jl
 # =============================================================================
 
-using Plots
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
-
 const GRID_RULES = [
     ("RDelta", () -> RDelta()),
     ("RStep",  () -> RStep()),
@@ -30,7 +25,7 @@ const GRID_MODELS = [
     ("I",      () -> ScaledIdentity(c = 1.0)),
 ]
 
-function main()
+function interaction()
     arch = ExperimentArchive(tag = "interaction")
     save_config(arch; rules = GRID_RULES, params = SOLVER_PARAMS,
                 problem_selection = PROBLEM_SELECTION,
@@ -110,5 +105,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    interaction()
 end

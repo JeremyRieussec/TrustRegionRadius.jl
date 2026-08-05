@@ -12,16 +12,29 @@
 #   * a sampled objective, via `SampledNLP` with any sampling rule;
 #   * a source of per-observation scores, so BHHH applies as well as Gauss–Newton
 #     and the two outer-product approximations can be compared on one problem.
+#
+# `LeastSquares <: NLSProblem <: LikelihoodProblem <: ScoredProblem`, so it accepts
+# `GaussNewtonModel` (which needs the Jacobian), `BHHHModel` (least squares is
+# maximum likelihood under Gaussian errors) and `ExactHessian` — the comparison
+# worth making, since Gauss-Newton and BHHH discard different terms.
+#
+# `true_objective` and `true_gradient` come from the generic `ScoredProblem`
+# methods in the sampling layer.
 # =============================================================================
 
 """
-    LeastSquares(t, y, φ, ∇φ, n; x_true = nothing)
+    LeastSquares(t, y, φ, ∇φ!, n; x_star = nothing)
 
 Nonlinear least squares with `M` observations and `n` parameters:
 
 - `t` is `M × d`, row `n` being the design point `tₙ`;
 - `φ(tₙ, x) -> Real` is the model;
-- `∇φ(tₙ, x) -> AbstractVector` of length `n` is its gradient in `x`.
+- `∇φ!(tₙ, x, g) -> nothing` writes its gradient in `x` into `g`.
+
+The gradient callback is now **in place**. Previously it returned a fresh
+`Vector` per row, so `jacobian` allocated `M` vectors on every call, and
+`jacobian` is called once per iteration by `GaussNewtonModel` and again by every
+`scores` evaluation.
 
 The per-observation score is `rₙ ∇φₙ` and the Jacobian row is `∇φₙᵀ`, so
 [`GaussNewtonModel`](@ref), [`BHHHModel`](@ref) and [`ExactHessian`](@ref) can all
@@ -38,20 +51,20 @@ struct LeastSquares{F, J} <: NLSProblem
     t::Matrix{Float64}
     y::Vector{Float64}
     φ::F
-    ∇φ::J
-    x_true::Union{Vector{Float64}, Nothing}
+    ∇φ!::J
+    x_star::Union{Vector{Float64}, Nothing}
 end
 
-function LeastSquares(t::AbstractMatrix, y::AbstractVector, φ, ∇φ, n::Int;
-                      x_true = nothing)
+function LeastSquares(t::AbstractMatrix, y::AbstractVector, φ, ∇φ!, n::Int;
+                      x_star = nothing)
     size(t, 1) == length(y) ||
         throw(DimensionMismatch("LeastSquares: rows of t must match y"))
-    return LeastSquares{typeof(φ), typeof(∇φ)}(
-        n, length(y), Matrix{Float64}(t), Vector{Float64}(y), φ, ∇φ,
-        x_true === nothing ? nothing : Vector{Float64}(x_true))
+    return LeastSquares{typeof(φ), typeof(∇φ!)}(
+        n, length(y), Matrix{Float64}(t), Vector{Float64}(y), φ, ∇φ!,
+        x_star === nothing ? nothing : Vector{Float64}(x_star))
 end
 
-n_terms(p::LeastSquares) = p.M
+population(p::LeastSquares) = p.M
 
 """
     x_true(prob) -> Vector or nothing
@@ -61,15 +74,22 @@ synthetically. As with [`β_true`](@ref), the least-squares estimate for a finit
 sample differs from them by the sampling error, so `‖x̂ − x*‖` does not vanish at
 the optimum.
 """
-x_true(p::LeastSquares) = p.x_true
+x_true(p::LeastSquares) = p.x_star
 
-residuals(p::LeastSquares, x, batch) =
-    [p.φ(view(p.t, i, :), x) - p.y[i] for i in batch]
+function residuals(p::LeastSquares, x, batch)
+    r = Vector{Float64}(undef, length(batch))
+    for (j, i) in enumerate(batch)
+        r[j] = p.φ(view(p.t, i, :), x) - p.y[i]
+    end
+    return r
+end
 
 function jacobian(p::LeastSquares, x, batch)
     J = Matrix{Float64}(undef, length(batch), p.n)
+    row = Vector{Float64}(undef, p.n)
     for (j, i) in enumerate(batch)
-        J[j, :] .= p.∇φ(view(p.t, i, :), x)
+        p.∇φ!(view(p.t, i, :), x, row)
+        @views J[j, :] .= row
     end
     return J
 end
@@ -85,6 +105,9 @@ analytic gradient.
 Available so that the Gauss–Newton approximation can be scored against the truth
 rather than assumed adequate: the discarded term is exactly the difference, and it
 is what separates a small-residual problem from a large-residual one.
+
+`LikelihoodNLP`/`SampledNLP` cache this per iterate, so the `O(n)` gradient
+evaluations are paid once per iteration rather than once per `hprod!`.
 """
 function batch_hess(p::LeastSquares, x, batch)
     n = p.n
@@ -101,11 +124,8 @@ function batch_hess(p::LeastSquares, x, batch)
     return (H .+ H') ./ 2
 end
 
-true_objective(p::LeastSquares, x) = batch_obj(p, x, 1:p.M)
-true_gradient(p::LeastSquares, x)  = (g = zeros(p.n); batch_grad!(p, x, 1:p.M, g); g)
-
 """
-    gauss_newton_error(p::LeastSquares, x; batch = all) -> NamedTuple
+    gauss_newton_error(p::LeastSquares, x; batch = full_batch(p)) -> NamedTuple
 
 How much the Gauss–Newton approximation discards at `x`:
 
@@ -122,7 +142,7 @@ fit the data. That is a different failure mode from BHHH's — it depends on the
 *fit*, not on the *specification* — and it is worth measuring rather than
 assuming, for the same reason.
 """
-function gauss_newton_error(p::LeastSquares, x; batch = 1:n_terms(p))
+function gauss_newton_error(p::LeastSquares, x; batch = full_batch(p))
     b = collect(batch)
     J = jacobian(p, x, b); r = residuals(p, x, b); N = length(b)
     GN = (J' * J) ./ N
@@ -137,7 +157,7 @@ end
 # -----------------------------------------------------------------------------
 
 """
-    linear_least_squares(A, b; x_true = nothing)
+    linear_least_squares(A, b; x_star = nothing)
     linear_least_squares(; n = 5, M = 2_000, noise = 0.1, seed = 0)
 
 `rₙ(x) = aₙᵀx − bₙ`, so `∇²rₙ = 0` and **Gauss–Newton is exact**:
@@ -152,20 +172,20 @@ size, which is the property that distinguishes "Gauss–Newton is exact" from
 The keyword form generates `A` with independent normal entries and
 `b = A x* + noise·ε`.
 """
-function linear_least_squares(A::AbstractMatrix, b::AbstractVector; x_true = nothing)
+function linear_least_squares(A::AbstractMatrix, b::AbstractVector; x_star = nothing)
     n = size(A, 2)
-    φ(a, x)  = dot(a, x)
-    ∇φ(a, x) = Vector(a)
-    return LeastSquares(Matrix(A), Vector(b), φ, ∇φ, n; x_true = x_true)
+    φ(a, x)       = dot(a, x)
+    ∇φ!(a, x, g)  = (copyto!(g, a); nothing)
+    return LeastSquares(Matrix(A), Vector(b), φ, ∇φ!, n; x_star = x_star)
 end
 
 function linear_least_squares(; n::Int = 5, M::Int = 2_000, noise::Real = 0.1,
                                 seed::Int = 0)
     rng = MersenneTwister(seed)
     A = randn(rng, M, n)
-    x⋆ = randn(rng, n)
-    b = A * x⋆ .+ noise .* randn(rng, M)
-    return linear_least_squares(A, b; x_true = x⋆)
+    xstar = randn(rng, n)
+    b = A * xstar .+ noise .* randn(rng, M)
+    return linear_least_squares(A, b; x_star = xstar)
 end
 
 """
@@ -200,10 +220,10 @@ function exponential_fit(; n_terms_model::Int = 2, M::Int = 400, noise::Real = 0
     rng = MersenneTwister(seed)
     t = reshape(collect(range(0.0, 4.0; length = M)), M, 1)
 
-    x⋆ = zeros(n)
+    xstar = zeros(n)
     for j in 1:J
-        x⋆[2j - 1] = 1.0 + 0.5 * (j - 1)          # amplitudes
-        x⋆[2j]     = 0.5 * j                       # decay rates, well separated
+        xstar[2j - 1] = 1.0 + 0.5 * (j - 1)          # amplitudes
+        xstar[2j]     = 0.5 * j                       # decay rates, well separated
     end
 
     function φ(tr, x)
@@ -213,17 +233,17 @@ function exponential_fit(; n_terms_model::Int = 2, M::Int = 400, noise::Real = 0
         end
         return s
     end
-    function ∇φ(tr, x)
-        τ = tr[1]; g = Vector{Float64}(undef, 2J)
+    function ∇φ!(tr, x, g)
+        τ = tr[1]
         for j in 1:J
             e = exp(-x[2j] * τ)
             g[2j - 1] = e
             g[2j]     = -x[2j - 1] * τ * e
         end
-        return g
+        return nothing
     end
 
-    y = [φ(view(t, i, :), x⋆) + misfit * sin(3 * t[i, 1]) + noise * randn(rng)
+    y = [φ(view(t, i, :), xstar) + misfit * sin(3 * t[i, 1]) + noise * randn(rng)
          for i in 1:M]
-    return LeastSquares(t, y, φ, ∇φ, n; x_true = x⋆)
+    return LeastSquares(t, y, φ, ∇φ!, n; x_star = xstar)
 end

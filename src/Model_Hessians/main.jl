@@ -1,10 +1,8 @@
 # =============================================================================
-# src/Model_Hessians/main.jl
-#
-# Axis 2: model Hessians.
-#
-# Must be included before `Subproblem/` and `Trust-region/`: both dispatch on
-# `ModelHessian`, so the type has to exist first.
+# ───── src/Model_Hessians/main.jl
+
+# Axis 2: the model Hessians. The three outer-product models are in Likelihood/,
+# since they need the score interface.
 # =============================================================================
 
 include("model_hessian.jl")

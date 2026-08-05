@@ -8,18 +8,36 @@ Companion code for *A survey of trust-region radius update mechanisms*, Parts I�
 ## Why this package exists
 
 Most trust-region codes fix one radius rule and vary everything else. This package does the
-opposite: the radius rule is a first-class, swappable component, and so are the two things it
-interacts with. Three orthogonal axes:
+opposite: the radius rule is a first-class, swappable component, and so are the three things it
+interacts with. Four orthogonal axes:
 
 | axis | choices |
 |---|---|
 | [radius rule](rules.md) | `RDelta`, `RStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RAdaptiveFanYuan`, `RRTR`, `RRTRGrad` |
-| [model Hessian](models.md) | `ExactHessian`, `LBFGSModel`, `SR1Model`, `ScaledIdentity`, `SPDTarget` |
-| [subproblem solver](subsolvers.md) | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCGLanczos` |
+| [model Hessian](models.md) | `ExactHessian`, `LBFGSModel`, `SR1Model`, `ScaledIdentity`, `SPDTarget`, `BHHHModel`, `BHHH2Model`, `GaussNewtonModel` |
+| [subproblem solver](subsolvers.md) | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCGLanczos`, `EigenPoint` |
+| [sampling rule](stochastic.md) | `FullBatch`, `FixedSample`, `RadiusProportional`, `NormTest`, `GeometricSample`, `InnerProductTest`, `OrthogonalityTest`, `AugmentedInnerProduct`, `SequentialEstimation` |
 
-Every combination runs through one driver, so a comparison measures the axis you varied
-rather than the difference between two code bases. That single-driver design is the main
+Every combination runs through one driver *per regime*, so a comparison measures the axis you
+varied rather than the difference between two code bases. That single-driver design is the main
 methodological control behind the numerical results in Part III.
+
+## Three regimes, three solvers
+
+The fourth axis exists only where there is something to sample, so the driver is chosen by the
+[problem class](problem_classes.md) rather than by a keyword:
+
+| class | solver | cap on `N_k` | full batch? |
+|---|---|---|---|
+| deterministic | `DeterministicTRSolver` | — | always |
+| expectation, `f = E[F(x,ξ)]` | `ExpectationTRSolver` | your `budget` | **never** |
+| finite sum, `f = (1/M) Σ fᵢ` | `FiniteSumTRSolver` | `M`, imposed | reachable |
+
+`tr_solve` dispatches for you. Keeping the three apart is not tidiness: a deterministic run
+should not carry a resampling branch, an expectation has no `M` and no exact iterate to fall
+back on, and a finite sum's `N_max` is a property of the problem rather than a knob. The
+[problem classes](problem_classes.md) page has the details, including why `BHHHModel` is
+rejected on anything that is not a likelihood.
 
 ## Installation
 
@@ -76,8 +94,12 @@ Acceptance is decoupled from scaling, `update_radius!` takes an `accepted::Bool`
 argument, and every rule obeys ``0 < \gamma_1 \le \gamma_2 < 1 < \gamma_3``. Because ``\eta``
 defaults to ``\eta_1``, existing `TRParams` calls are unaffected; four rules had their
 factors renumbered and will now throw rather than be silently reinterpreted.
-[Thresholds and factors](thresholds.md) explains both conventions, and `MIGRATION.md` in the
-repository root lists what to edit.
+[Thresholds and factors](thresholds.md) explains both conventions.
+
+The solver was then split in three by problem class, `TRSolver` becoming
+`DeterministicTRSolver`, and `SampledNLP` split into `ExpectationNLP` and `FiniteSumNLP`.
+`TRParams` keywords are ASCII (`η1`, `η2`, `Δ0`) with the subscript spellings kept as aliases.
+`MIGRATION.md` in the repository root lists what to edit.
 
 ## Citing
 

@@ -19,15 +19,9 @@
 #   julia --project=benchmark benchmark/experiments/exp4_mu_sweep.jl
 # =============================================================================
 
-using Plots
-using LinearAlgebra
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
-
 const MUS = [0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 8.0, 128.0]
 
-function main()
+function mu_sweep()
     arch = ExperimentArchive(tag = "mu_sweep")
 
     configs = [(@sprintf("mu_max=%g", μ),
@@ -100,5 +94,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    mu_sweep()
 end

@@ -2,14 +2,38 @@
 
 Three `ModelHessian`s that approximate `∇²f` from first derivatives alone:
 
-| model | approximation | assumption it rests on |
-|---|---|---|
-| [`BHHHModel`](@ref) | `B = (1/N) Σ sₙsₙᵀ` | information identity: correct specification, at the true parameters |
-| [`BHHH2Model`](@ref) | `W = (1/N) Σ (sₙ−ḡ)(sₙ−ḡ)ᵀ` | the same |
-| [`GaussNewtonModel`](@ref) | `B = (1/N) JᵀJ` | small residuals, or nearly linear `rₙ` |
+| model | approximation | requires | assumption it rests on |
+|---|---|---|---|
+| [`BHHHModel`](@ref) | `B = (1/N) Σ sₙsₙᵀ` | `LikelihoodProblem` | information identity: correct specification, at the true parameters |
+| [`BHHH2Model`](@ref) | `W = (1/N) Σ (sₙ−ḡ)(sₙ−ḡ)ᵀ` | `LikelihoodProblem` | the same |
+| [`GaussNewtonModel`](@ref) | `B = (1/N) JᵀJ` | `NLSProblem` | small residuals, or nearly linear `rₙ` |
 
 All three are positive semidefinite by construction, and all three obtain that
 property by discarding a term that vanishes only under their assumption.
+
+The **requires** column is enforced, not documented: [`required_problem`](@ref)
+declares it and the solver constructor checks it, so `BHHHModel` over anything that
+is not a negative log-likelihood is an `ArgumentError` naming both types.
+
+```julia
+tr_solve(ADNLPModel(f, x0); model = BHHHModel())        # ArgumentError
+tr_solve(FullBatchNLP(logistic); model = BHHHModel())   # fine
+```
+
+That check exists because the failure it prevents is silent: applied to the wrong
+problem BHHH still produces a positive semidefinite matrix and the run still
+converges, and nothing in `ρ`, `‖g‖` or the radius trace reveals that the model is
+approximating nothing in particular. See [Problem classes](problem_classes.md).
+
+!!! note "`NLSProblem <: LikelihoodProblem`"
+    Least squares *is* maximum likelihood under i.i.d. Gaussian errors, and the score
+    `rₙ∇rₙ` is the log-likelihood score up to `σ²`. So BHHH applies to a least-squares
+    problem as well as Gauss–Newton, and the two can be compared on one — which is
+    the comparison worth making.
+
+Belonging to `LikelihoodProblem` asserts that `f` is a negative log-likelihood. It
+does **not** assert correct specification, which is a property of the data that no
+type can carry — that half is what [`information_identity_error`](@ref) measures.
 
 ## The information identity
 
@@ -80,10 +104,10 @@ batch size are not independent choices.
 
 ## Least squares
 
-[`LeastSquares`](@ref) is a `ScoredProblem`, so it runs deterministically through
-`LikelihoodNLP`, stochastically through `SampledNLP` with any sampling rule, and reports
-per-observation scores — meaning `GaussNewtonModel`, `BHHHModel` and `ExactHessian` can
-all be compared on one problem.
+[`LeastSquares`](@ref) is an `NLSProblem`, so it runs deterministically through
+[`FullBatchNLP`](@ref), stochastically through [`FiniteSumNLP`](@ref) with any sampling
+rule, and reports per-observation scores — meaning `GaussNewtonModel`, `BHHHModel` and
+`ExactHessian` can all be compared on one problem.
 
 - [`linear_least_squares`](@ref): `∇²rₙ = 0`, so **Gauss–Newton is exact**, not merely
   accurate, whatever the residual size. The control.
@@ -109,7 +133,6 @@ scores
 loss_terms
 score_matrix
 LikelihoodNLP
-NLSProblem
 residuals
 jacobian
 LogisticRegression
