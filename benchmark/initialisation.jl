@@ -11,6 +11,7 @@
 using TrustRegionRadius
 using ADNLPModels, NLPModels, LinearAlgebra
 using CUTEst
+using Random
 using TOML, Dates, Printf, JLD2
 using Plots, StatsPlots
 

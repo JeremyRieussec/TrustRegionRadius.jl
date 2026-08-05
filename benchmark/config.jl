@@ -34,7 +34,6 @@ const RULES = [
                                      μ = 1.0, μ_max = 128.0)),
     ("RAdaptiveStep",    () -> RAdaptiveStep()),
     ("RAdaptiveGrad",    () -> RAdaptiveGrad()),
-    ("RAdaptiveFanYuan", () -> RAdaptiveFanYuan()),
     # ("RRTR",             () -> RRTR()),
     # ("RRTRGrad",         () -> RRTRGrad(μ = 1.0)),
 ]
@@ -59,7 +58,6 @@ const TAU_RULES = [
                                                 μ = 1.0, μ_max = 128.0)),
     ("RDFOTau",            () -> RDFOTau(γ1 = 0.25, γ2 = 0.50, γ3 = 2.0, ζ = 100.0)),
     ("RAdaptiveGradTau",   () -> RAdaptiveGradTau()),
-    ("RAdaptiveFanYuanTau",() -> RAdaptiveFanYuanTau()),
 ]
 
 "The ‖g‖-anchored rule each τ-rule should be compared against, by name."
@@ -67,8 +65,7 @@ const TAU_PAIRS = [
     ("RGrad",            "RGradTau"),
     ("RGradCapped",      "RGradCappedTau"),
     ("RDFO",             "RDFOTau"),
-    ("RAdaptiveGrad",    "RAdaptiveGradTau"),
-    ("RAdaptiveFanYuan", "RAdaptiveFanYuanTau"),
+    ("RAdaptiveGrad",    "RAdaptiveGradTau")
 ]
 
 """

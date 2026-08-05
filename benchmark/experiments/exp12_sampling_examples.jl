@@ -109,7 +109,11 @@ const SAMPLERS = [
 # config.jl's full list of eight, and redefining it here shadowed the mechanisms
 # every other experiment runs on -- a `const` redefinition Julia warns about and
 # whose effect depends on include order.
-const TR_RULES = [("RDelta", () -> RDelta()), ("RGrad", () -> RGrad(μ = 1.0))]
+const TR_RULES = [("RDelta", () -> RDelta()), 
+                    ("RDFO",    () -> RDFO(  γ1 = 0.25, γ2 = 0.50, γ3 = 2.0, ζ = 100.0)),
+                    ("RGrad",   () -> RGrad( γ1 = 0.25, γ2 = 0.50, γ3 = 2.0, μ = 1.0)),
+                    ("RAdaptiveGrad",    () -> RAdaptiveGrad())
+                    ]
 
 # --- one run -----------------------------------------------------------------
 
