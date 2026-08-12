@@ -19,10 +19,10 @@
     @testset "the solver validates thresholds against the rule" begin
         nlp = ADNLPModel(rosen, [-1.2, 1.0])
         bad = TRParams(η = 0.0, η1 = 0.0, η2 = 0.9)
-        @test_throws ArgumentError TRSolver(nlp; rule = RStep(),         params = bad)
-        @test_throws ArgumentError TRSolver(nlp; rule = RAdaptiveStep(), params = bad)
-        @test TRSolver(nlp; rule = RDelta(), params = bad) isa TRSolver
-        @test TRSolver(nlp; rule = RGrad(),  params = bad) isa TRSolver
+        @test_throws ArgumentError DeterministicTRSolver(nlp; rule = RStep(),         params = bad)
+        @test_throws ArgumentError DeterministicTRSolver(nlp; rule = RAdaptiveStep(), params = bad)
+        @test DeterministicTRSolver(nlp; rule = RDelta(), params = bad) isa DeterministicTRSolver
+        @test DeterministicTRSolver(nlp; rule = RGrad(),  params = bad) isa DeterministicTRSolver
     end
 
     # ------
@@ -47,11 +47,11 @@
     end
 
     # ------
-    # check TRSolver construction
+    # check DeterministicTRSolver construction
     # ------
-    @testset "TRSolver construction" begin
+    @testset "DeterministicTRSolver construction" begin
         nlp = ADNLPModel(rosen, [-1.2, 1.0])
-        solver = TRSolver(nlp; rule = RDelta(), model = ExactHessian(),
+        solver = DeterministicTRSolver(nlp; rule = RDelta(), model = ExactHessian(),
                           subsolver = SteihaugCG())
         @test solver.rule isa RadiusRule
         @test solver.model isa ModelHessian
@@ -155,7 +155,7 @@
 
     @testset "solver reset restores rule state" begin
         nlp = ADNLPModel(rosen, [-1.2, 1.0])
-        solver = TRSolver(nlp; rule = RGrad(μ = 1.0))
+        solver = DeterministicTRSolver(nlp; rule = RGrad(μ = 1.0))
         SolverCore.solve!(solver, nlp)
         SolverCore.reset!(solver)
         @test solver.rule.μ == solver.rule.μ0

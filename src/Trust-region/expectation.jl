@@ -25,10 +25,13 @@ returns, so it belongs with the oracle. `budget` is a safety cap on `N_k` applie
 top of the rule's own `N_max`; the accuracy theory imposes none, so without a cap a
 criticality-anchored mechanism will ask for `Θ(Δ_k^{-4})` objective terms and get it.
 
-`TRParams(true_stop = true)` requires `has_truth(prob)`. That is `true` for
-[`PerturbedExpectation`](@ref), which supplies the exact mean by construction, and
-`false` for a general expectation — where the request is not conservative but
+`TRParams(true_stop = :full)` and `:both` require `has_truth(prob)`. That is `true`
+for [`PerturbedExpectation`](@ref), which supplies the exact mean by construction,
+and `false` for a general expectation — where the request is not conservative but
 impossible, and is refused rather than silently downgraded to the batch test.
+
+`:test` is available on every expectation: it consults only `σ_g` and `N_k`, both of
+which the oracle already maintains, and asserts nothing it cannot support.
 """
 mutable struct ExpectationTRSolver{T, V, R, M, S} <: AbstractTRSolver
     core::TRCore{T, V, R, M, S}
@@ -39,10 +42,11 @@ function ExpectationTRSolver(nlp::ExpectationNLP;
                              model::ModelHessian         = ExactHessian(),
                              subsolver::SubproblemSolver = SteihaugCG(),
                              params::TRParams            = TRParams{Float64}())
-    params.true_stop && !has_truth(nlp) && throw(ArgumentError(
-        "TRParams(true_stop = true) needs an exact gradient, but " *
+    confirmation_needs_truth(params) && !has_truth(nlp) && throw(ArgumentError(
+        "TRParams(true_stop = :$(params.true_stop)) needs an exact gradient, but " *
         "$(nameof(typeof(nlp.prob))) is an expectation with no closed-form mean. " *
-        "Use PerturbedExpectation, or a finite sum, or drop true_stop — the batch " *
+        "Use true_stop = :test, which needs only the variance estimate, or " *
+        "PerturbedExpectation, or a finite sum, or true_stop = :none — the batch " *
         "test is then the only test available and should be reported as such."))
     c = TRCore(nlp, rule, model, subsolver, params)
     return ExpectationTRSolver{Float64, Vector{Float64}, typeof(c.rule),
@@ -87,7 +91,7 @@ function SolverCore.solve!(solver::ExpectationTRSolver,
 
     k = 0
     while true
-        if _first_order_ok(st, p) && _confirm_stop(nlp, c.x, p)
+        if _first_order_ok(st, p) && _confirm_stop(nlp, c.x, Float64(st.g_norm), p)
             set_status!(stats, _final_status(p)); break
         end
         k >= p.max_iterations    && (set_status!(stats, :max_iter);  break)
@@ -118,16 +122,50 @@ function SolverCore.solve!(solver::ExpectationTRSolver,
 end
 
 """
-    _confirm_stop(nlp, x, params) -> Bool
+    _confirm_stop(nlp, x, g_norm, params) -> Bool
 
-Whether a satisfied stopping test should be believed. Always, unless
-`true_stop = true`, in which case `‖ĝ_k‖ ≤ tol` is confirmed against the true
-gradient before the run is declared converged.
+Whether a satisfied stopping test should be believed, under the mode named by
+`params.true_stop`. Called only once `‖ĝ_k‖ ≤ tol` already holds, so `g_norm ≤ tol`
+on entry.
+
+# The three modes
+
+`:test` — free. `σ_g/√N_k` is the standard error of the batch gradient, so
+
+    ‖ĝ_k‖ + z·σ_g/√N_k ≤ tol
+
+is a one-sided confidence statement that the *true* `‖∇f‖` is below `tol`. When the
+batch is too small to resolve `tol` the bound cannot be met however small `‖ĝ_k‖`
+happens to be, which is exactly the case the unguarded test gets wrong. Costs
+nothing and never certifies noise; the price is that it can withhold a correct stop
+until the sampling rule has grown `N_k`.
+
+`:full` — exact and unconditional. [`confirm_gradient_norm!`](@ref) at the cap.
+
+`:both` — the cheap bound first. If it holds, the batch has *proved* the stop and
+there is nothing left to buy. If it does not, the batch is inconclusive — `‖ĝ_k‖` is
+small but the noise could be hiding anything — and only then is the cap-sized pass
+paid for. Same guarantee as `:full`, at a fraction of the evaluations, and it is the
+mode to prefer.
+
+!!! note "Screening on `‖∇f‖ = 0` would be the wrong screen"
+    The natural-sounding alternative is to test `H₀: ∇f = 0` and reject the stop
+    when `H₀` is refuted. That is not the hypothesis the solver cares about. A
+    well-resolved iterate with `‖ĝ_k‖` comfortably below `tol` refutes `∇f = 0` —
+    the gradient is significantly non-zero and significantly small — and blocking
+    there would refuse every correct stop the cheap path is meant to accept. The
+    test above screens on `‖∇f‖ ≤ tol`, which is the stopping criterion itself.
 """
-_confirm_stop(::AbstractNLPModel, x, ::TRParams) = true
-function _confirm_stop(nlp::SampledNLP, x, p::TRParams)
-    p.true_stop || return true
-    return norm(true_gradient(nlp, x)) <= p.tol
+_confirm_stop(::AbstractNLPModel, x, g_norm, ::TRParams) = true
+
+function _confirm_stop(nlp::SampledNLP, x, g_norm, p::TRParams)
+    mode = p.true_stop
+    mode === :none && return true
+    mode === :full && return confirm_gradient_norm!(nlp, x) <= p.tol
+
+    resolved = g_norm + p.stop_z * grad_standard_error(nlp) <= p.tol
+    mode === :test && return resolved
+    return resolved || confirm_gradient_norm!(nlp, x) <= p.tol   # :both
 end
 
 function _attach_sampling!(stats, nlp::SampledNLP, trace::Bool)

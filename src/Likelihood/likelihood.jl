@@ -187,6 +187,16 @@ struct OuterProductOperator{T, M <: AbstractMatrix{T}}
     ḡ::Vector{T}
     centred::Bool
     ridge::T
+
+    # Declared explicitly so Julia does *not* generate the default outer
+    # constructor `OuterProductOperator(::M, ::Vector{T}, ::Bool, ::T)`. That one
+    # was ambiguous with the converting constructor below for the commonest call
+    # of all — a dense `Matrix{Float64}` with a `Float64` ridge — because neither
+    # signature is more specific than the other. Widening `S` from `Matrix{T}` to
+    # `AbstractMatrix{T}` (to admit the `Adjoint` that NLS scores are) is what
+    # created the ambiguity.
+    OuterProductOperator{T, M}(S, ḡ, centred, ridge) where {T, M <: AbstractMatrix{T}} =
+        new{T, M}(S, ḡ, centred, ridge)
 end
 
 OuterProductOperator(S::AbstractMatrix{T}, ḡ::AbstractVector, centred::Bool,

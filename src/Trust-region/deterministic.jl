@@ -16,9 +16,9 @@ Trust-region solver for a problem evaluated exactly: any `AbstractNLPModel`, or 
 full-batch view [`FullBatchNLP`](@ref) of a finite sum.
 
 Accepts no sampling rule. It has no `resample!`, no variance estimate and no sample
-counters, and `TRParams(true_stop = true)` is rejected — the batch test *is* the
-true test here, so confirming it against the truth is meaningless rather than
-merely redundant.
+counters, and any `TRParams(true_stop = …)` other than `:none` is rejected — the
+batch test *is* the true test here, so confirming it against the truth is
+meaningless rather than merely redundant.
 
 ```julia
 stats = tr_solve(nlp; rule = RGrad(), model = SR1Model(mem = 5),
@@ -39,9 +39,10 @@ function DeterministicTRSolver(nlp::AbstractNLPModel{T, V};
         "$(problem_class(nlp)) oracle. Use $(nlp isa ExpectationNLP ?
         "ExpectationTRSolver" : "FiniteSumTRSolver"), or wrap the problem in " *
         "FullBatchNLP to solve it exactly."))
-    params.true_stop && throw(ArgumentError(
-        "TRParams(true_stop = true) has no meaning for a deterministic problem: " *
-        "the stopping test is already the true one."))
+    confirms_stop(params) && throw(ArgumentError(
+        "TRParams(true_stop = :$(params.true_stop)) has no meaning for a " *
+        "deterministic problem: the stopping test is already the true one. " *
+        "Use true_stop = :none."))
     c = TRCore(nlp, rule, model, subsolver, params)
     return DeterministicTRSolver{T, V, typeof(c.rule), typeof(c.model),
                                  typeof(c.subsolver)}(c)

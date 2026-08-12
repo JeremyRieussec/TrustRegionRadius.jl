@@ -20,8 +20,10 @@
 
 Trust-region solver for a [`FiniteSumNLP`](@ref).
 
-`TRParams(true_stop = true)` is always available here: `has_truth` holds for the
-whole class, at the cost of one full pass per confirmation.
+Every `TRParams(true_stop = …)` mode is available here: `has_truth` holds for the
+whole class, so `:full` and `:both` can confirm exactly, at the cost of one full
+pass per confirmation. `:both` pays that cost only when the batch cannot settle the
+question on its own, and is the mode to prefer.
 
 !!! note "The full-batch reference"
     `FiniteSumNLP(prob, FullBatch())` under this solver is numerically identical to
@@ -74,7 +76,7 @@ function SolverCore.solve!(solver::FiniteSumTRSolver,
 
     k = 0
     while true
-        if _first_order_ok(st, p) && _confirm_stop(nlp, c.x, p)
+        if _first_order_ok(st, p) && _confirm_stop(nlp, c.x, Float64(st.g_norm), p)
             set_status!(stats, _final_status(p)); break
         end
         k >= p.max_iterations    && (set_status!(stats, :max_iter);  break)

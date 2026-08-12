@@ -64,7 +64,7 @@
 
     @testset "SampledNLP satisfies the NLP interface" begin
         base = quad(); p = PerturbedSum(base, 500; σg = 1.0, seed = 5)
-        m = SampledNLP(p, FixedSample(500))
+        m = FiniteSumNLP(p, FixedSample(500))
         x = [0.3, -0.7, 1.4, 0.2]
         resample!(m, 1, 1.0, 1.0)
         @test length(m.batch_g) == 500
@@ -77,7 +77,7 @@
 
     @testset "the solver counts samples, not just iterations" begin
         base = quad(); p = PerturbedSum(base, 2_000; σg = 0.5, seed = 7)
-        m = SampledNLP(p, FixedSample(32))
+        m = FiniteSumNLP(p, FixedSample(32))
         st = tr_solve(m; rule = RDelta(), model = ExactHessian(),
                       subsolver = ExactMS(), trace = true,
                       params = TRParams(tol = 1e-4, max_iterations = 60))
@@ -96,16 +96,96 @@
 
     @testset "radius-proportional sampling grows N as Δ falls" begin
         base = quad(); p = PerturbedSum(base, 20_000; σg = 1.0, seed = 11)
-        m = SampledNLP(p, RadiusProportional(κ_g = 1.0, κ_f = 1.0, N_max = 20_000))
+        # No N_max: on a finite sum the cap is M, imposed by the problem
+        # (check_population_cap). M = 20_000 here, so the old N_max was redundant.
+        m = FiniteSumNLP(p, RadiusProportional(κ_g = 1.0, κ_f = 1.0))
+        # true_stop = :test, and it is load-bearing rather than incidental. Under
+        # :none this run stops after 3 iterations at ‖ĝ‖ = 3e-16 on a batch of
+        # N = 2 — ExactMS on a 2-term batch lands exactly on that batch's
+        # minimiser — while the true ‖∇f‖ there is 1.79. There is no N-versus-Δ
+        # trajectory to measure because there is no trajectory. :test costs no
+        # evaluations and refuses the stop until the batch can resolve tol.
         st = tr_solve(m; rule = RDFO(ζ = 1.0), model = ExactHessian(),
                       subsolver = ExactMS(), trace = true,
-                      params = TRParams(tol = 1e-6, max_iterations = 40))
+                      params = TRParams(tol = 1e-6, max_iterations = 40,
+                                        true_stop = :test))
         ss = st.solver_specific
         N = ss[:grad_sample_trajectory]; Δ = ss[:delta_trajectory]
         @test length(N) >= 5
         # N_k and Δ_k move in opposite directions: the mechanism pays for its own
         # radius policy. Checked on the run's own trajectory rather than asserted.
         @test cor(log.(max.(N, 1)), log.(max.(Δ[1:length(N)], 1e-300))) < -0.5
+    end
+
+    @testset "true_stop refuses a stop the batch cannot support" begin
+        # The regression this exists for: ‖ĝ_k‖ ≤ tol on a tiny batch is not
+        # evidence of anything. With an exact model and an exact subsolver the
+        # step lands on the batch minimiser, so ‖ĝ‖ is zero to rounding at N = 2
+        # whatever ∇f is doing, and the run certifies :first_order 1.79 away from
+        # criticality.
+        base = quad(); p = PerturbedSum(base, 20_000; σg = 1.0, seed = 11)
+        mk() = FiniteSumNLP(p, RadiusProportional(κ_g = 1.0, κ_f = 1.0))
+        run(mode) = tr_solve(mk(); rule = RDFO(ζ = 1.0), model = ExactHessian(),
+                             subsolver = ExactMS(), trace = true,
+                             params = TRParams(tol = 1e-6, max_iterations = 60,
+                                               true_stop = mode))
+
+        unguarded = run(:none)
+        @test unguarded.status === :first_order
+        @test unguarded.dual_feas <= 1e-6                       # the batch is happy
+        @test norm(true_gradient(p, unguarded.solution)) > 1.0  # and it is wrong
+
+        # Every guard rejects it and reaches the actual minimiser.
+        for mode in (:test, :full, :both)
+            st = run(mode)
+            @test st.status === :first_order
+            @test norm(true_gradient(p, st.solution)) <= 1e-6
+            @test st.iter > unguarded.iter
+        end
+    end
+
+    @testset "what each true_stop mode costs" begin
+        base = quad(); p = PerturbedSum(base, 20_000; σg = 1.0, seed = 11)
+        mk() = FiniteSumNLP(p, RadiusProportional(κ_g = 1.0, κ_f = 1.0))
+        cost(mode) = begin
+            m = mk()
+            tr_solve(m; rule = RDFO(ζ = 1.0), model = ExactHessian(),
+                     subsolver = ExactMS(),
+                     params = TRParams(tol = 1e-6, max_iterations = 60,
+                                       true_stop = mode))
+            samples_used(m)
+        end
+        none, test, full, both = cost(:none), cost(:test), cost(:full), cost(:both)
+
+        # :test is free — it reads σ_g and N_k, which the oracle already has.
+        @test test.confirm == 0
+        @test none.confirm == 0
+        # :full and :both pay in whole population passes, and :both pays less
+        # because the cheap bound settles the well-resolved candidates.
+        @test full.confirm > 0
+        @test both.confirm > 0
+        @test both.confirm < full.confirm
+        @test full.confirm % population(p) == 0
+        # confirmation is separated from optimisation work but included in total
+        @test both.total == both.grad + both.obj + both.confirm
+    end
+
+    @testset "the finite population correction is what makes :test usable" begin
+        # Without it the standard error stays positive at N = M, so no tolerance
+        # below z·σ_g/√M is ever certifiable and :both degenerates into :full.
+        base = quad(); p = PerturbedSum(base, 500; σg = 1.0, seed = 17)
+        m = FiniteSumNLP(p, FixedSample(500))          # N = M: the batch IS the truth
+        resample!(m, 1, 1.0, 1.0)
+        x = [0.3, -0.7, 1.4, 0.2]; g = zeros(4)
+        grad!(m, x, g); update_variances!(m, x, g)
+        @test m.Ng == 500
+        @test grad_standard_error(m) == 0.0
+
+        # and strictly positive, shrinking in N, below the population
+        small = FiniteSumNLP(p, FixedSample(50); replace = false)
+        resample!(small, 1, 1.0, 1.0)
+        grad!(small, x, g); update_variances!(small, x, g)
+        @test grad_standard_error(small) > 0
     end
 
     @testset "common random numbers keep ρ̂ usable at small radii" begin

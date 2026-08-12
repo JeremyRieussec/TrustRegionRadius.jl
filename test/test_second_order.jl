@@ -195,9 +195,15 @@
         # so the radius is multiplied by γ2 < 1 for ever.
         rd, rdτ = RDFO(ζ = 1.0, γ2 = 0.5), RDFOTau(ζ = 1.0, γ2 = 0.5)
         Δ, Δτ = 1.0, 1.0
+        # RDFO reads the *g_norm_old* slot as its criticality measure, so the
+        # criticality has to go there — passing the raw ‖g‖ there and τ in the
+        # g_norm_new slot fed RDFOTau a τ it never looks at, and the τ variant
+        # collapsed identically to the bare rule. This is what the solver does:
+        # _tr_step! passes crit_old, which is τ under a SecondOrder wrapper.
         for _ in 1:40
-            Δ  = update_radius!(rd,  Δ,  0.95, true, η1, η2, Δ,  gn, criticality(rd,  gn, λ))
-            Δτ = update_radius!(rdτ, Δτ, 0.95, true, η1, η2, Δτ, gn, criticality(rdτ, gn, λ))
+            c, cτ = criticality(rd, gn, λ), criticality(rdτ, gn, λ)
+            Δ  = update_radius!(rd,  Δ,  0.95, true, η1, η2, Δ,  c,  c)
+            Δτ = update_radius!(rdτ, Δτ, 0.95, true, η1, η2, Δτ, cτ, cτ)
         end
         @test Δ < 1e-10                        # collapsed
         @test Δτ >= 1.0                        # held at the curvature scale

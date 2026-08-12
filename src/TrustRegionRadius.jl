@@ -85,6 +85,7 @@ export batch_obj, batch_grad!, batch_hess, grad_variance, obj_variance, draw_bat
 export scores, loss_terms, score_matrix
 export SampledNLP, ExpectationNLP, FiniteSumNLP, FullBatchNLP, LikelihoodNLP
 export resample!, update_variances!, record_prediction!, samples_used
+export confirm_gradient_norm!, grad_standard_error
 export reset_sampling!, population_cap, true_objective, true_gradient
 
 # likelihood and least-squares problems
@@ -94,6 +95,7 @@ export LeastSquares, linear_least_squares, exponential_fit, x_true, gauss_newton
 
 # ---- The three solvers ------------------------------------------------------
 export TRParams, TRResult, AbstractTRSolver
+export confirms_stop, confirmation_needs_truth
 export DeterministicTRSolver, ExpectationTRSolver, FiniteSumTRSolver
 export tr_solve, model_grad_evals
 

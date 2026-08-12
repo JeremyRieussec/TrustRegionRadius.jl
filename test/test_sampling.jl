@@ -157,14 +157,18 @@
     end
 
     @testset "all three examples run under every sampling rule" begin
+        # No N_max anywhere: every example below is a finite sum, where
+        # check_population_cap rejects a user-supplied N_max because the cap is M.
+        # The examples have M ∈ {800, 2_000}, so the old N_max = 20_000 was
+        # redundant in every case and dropping it changes nothing that is tested.
         samplers = [("Fixed",        () -> FixedSample(64)),
-                    ("RadiusProp",   () -> RadiusProportional(N_max = 20_000)),
-                    ("NormTest",     () -> NormTest(θ = 0.5, N_max = 20_000)),
-                    ("InnerProduct", () -> InnerProductTest(N_min = 8, N_max = 20_000)),
-                    ("Orthogonality",() -> OrthogonalityTest(N_min = 8, N_max = 20_000)),
-                    ("Augmented",    () -> AugmentedInnerProduct(N_min = 8, N_max = 20_000)),
-                    ("Geometric",    () -> GeometricSample(N₀ = 8, rate = 1.1, N_max = 20_000)),
-                    ("Sequential",   () -> SequentialEstimation(N_min = 8, N_max = 20_000))]
+                    ("RadiusProp",   () -> RadiusProportional()),
+                    ("NormTest",     () -> NormTest(θ = 0.5)),
+                    ("InnerProduct", () -> InnerProductTest(N_min = 8)),
+                    ("Orthogonality",() -> OrthogonalityTest(N_min = 8)),
+                    ("Augmented",    () -> AugmentedInnerProduct(N_min = 8)),
+                    ("Geometric",    () -> GeometricSample(N₀ = 8, rate = 1.1)),
+                    ("Sequential",   () -> SequentialEstimation(N_min = 8))]
 
         rngm = MersenneTwister(1)
         Xm = randn(rngm, 800, 5)
@@ -185,7 +189,7 @@
         for (ename, mk, x0f, modelf) in examples, (sname, sf) in samplers
             @testset "$ename / $sname" begin
                 p   = mk()
-                nlp = SampledNLP(p, sf(); x0 = x0f(p), seed = 1)
+                nlp = FiniteSumNLP(p, sf(); x0 = x0f(p), seed = 1)
                 st  = tr_solve(nlp; rule = RDelta(), model = modelf(),
                                subsolver = SteihaugCG(), trace = true,
                                params = TRParams(tol = 1e-6, max_iterations = 40))
@@ -208,8 +212,8 @@
         # A rule that never moves N is indistinguishable from FixedSample, so the
         # grid above would pass vacuously. Check that at least one adapts.
         p = LogisticRegression(K = 5, M = 20_000, seed = 6)
-        fixed = SampledNLP(p, FixedSample(64); x0 = zeros(5), seed = 1)
-        adapt = SampledNLP(p, RadiusProportional(N_max = 50_000); x0 = zeros(5), seed = 1)
+        fixed = FiniteSumNLP(p, FixedSample(64); x0 = zeros(5), seed = 1)
+        adapt = FiniteSumNLP(p, RadiusProportional(); x0 = zeros(5), seed = 1)
         for nlp in (fixed, adapt)
             tr_solve(nlp; rule = RDFO(ζ = 1.0), model = BHHHModel(ridge = 1e-8),
                      subsolver = SteihaugCG(), trace = true,

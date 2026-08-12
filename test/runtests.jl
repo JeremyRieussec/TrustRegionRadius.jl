@@ -9,11 +9,12 @@ using Random
 using SolverCore
 
 @testset "TrustRegionRadius.jl" begin
+    include("test_problem_classes.jl")
     include("test_rules.jl")
     include("test_models.jl")
     include("test_subproblem.jl")
     include("test_solver.jl")
-    # include("test_profiles.jl")
+    include("test_profiles.jl")
     include("test_thresholds.jl")
     include("test_second_order.jl")
     include("test_stochastic.jl")

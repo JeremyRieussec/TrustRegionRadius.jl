@@ -217,8 +217,17 @@
               fs.solver_specific[:active_trajectory]
         @test det.solver_specific[:accepted_trajectory] ==
               fs.solver_specific[:accepted_trajectory]
-        # and the sampled run reports the truth, because the batch IS the truth
-        @test fs.solver_specific[:true_grad_trajectory][end] ≈ fs.dual_feas rtol = 1e-10
+        # and the sampled run reports the truth, because the batch IS the truth.
+        #
+        # An ABSOLUTE tolerance, deliberately. These are two different reductions of
+        # the same mathematical quantity — true_gradient evaluates the base model,
+        # dual_feas averages M perturbed terms — so they agree only to rounding, and
+        # at a converged point both are ~1e-15, where a *relative* comparison is
+        # meaningless: rtol = 1e-10 on quantities of magnitude 4e-15 demands
+        # agreement to 4e-25 and no implementation can pass it. The absolute
+        # agreement, ~2e-17, is the equivalence actually holding.
+        @test isapprox(fs.solver_specific[:true_grad_trajectory][end], fs.dual_feas;
+                       atol = 1e-12, rtol = 1e-6)
     end
 
     @testset "true_stop needs a truth, and a regime where it means something" begin

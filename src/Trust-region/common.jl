@@ -17,7 +17,7 @@
 
 """
     TRParams{T}(; η, η1, η2, Δ0, Δmin, Δmax, max_iterations, tol, tol_H,
-                  max_time, true_stop)
+                  max_time, true_stop, stop_z)
 
 Solver parameters, shared by all three solvers.
 
@@ -31,10 +31,44 @@ Solver parameters, shared by all three solvers.
 - `tol`: first-order tolerance on `‖g‖`                            (default `√eps`)
 - `tol_H`: second-order tolerance on `λ_min(B)`; `-1` disables it   (default `-1`)
 - `max_time`: wall-clock budget in seconds                         (default `Inf`)
-- `true_stop`: confirm the stopping test against the **true** gradient before
-  declaring convergence. Sampled solvers only, and only on a problem with
-  [`has_truth`](@ref); a deterministic solver rejects it as meaningless and an
-  expectation without truth rejects it as impossible. (default `false`)
+- `true_stop`: how a satisfied stopping test is confirmed          (default `:none`)
+- `stop_z`: confidence multiplier for the statistical modes        (default 2)
+
+# Confirming the stopping test
+
+`‖ĝ_k‖ ≤ tol` is a statement about **one batch**. On a small batch it can be met on
+sampling noise alone, and then the solver reports `:first_order` at a point that is
+not critical — a batch of `N = 2` with an exact model puts the step on the batch
+minimiser, so `‖ĝ‖` is zero to rounding whatever `∇f` is doing. `true_stop` chooses
+what has to hold before that stop is believed:
+
+| value | cost per candidate stop | accepts the stop when |
+|:--|:--|:--|
+| `:none` | none | always — the batch test is the test |
+| `:test` | none | `‖ĝ_k‖ + z·σ_g/√N_k ≤ tol` |
+| `:full` | one cap-sized pass | `‖g‖ ≤ tol` on the largest batch allowed |
+| `:both` | a pass only when `:test` is inconclusive | `:test`, else `:full` |
+
+`:test` is free: it asks whether the batch can *resolve* `tol` at all, by putting a
+one-sided confidence bound on `‖∇f‖` from the plug-in standard error `σ_g/√N_k`. It
+never stops on noise, but it can refuse to stop for a long time when `N_k` is held
+down by the sampling rule.
+
+`:full` is exact and always pays. `:both` is the one to reach for: the cheap bound
+settles the well-resolved case with no extra evaluations, and the expensive pass is
+spent only when the batch genuinely cannot tell. See [`confirm_gradient_norm!`](@ref)
+for what "the largest batch allowed" means and how its cost is accounted.
+
+`true_stop = false` and `true_stop = true` remain accepted, and mean `:none` and
+`:full`. A deterministic solver rejects anything but `:none` — the batch test *is*
+the true test there. `:full` and `:both` on an expectation need [`has_truth`](@ref);
+`:test` does not, since it consults only the variance the oracle already tracks.
+
+!!! warning "The default is not the safe choice"
+    `:none` reproduces the literature, and every benchmark result recorded in this
+    repository was produced under it. It is the right default for a survey whose
+    subject is the mechanisms, but a `:first_order` status obtained under it is a
+    claim about a batch, not about `∇f`. Report which mode produced a number.
 
 `0 ≤ η ≤ η1 ≤ η2 < 1`. `η₁`, `η₂` and `Δ₀` work as keywords and as property names
 too: `TRParams(η₁ = 0.2).η1 == 0.2`.
@@ -63,8 +97,37 @@ struct TRParams{T}
     tol::T
     tol_H::T
     max_time::Float64
-    true_stop::Bool
+    true_stop::Symbol
+    stop_z::T
 end
+
+"""
+    _stop_mode(v) -> Symbol
+
+Normalise the `true_stop` argument. `false`/`true` are kept as spellings of
+`:none`/`:full` so existing scripts and the archived experiment configs still load.
+"""
+_stop_mode(b::Bool) = b ? :full : :none
+function _stop_mode(s::Symbol)
+    s in (:none, :test, :full, :both) || throw(ArgumentError(
+        "TRParams: true_stop must be one of :none, :test, :full, :both " *
+        "(or a Bool, where false = :none and true = :full), got :$s"))
+    return s
+end
+"""
+    confirms_stop(p) -> Bool
+
+Whether `p` asks for any confirmation of a satisfied stopping test.
+"""
+@inline confirms_stop(p::TRParams) = p.true_stop !== :none
+
+"""
+    confirmation_needs_truth(p) -> Bool
+
+Whether the confirmation mode can require an exact gradient. True for `:full` and
+`:both`, false for `:test`, which reads only the variance the oracle already has.
+"""
+@inline confirmation_needs_truth(p::TRParams) = p.true_stop in (:full, :both)
 
 @inline function _pick(name::String, ascii, unicode, default)
     ascii !== nothing && unicode !== nothing && ascii != unicode &&
@@ -84,7 +147,9 @@ function TRParams{T}(; η::Union{Real, Nothing} = nothing,
                        Δmin::Real = T(0), Δmax::Real = T(Inf),
                        max_iterations::Int = 10_000,
                        tol::Real = sqrt(eps(T)), tol_H::Real = T(-1),
-                       max_time::Real = Inf, true_stop::Bool = false) where {T}
+                       max_time::Real = Inf,
+                       true_stop::Union{Bool, Symbol} = :none,
+                       stop_z::Real = 2) where {T}
     e1 = _pick("η1", η1, η₁, T(0.1))
     e2 = _pick("η2", η2, η₂, T(0.9))
     d0 = _pick("Δ0", Δ0, Δ₀, T(1))
@@ -100,8 +165,11 @@ function TRParams{T}(; η::Union{Real, Nothing} = nothing,
     tol_H == -1 || tol_H > 0 || throw(ArgumentError(
         "TRParams: need tol_H > 0 to request the second-order test, or " *
         "tol_H = -1 to disable it; got $tol_H"))
+    mode = _stop_mode(true_stop)
+    stop_z > 0 || throw(ArgumentError("TRParams: need stop_z > 0, got $stop_z"))
     return TRParams{T}(T(ea), T(e1), T(e2), T(d0), T(Δmin), T(Δmax),
-                       max_iterations, T(tol), T(tol_H), Float64(max_time), true_stop)
+                       max_iterations, T(tol), T(tol_H), Float64(max_time),
+                       mode, T(stop_z))
 end
 
 TRParams(; kwargs...) = TRParams{Float64}(; kwargs...)
@@ -115,7 +183,7 @@ end
 
 Base.propertynames(::TRParams) =
     (:η, :η1, :η2, :Δ0, :Δmin, :Δmax, :max_iterations, :tol, :tol_H,
-     :max_time, :true_stop, :η₁, :η₂, :Δ₀)
+     :max_time, :true_stop, :stop_z, :η₁, :η₂, :Δ₀)
 
 function Base.show(io::IO, p::TRParams{T}) where {T}
     println(io, "TRParams{$T}:")
@@ -128,7 +196,12 @@ function Base.show(io::IO, p::TRParams{T}) where {T}
     p.tol_H > 0 ?
         println(io, "  tol_H = ", p.tol_H, "   (second-order test)") :
         println(io, "  tol_H disabled")
-    p.true_stop && println(io, "  stopping test confirmed against the true gradient")
+    if confirms_stop(p)
+        println(io, "  true_stop = :", p.true_stop, "   (stopping test confirmed",
+                p.true_stop === :full ? "" : ", z = $(p.stop_z)", ")")
+    else
+        println(io, "  true_stop disabled: ‖ĝ‖ ≤ tol is a claim about one batch")
+    end
 end
 
 """

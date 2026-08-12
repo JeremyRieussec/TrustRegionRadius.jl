@@ -134,6 +134,7 @@ mutable struct ExpectationNLP{P <: ExpectationProblem, S <: SamplingRule} <:
     Nf::Int
     samples_g::Int
     samples_f::Int
+    samples_confirm::Int
     Ng_hist::Vector{Int}
     Nf_hist::Vector{Int}
     σg²::Float64
@@ -176,6 +177,7 @@ mutable struct FiniteSumNLP{P <: FiniteSumProblem, S <: SamplingRule} <:
     Nf::Int
     samples_g::Int
     samples_f::Int
+    samples_confirm::Int
     Ng_hist::Vector{Int}
     Nf_hist::Vector{Int}
     full_hist::Vector{Bool}
@@ -205,7 +207,7 @@ function ExpectationNLP(prob::ExpectationProblem, rule::SamplingRule;
     N0 = min(N_init, budget)
     b = draw_batch(prob, rng, N0)
     return ExpectationNLP{typeof(prob), typeof(rule)}(
-        meta, Counters(), prob, rule, rng, seed, N0, b, b, N0, N0, 0, 0,
+        meta, Counters(), prob, rule, rng, seed, N0, b, b, N0, N0, 0, 0, 0,
         Int[], Int[], 1.0, 1.0, 0.0, 0.0, NaN, 0, budget,
         zeros(0, 0), Float64[], false)
 end
@@ -225,7 +227,7 @@ function FiniteSumNLP(prob::FiniteSumProblem, rule::SamplingRule;
     b = draw_batch(prob, rng, N0; replace = replace)
     return FiniteSumNLP{typeof(prob), typeof(rule)}(
         meta, Counters(), prob, rule, rng, seed, replace, N0, copy(b), copy(b),
-        N0, N0, 0, 0, Int[], Int[], Bool[], 1.0, 1.0, 0.0, 0.0, NaN, 0, cap,
+        N0, N0, 0, 0, 0, Int[], Int[], Bool[], 1.0, 1.0, 0.0, 0.0, NaN, 0, cap,
         zeros(0, 0), Float64[], false)
 end
 
@@ -371,13 +373,98 @@ batch against it; no other rule reads it.
 record_prediction!(m::SampledNLP, pred::Real) = (m.last_pred = Float64(pred); pred)
 
 """
-    samples_used(m) -> (grad = …, obj = …, total = …)
+    samples_used(m) -> (grad = …, obj = …, confirm = …, total = …)
 
 Cumulative term evaluations — the cost measure for a sampled comparison. Iteration
 counts are proportional to work only under [`FixedSample`](@ref).
+
+`confirm` is what [`confirm_gradient_norm!`](@ref) spent verifying candidate stops,
+and is zero unless `TRParams(true_stop = …)` asked for verification. It is separated
+out because it is *not* optimisation work — comparing a mechanism that confirms
+against one that does not, on `total`, would charge the first for being honest — but
+it is included in `total`, because it is work that was done.
 """
 samples_used(m::SampledNLP) =
-    (grad = m.samples_g, obj = m.samples_f, total = m.samples_g + m.samples_f)
+    (grad = m.samples_g, obj = m.samples_f, confirm = m.samples_confirm,
+     total = m.samples_g + m.samples_f + m.samples_confirm)
+
+"""
+    confirm_gradient_norm!(m, x) -> Float64
+
+`‖∇f(x)‖` as accurately as this oracle can produce it, for confirming a candidate
+stopping test. Mutates `m`: the cost is added to `m.samples_confirm`.
+
+Two paths, and which one applies is a property of the problem, not a choice:
+
+- [`has_truth`](@ref) — the exact gradient, via [`true_gradient`](@ref). Every finite
+  sum qualifies (one pass over `M`), as does an expectation supplying a closed-form
+  mean, which costs nothing per term and is charged nothing.
+- otherwise — the gradient over a freshly drawn batch of [`population_cap`](@ref)
+  terms, the largest the budget allows. This is still an estimate; it is simply the
+  best one available, and on an expectation there is nothing better.
+
+The finite-sum truth path draws no random numbers, so a confirmed run and an
+unconfirmed one see the *same* realisations and remain comparable iterate for
+iterate. The cap-batch path does consume the stream, so an expectation without truth
+cannot be compared that way — confirmation there changes the run it is confirming.
+"""
+function confirm_gradient_norm!(m::SampledNLP, x::AbstractVector)
+    if has_truth(m)
+        m.samples_confirm += _truth_cost(m)
+        return Float64(norm(true_gradient(m, x)))
+    end
+    cap = population_cap(m)
+    b = _confirm_batch(m, cap)
+    g = similar(Vector{Float64}, length(x))
+    batch_grad!(m.prob, x, b, g)
+    m.samples_confirm += cap
+    return Float64(norm(g))
+end
+
+# One pass over the population for a finite sum; a closed-form mean is free.
+_truth_cost(m::FiniteSumNLP)   = population(m.prob)
+_truth_cost(::ExpectationNLP)  = 0
+
+_confirm_batch(m::ExpectationNLP, cap::Int) = draw_batch(m.prob, m.rng, cap)
+_confirm_batch(m::FiniteSumNLP, cap::Int) =
+    draw_batch(m.prob, m.rng, cap; replace = m.replace)
+
+"""
+    grad_standard_error(m) -> Float64
+
+The plug-in standard error of the batch gradient, from the variance estimate the
+oracle already maintains and the batch size that produced it.
+
+This is what makes the statistical stopping modes free — no extra evaluation, only
+arithmetic on numbers [`update_variances!`](@ref) has already computed. It is a
+*plug-in* estimate and inherits the usual caveat: `σ_g²` comes from the previous
+batch, and on a batch of two it is itself a one-degree-of-freedom quantity. It is
+used to decide whether a stop is *believable*, never to decide the step.
+
+# The finite population correction is not optional here
+
+For an expectation the population is unbounded and the answer is `σ_g/√N_k`. For a
+finite sum it is not, and using `σ_g/√N_k` there makes the statistical test useless
+rather than merely conservative: it would report a positive sampling error even at
+`N_k = M`, where the batch **is** the population and the gradient is exact. The
+practical effect is that no tolerance below `z·σ_g/√M` could ever be certified — on
+a population of 20 000 with `σ_g ≈ 1` that is about `1.4e-2`, so every realistic
+`tol` is unreachable and `:both` degenerates into always paying for `:full`.
+
+So: zero at `N_k ≥ M`, since [`draw_batch`](@ref) returns the whole population there
+whatever `replace` says; the textbook `√((M−N)/(M−1))` correction below that when
+drawing without replacement; and no correction when drawing with replacement, where
+the draws are genuinely i.i.d. and `σ_g/√N_k` is right.
+"""
+grad_standard_error(m::ExpectationNLP) = sqrt(max(m.σg², 0.0) / max(m.Ng, 1))
+
+function grad_standard_error(m::FiniteSumNLP)
+    M = population(m.prob)
+    N = max(m.Ng, 1)
+    N >= M && return 0.0                       # the batch is the population
+    se = sqrt(max(m.σg², 0.0) / N)
+    return m.replace ? se : se * sqrt((M - N) / (M - 1))
+end
 
 """
     reset_sampling!(m::SampledNLP) -> m
@@ -392,7 +479,7 @@ function reset_sampling!(m::SampledNLP)
     N0 = min(m.N_init, population_cap(m))
     _reset_batches!(m, N0)
     m.Ng = N0; m.Nf = N0
-    m.samples_g = 0; m.samples_f = 0
+    m.samples_g = 0; m.samples_f = 0; m.samples_confirm = 0
     empty!(m.Ng_hist); empty!(m.Nf_hist)
     m isa FiniteSumNLP && empty!(m.full_hist)
     m.σg² = 1.0; m.σf² = 1.0; m.ip² = 0.0; m.orth² = 0.0
