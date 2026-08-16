@@ -601,16 +601,20 @@ rejects it, and the failure lands on the one path that succeeded.
 # -----------------------------------------------------------------------------
 
 """
-    TRTrace(on, want_curv, want_truth)
+    TRTrace(on, want_curv)
 
 The per-iteration trajectories, collected only when `trace = true`.
+
+The sampled quantities are not here. `tg` (the true gradient norm), the variance
+estimates and the paired-difference statistics live on [`SampleTrace`](@ref),
+which the two sampled solvers carry alongside this one.
 
 # Alignment
 
 Entry `j` of every trajectory describes iteration `j-1`, counting from the
-initial point. The state trajectories `Δ`, `g`, `f` (and `λ`, `τ`, `dist`,
-`λtrue`, `tg`) carry one **extra entry at the end**: the state left behind by the
-final iteration.
+initial point. The state trajectories `Δ`, `g`, `f` (and `λ`, `τ` when curvature
+is wanted, plus `dist`, `λtrue`, `hnorm`) carry one **extra entry at the end**:
+the state left behind by the final iteration.
 
 To pair a state with the iteration it produced, drop that last entry:
 
