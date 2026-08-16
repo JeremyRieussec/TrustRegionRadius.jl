@@ -631,9 +631,9 @@ estimate of that decrease, using paired differences under common random numbers.
 With the same realisations at both ends of the step,
 
 ```math
-D_i = F(x_k, \xi_i) - F(x_k + s_k, \xi_i),
-\qquad
-N_{k+1} = \left\lceil z_p^2 \hat\sigma_N^2 / \hat\delta_N^2 \right\rceil ,
+D_i = F(x_k, \\xi_i) - F(x_k + s_k, \\xi_i),
+\\qquad
+N_{k+1} = \\left\\lceil z_p^2 \\hat\\sigma_N^2 / \\hat\\delta_N^2 \\right\\rceil ,
 ```
 
 where `δ̂_N` and `σ̂_N²` are the sample mean and variance of the `D_i`.
@@ -652,8 +652,8 @@ Both the numerator and the denominator are linear in the step:
 `δ̂ ∼ ‖g_k‖‖s_k‖` and `σ̂ ∼ C‖s_k‖`, so
 
 ```math
-N_k \sim \frac{z_p^2 C^2 \|s_k\|^2}{\|g_k\|^2 \|s_k\|^2}
-      = \frac{z_p^2 C^2}{\|g_k\|^2} ,
+N_k \\sim \\frac{z_p^2 C^2 \\|s_k\\|^2}{\\|g_k\\|^2 \\|s_k\\|^2}
+      = \\frac{z_p^2 C^2}{\\|g_k\\|^2} ,
 ```
 
 and the step length cancels. Pairing buys a large constant, not a better rate,
