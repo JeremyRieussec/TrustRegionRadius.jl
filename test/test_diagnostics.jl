@@ -204,7 +204,9 @@
                          trace = true)
         ki = inactivity_index(stats)
         @test ki isa Int                      # the region does stop binding
-        @test 0 <= active_fraction(stats) <= 1
+        @test 0 <= active_fraction(stats) <= 1   # on a real run, only a sanity bound;
+        # the exact slice is pinned on synthetic traces below, where the answer
+        # is known rather than whatever this run happened to produce.
 
         counts = branch_counts(stats)
         @test sum(values(counts)) == length(stats.solver_specific[:step_trajectory])
@@ -224,9 +226,11 @@
         @test isnan(κe) || κe <= κ + 1e-6
 
         # Too few points after inactivity to fit an order: NaN, not a number.
+        # (`isnan(o.order) || isfinite(o.order)` was here, which no implementation
+        # can fail. The order is pinned against known sequences below.)
         o = observed_order(stats; last = 5)
-        @test isnan(o.order) || isfinite(o.order)
         @test o.npts >= 0
+        @test o.npts < 3 ? isnan(o.order) : isfinite(o.order)
     end
 
     # ---------------------------------------------------------------------
@@ -333,5 +337,217 @@
                   ss[:lambda_min_true_trajectory])
 
         @test_throws ArgumentError DeterministicTRSolver(nlp; x_ref = [0.0, 0.0, 0.0])
+    end
+
+    # ---------------------------------------------------------------------
+    # Synthetic traces. A trace built by hand pins the *function*; a trace taken
+    # from a run pins whatever that run happened to do, which is why the three
+    # assertions these replace could not fail.
+    # ---------------------------------------------------------------------
+
+    synth(nlp; kw...) = begin
+        s = GenericExecutionStats(nlp)
+        for (k, v) in kw
+            set_solver_specific!(s, k, v)
+        end
+        s
+    end
+
+    @testset "active_fraction takes the exact tail slice" begin
+        nlp = ADNLPModel(quad, [1.0, 1.0])
+        # 20 entries, only the last two active.
+        a = fill(false, 20); a[19] = true; a[20] = true
+        s = synth(nlp; active_trajectory = a)
+
+        # tail = 0.1 -> lo = floor(20*0.9)+1 = 19, slice 19:20, both active.
+        @test active_fraction(s; tail = 0.1) == 1.0
+        # tail = 0.5 -> lo = floor(20*0.5)+1 = 11, slice 11:20, two of ten.
+        @test active_fraction(s; tail = 0.5) == 0.2
+        # tail = 1 is the whole run.
+        @test active_fraction(s; tail = 1.0) == 0.1
+
+        # The boundary the hand-rolled notebook version got wrong: at n = 41 it
+        # took six points where this takes five, because floor(0.9n) is an index
+        # and floor(0.9n)+1 is the first index of the tail.
+        b = fill(false, 41); b[37:41] .= true      # exactly the tail slice
+        s41 = synth(nlp; active_trajectory = b)
+        @test active_fraction(s41; tail = 0.1) == 1.0
+        b2 = fill(false, 41); b2[36] = true        # one before it: outside
+        @test active_fraction(synth(nlp; active_trajectory = b2); tail = 0.1) == 0.0
+
+        @test_throws ArgumentError active_fraction(s; tail = 0.0)
+        @test_throws ArgumentError active_fraction(s; tail = -0.1)
+        @test_throws ArgumentError active_fraction(s; tail = 1.5)
+    end
+
+    @testset "inactivity_index survives release and rebind" begin
+        nlp = ADNLPModel(quad, [1.0, 1.0])
+        # act[j] describes iteration j-1. Inactive at k = 2, binding again at
+        # k = 5, permanently inactive from k = 9.
+        a = fill(false, 15)
+        a[1] = a[2] = true            # iterations 0, 1 active
+        a[6] = a[7] = a[8] = a[9] = true   # iterations 5..8 active again
+        s = synth(nlp; active_trajectory = a)
+        # An implementation that stops at the first release returns 2. The
+        # answer is 9: the run was still binding at k = 8.
+        @test inactivity_index(s) == 9
+
+        # never binds
+        @test inactivity_index(synth(nlp; active_trajectory = fill(false, 10))) == 0
+        # still binding at the end: no inactivity index exists
+        @test inactivity_index(synth(nlp; active_trajectory = fill(true, 10))) === nothing
+        tail_true = fill(false, 10); tail_true[10] = true
+        @test inactivity_index(synth(nlp; active_trajectory = tail_true)) === nothing
+        # empty trace
+        @test inactivity_index(synth(nlp; active_trajectory = Bool[])) === nothing
+    end
+
+    @testset "observed_order recovers a known order" begin
+        nlp = ADNLPModel(quad, [1.0, 1.0])
+        # after_inactivity = false isolates the regression from the gating.
+        mk(e) = synth(nlp; grad_trajectory = e,
+                           accepted_trajectory = fill(true, length(e) - 1),
+                           active_trajectory = fill(false, length(e) - 1))
+
+        # Order 1: e_{k+1} = 0.3 e_k, so log e_{k+1} = log 0.3 + 1·log e_k.
+        e1 = [0.5]; for _ in 1:9; push!(e1, 0.3 * e1[end]); end
+        o1 = observed_order(mk(e1); after_inactivity = false)
+        @test round(o1.order, digits = 2) == 1.00
+        @test o1.npts == 9
+        @test isapprox(exp(o1.intercept), 0.3; rtol = 1e-8)
+
+        # Order 2: e_{k+1} = 0.5 e_k², slope 2 exactly.
+        e2 = [0.5]; for _ in 1:6; push!(e2, 0.5 * e2[end]^2); end
+        o2 = observed_order(mk(e2); after_inactivity = false)
+        @test round(o2.order, digits = 2) == 2.00
+        @test o2.npts == 6
+
+        # Too short to fit: NaN order, but npts reports the count actually
+        # available, so "too short" is distinguishable from "measured as zero".
+        short = observed_order(mk([0.5, 0.15, 0.045]); after_inactivity = false)
+        @test isnan(short.order)
+        @test short.npts == 2
+
+        # Zero is a measurement, not an absence: a flat sequence has order 0
+        # and reports its full point count.
+        flat = observed_order(mk(fill(0.25, 8)); after_inactivity = false)
+        @test flat.npts == 7
+        @test isnan(flat.order) || abs(flat.order) < 1e-8
+
+        @test_throws ArgumentError observed_order(mk(e1); use = :nonsense)
+    end
+
+    @testset "model_hessian_norm on both branches" begin
+        nlp2 = ADNLPModel(quad, [1.0, 1.0])
+        x2 = [0.7, -0.3]
+
+        # ScaledIdentity: ‖cI‖ = c exactly, at every point.
+        @test model_hessian_norm(ScaledIdentity(c = 3.0), nlp2, x2) ≈ 3.0
+        @test model_hessian_norm(ScaledIdentity(c = 0.25), nlp2, randn(2)) ≈ 0.25
+
+        # ExactHessian on ½(x₁² + 4x₂²): ∇²f ≡ diag(1,4), so ‖H‖₂ = 4 everywhere.
+        m = ExactHessian(); reset_model!(m, 2)
+        @test model_hessian_norm(m, nlp2, x2) ≈ 4.0 atol = 1e-8
+        @test model_hessian_norm(m, nlp2, [5.0, 5.0]) ≈ 4.0 atol = 1e-8
+
+        # The two branches on identical input. nmax = 1 forces the power
+        # iteration on a problem whose dense answer is known exactly, which is a
+        # sharper cross-check than running the branches on different problems.
+        @test model_hessian_norm(m, nlp2, x2; nmax = 1) ≈ 4.0 atol = 1e-6
+        @test model_hessian_norm(ScaledIdentity(c = 3.0), nlp2, x2; nmax = 1) ≈ 3.0 atol = 1e-6
+
+        # n = 250 > nmax = 200, so the power-iteration branch runs for real.
+        n = 250
+        xb = ones(n) ./ 3
+
+        # (a) Well-separated spectrum, λ2/λ1 ≈ 0.1. Thirty iterations is ample
+        #     and the branch is exact to machine precision.
+        ws = vcat(collect(1.0:(n - 1)) ./ 250, 10.0)
+        sep = ADNLPModel(z -> 0.5 * sum(ws .* z .^ 2), zeros(n))
+        ms = ExactHessian(); reset_model!(ms, n)
+        @test model_hessian_norm(ms, sep, xb) ≈ 10.0 rtol = 1e-10
+        @test model_hessian_norm(ms, sep, xb; nmax = 10_000) ≈ 10.0 rtol = 1e-10
+
+        # (b) Clustered spectrum {i/25 : i = 1…250}, λ2/λ1 = 0.996. The default
+        #     power_iters = 30 does NOT converge here: the per-step factor for
+        #     the iteration on H² is (λ2/λ1)² = 0.992, so thirty steps remove
+        #     almost nothing. The estimate is 9.9346 against a true 10.0.
+        #
+        #     This is pinned rather than tolerated. The value is a genuine
+        #     underestimate of ‖H‖, it converges monotonically from below, and
+        #     the assertions below would fail if the default silently changed,
+        #     if the iteration stopped converging, or if it ever overshot.
+        w = collect(1.0:n) ./ 25
+        big = ADNLPModel(z -> 0.5 * sum(w .* z .^ 2), zeros(n))
+        mb = ExactHessian(); reset_model!(mb, n)
+        truth = maximum(w)
+
+        @test model_hessian_norm(mb, big, xb; nmax = 10_000) ≈ truth rtol = 1e-10
+
+        d30  = model_hessian_norm(mb, big, xb)                      # default
+        d300 = model_hessian_norm(mb, big, xb; power_iters = 300)
+        d3k  = model_hessian_norm(mb, big, xb; power_iters = 3_000)
+        @test d30 < truth                       # underestimates, never overshoots
+        @test d300 < truth
+        @test d30 < d300 < d3k                  # and increases monotonically
+        @test d3k ≈ truth rtol = 1e-8           # converges when given the steps
+        # the default's error is ~6.5e-3 here, which is the documented limitation
+        @test 1e-3 < abs(d30 - truth) / truth < 1e-2
+
+        # NaN rather than an exception: a diagnostic must not be able to fail a
+        # run. An LBFGS model that was never reset has no operator to ask.
+        @test isnan(model_hessian_norm(LBFGSModel(mem = 5), nlp2, x2))
+    end
+
+    @testset "radius_sums and the hessian_norm keyword" begin
+        nlp = ADNLPModel(quad, [3.0, -2.0])
+        p = TRParams(tol = 1e-10, max_iterations = 100)
+
+        # Without the flag the third series is unavailable, and says so with NaN
+        # rather than with a zero that would read as a converged sum.
+        off = tr_solve(nlp; rule = RDelta(), model = ExactHessian(),
+                       params = p, trace = true)
+        @test !haskey(off.solver_specific, :hessian_norm_trajectory)
+        r0 = radius_sums(off)
+        @test isnan(r0.sum_delta2_over_M)
+        @test isfinite(r0.sum_delta) && isfinite(r0.sum_delta2)
+        @test r0.n == length(off.solver_specific[:delta_trajectory])
+
+        # With it, all three are finite and the count is the full trajectory.
+        on = tr_solve(nlp; rule = RDelta(), model = ExactHessian(),
+                      params = p, hessian_norm = true, trace = true)
+        ss = on.solver_specific
+        @test haskey(ss, :hessian_norm_trajectory)
+        @test length(ss[:hessian_norm_trajectory]) == length(ss[:delta_trajectory])
+        # ∇²f ≡ diag(1,4), so the recorded norm is 4 at every iterate.
+        @test all(x -> isapprox(x, 4.0; atol = 1e-8), ss[:hessian_norm_trajectory])
+        r = radius_sums(on)
+        @test isfinite(r.sum_delta) && isfinite(r.sum_delta2)
+        @test isfinite(r.sum_delta2_over_M)
+        @test r.n == length(ss[:delta_trajectory])
+
+        # M_k = L + max_{i≤k}‖H_i‖ is non-decreasing in L, so raising L lowers
+        # the third sum strictly.
+        rL = radius_sums(on; L = 10.0)
+        @test rL.sum_delta2_over_M < r.sum_delta2_over_M
+        @test rL.sum_delta == r.sum_delta          # the other two do not move
+        @test rL.sum_delta2 == r.sum_delta2
+
+        # With a constant ‖H_k‖ the third sum is the second divided by L + ‖H‖,
+        # exactly. ScaledIdentity makes ‖H_k‖ = c at every iterate.
+        c = 2.5
+        sc = tr_solve(nlp; rule = RDelta(), model = ScaledIdentity(c = c),
+                      params = TRParams(tol = 1e-8, max_iterations = 100),
+                      hessian_norm = true, trace = true)
+        @test all(x -> isapprox(x, c; atol = 1e-12),
+                  sc.solver_specific[:hessian_norm_trajectory])
+        rs = radius_sums(sc)
+        @test rs.sum_delta2_over_M ≈ rs.sum_delta2 / c rtol = 1e-12
+        rs3 = radius_sums(sc; L = 3.0)
+        @test rs3.sum_delta2_over_M ≈ rs.sum_delta2 / (3.0 + c) rtol = 1e-12
+
+        # An empty trace reports NaN and n = 0 rather than a sum of nothing.
+        empt = radius_sums(synth(nlp; delta_trajectory = Float64[]))
+        @test empt.n == 0 && isnan(empt.sum_delta)
     end
 end

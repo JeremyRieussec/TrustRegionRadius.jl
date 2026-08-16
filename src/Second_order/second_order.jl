@@ -295,6 +295,20 @@ Dense and exact for `n ≤ nmax`; a power iteration on `H_kᵀH_k` otherwise, wh
 converges to the largest singular value and so, `H_k` being symmetric, to the
 spectral norm. Returns `NaN` rather than throwing when the model cannot supply a
 Hessian at `x`: this is a diagnostic and must not be able to fail a run.
+
+!!! warning "The default iteration count does not always converge"
+    The power branch runs a fixed `power_iters` steps with no convergence test,
+    so what it returns is a lower bound on `‖H_k‖` rather than the norm. The
+    per-step contraction is `(λ₂/λ₁)²`, and on a clustered spectrum that is close
+    to one: with eigenvalues `{i/25 : i = 1…250}` the default thirty steps return
+    `9.9346` against a true `10.0`, an error of `6.5e-3`, while three thousand
+    steps return the exact value. A well-separated spectrum is exact at thirty.
+
+    The error is one-sided. `‖H_k‖` is understated, so `M_k = L + max_i‖H_i‖` is
+    understated and `Σ_k Δ_k²/M_k` is *over*stated, which is the safe direction
+    for a claim that the series is finite but the wrong one for a reported value.
+    Raise `power_iters`, or force the dense branch with `nmax`, before quoting a
+    number from a large problem.
 """
 function model_hessian_norm(model::ModelHessian, nlp, x;
                             nmax::Int = 200, power_iters::Int = 30)
