@@ -35,7 +35,8 @@ function DeterministicTRSolver(nlp::AbstractNLPModel{T, V};
                                subsolver::SubproblemSolver = SteihaugCG(),
                                params::TRParams            = TRParams{T}(),
                                x_ref::Union{Nothing, AbstractVector} = nothing,
-                               true_curvature::Bool        = false) where {T, V}
+                               true_curvature::Bool        = false,
+                               hessian_norm::Bool          = false) where {T, V}
     nlp isa SampledNLP && throw(ArgumentError(
         "DeterministicTRSolver was given a $(nameof(typeof(nlp))), which is a " *
         "$(problem_class(nlp)) oracle. Use $(nlp isa ExpectationNLP ?
@@ -46,7 +47,8 @@ function DeterministicTRSolver(nlp::AbstractNLPModel{T, V};
         "deterministic problem: the stopping test is already the true one. " *
         "Use true_stop = :none."))
     c = TRCore(nlp, rule, model, subsolver, params;
-               x_ref = x_ref, true_curvature = true_curvature)
+               x_ref = x_ref, true_curvature = true_curvature,
+               hessian_norm = hessian_norm)
     return DeterministicTRSolver{T, V, typeof(c.rule), typeof(c.model),
                                  typeof(c.subsolver)}(c)
 end

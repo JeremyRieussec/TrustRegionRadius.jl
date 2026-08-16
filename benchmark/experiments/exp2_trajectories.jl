@@ -28,7 +28,8 @@ function trajectories()
     labels  = [c[1] for c in configs]
 
     records = run_experiment(problems, configs;
-                             params = SOLVER_PARAMS, trace = true, archive = arch)
+                             params = SOLVER_PARAMS, trace = true, archive = arch,
+                             solver_kwargs = (hessian_norm = true,))
 
     for (pname, _) in problems
         rs = filter(r -> r.problem == pname && solved(r), records)
@@ -73,15 +74,27 @@ function trajectories()
     end
     savefig_archived(arch, "exp2_cumsum_summary.pdf", plt)
 
-    # ΣΔ and ΣΔ² per run
+    # The three series, per run and never averaged across problems: the mean of a
+    # divergent series and two convergent ones is not a summary of anything.
     io = IOBuffer()
-    @printf(io, "%-16s %-16s %14s %14s\n", "problem", "rule", "Σ Δ_k", "Σ Δ_k²")
-    println(io, "-"^64)
-    for r in filter(solved, records)
+    @printf(io, "%-16s %-16s %6s %8s %14s %14s %16s\n", "problem", "rule", "iters",
+            "status", "Σ Δ_k", "Σ Δ_k²", "Σ Δ_k²/M_k")
+    println(io, "-"^96)
+    for r in records
         isempty(r.delta_traj) && continue
-        @printf(io, "%-16s %-16s %14.4g %14.4g\n", r.problem, r.config,
-                sum(r.delta_traj), sum(abs2, r.delta_traj))
+        rs = radius_sums(RecordView(r))
+        @printf(io, "%-16s %-16s %6d %8s %14.4g %14.4g %16s\n",
+                r.problem, r.config, r.iterations, string(r.status),
+                rs.sum_delta, rs.sum_delta2,
+                isnan(rs.sum_delta2_over_M) ? "--" :
+                    @sprintf("%.4g", rs.sum_delta2_over_M))
     end
+    println(io)
+    println(io, "Σ Δ_k²/M_k with M_k = max_{i≤k}‖H_i‖ is the quantity Part II proves")
+    println(io, "finite for the criticality-anchored rules. Σ Δ_k² is equivalent to it")
+    println(io, "only while ‖H_k‖ stays bounded, which is the hypothesis the M_k form")
+    println(io, "exists to drop, so the two columns separate exactly on the runs where")
+    println(io, "the model curvature grows.")
     save_table(arch, "exp2_radius_sums.txt", String(take!(io)))
 
     finalize_archive(arch; notes = """

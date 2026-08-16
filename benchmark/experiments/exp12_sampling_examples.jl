@@ -103,6 +103,12 @@ const SAMPLERS = [
     ("Geometric(8,1.06)",    () -> GeometricSample(N₀ = 8, rate = 1.06)),
     ("Sequential(0.25)",     () -> SequentialEstimation(κ = 0.25, α = 0.05,
                                                         N_min = 8)),
+    # Certified decrease: N from the paired differences D_i = F(x_k,ξ_i) −
+    # F(x_k+s_k,ξ_i) under common random numbers. This is the rule whose cost is
+    # ‖g_k‖^{-2} with the step length cancelling, and the contrast with
+    # RadiusProportional (N ∼ Δ_k^{-2}) is the whole question of whether a
+    # sampling rule can see the radius rule.
+    ("Certified(0.9)",       () -> CertifiedDecrease(p = 0.9, N_min = 8)),
 ]
 
 # The two radius mechanisms this experiment varies. NOT `RULES`: that name is
@@ -274,11 +280,15 @@ end
 
 function sampling_examples()
     arch = ExperimentArchive(tag = "sampling_examples")
-    save_config(arch; rules = [r[1] for r in TR_RULES],
-                params = "tol=1e-7, maxit=$MAXIT, seeds=$(length(SEEDS))",
+    # The rule factories, not their names: `save_config` calls each once and
+    # records its parameters, which is what makes the archive a description of
+    # the run. Passing strings recorded only that they were strings.
+    save_config(arch; rules = TR_RULES, seed = collect(SEEDS),
+                params = TRParams(tol = 1e-7, max_iterations = MAXIT),
                 extra = Dict("experiment" => "exp12_sampling_examples",
                              "examples" => join([e[1] for e in EXAMPLES], ", "),
-                             "samplers" => join([s[1] for s in SAMPLERS], ", ")))
+                             "samplers" => join([s[1] for s in SAMPLERS], ", "),
+                             "seeds" => collect(SEEDS)))
 
     println("running $(length(EXAMPLES))×$(length(SAMPLERS))×$(length(TR_RULES)) cells, "
             * "$(length(SEEDS)) seeds each\n")

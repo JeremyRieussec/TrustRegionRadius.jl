@@ -24,19 +24,25 @@ const MUS = [0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 8.0, 128.0]
 function mu_sweep()
     arch = ExperimentArchive(tag = "mu_sweep")
 
-    configs = [(@sprintf("mu_max=%g", μ),
-                () -> (rule = RGradCapped(μ = μ, μ_max = μ),
-                       model = DEFAULT_MODEL(), subsolver = DEFAULT_SUBSOLVER()))
-               for μ in MUS]
-    # println("type of configs: ", typeof(configs))
-    # println("eltype of configs: ", eltype(configs))
-    # # push!(configs, ("uncapped",
-    #                 () -> (rule = RGrad(μ = 1.0), model = DEFAULT_MODEL(),
-    #                        subsolver = DEFAULT_SUBSOLVER())))
+    # Typed as `Function`, not left to inference: a comprehension of closures has
+    # one concrete closure type, so pushing the uncapped arm onto an untyped
+    # vector fails to convert. That is why the arm was commented out.
+    configs = Tuple{String, Function}[
+        (@sprintf("mu_max=%g", μ),
+         () -> (rule = RGradCapped(μ = μ, μ_max = μ),
+                model = DEFAULT_MODEL(), subsolver = DEFAULT_SUBSOLVER()))
+        for μ in MUS]
+    # The uncapped arm is the point of the experiment, not an extra: it is the
+    # only configuration testing the one unconditional inactivity result in the
+    # survey, that μ_k climbs past any threshold on its own. It starts far below
+    # κ̄ on purpose, so that the climb is what is being measured.
+    push!(configs, ("uncapped",
+                    () -> (rule = RGrad(μ = 0.1), model = DEFAULT_MODEL(),
+                           subsolver = DEFAULT_SUBSOLVER())))
 
     save_config(arch; params = SOLVER_PARAMS, problem_selection = PROBLEM_SELECTION,
                 rules = vcat([(@sprintf("mu_max=%g", μ), () -> RGradCapped(μ = μ, μ_max = μ))
-                              for μ in MUS], [("uncapped", () -> RGrad(μ = 1.0))]),
+                              for μ in MUS], [("uncapped", () -> RGrad(μ = 0.1))]),
                 extra = Dict("experiment" => "exp4_mu_sweep", "mu_values" => MUS))
 
     problems = default_problems()
@@ -44,6 +50,24 @@ function mu_sweep()
     labels   = [c[1] for c in configs]
 
     save_table(arch, "exp4_mu_summary.txt", success_table(records, problems, configs))
+
+    # The climb, measured. Corollary [mu three regimes] bounds the number of
+    # expansions after the iterates settle by log_{γ₃}(γ₃C/μ₀); `:expand` counts
+    # them, and `:expand_capped` counts the iterations on which the user's cap
+    # refused the climb, which is the mechanism that traps a run below κ̄.
+    io = IOBuffer()
+    @printf(io, "%-16s %-16s %8s %10s %12s %14s\n",
+            "problem", "config", "expand", "capped", "k*", "tail active")
+    println(io, "-"^82)
+    for r in records
+        b = branch_counts(RecordView(r))
+        ki = inactivity_index(RecordView(r))
+        @printf(io, "%-16s %-16s %8d %10d %12s %14.3f\n", r.problem, r.config,
+                get(b, :expand, 0), get(b, :expand_capped, 0),
+                ki === nothing ? "never" : string(ki),
+                active_fraction(RecordView(r)))
+    end
+    save_table(arch, "exp4_climb.txt", String(take!(io)))
 
     M = metric_matrix(records, problems, configs, :iter)
     τ, prof = performance_profile(M)

@@ -160,6 +160,53 @@ function active_fraction(stats; tail::Real = 0.1)
 end
 
 """
+    radius_sums(stats; L = 0.0) -> (; sum_delta, sum_delta2, sum_delta2_over_M, n)
+
+The three radius series of Part II, on one run.
+
+- `sum_delta` = `Σ_k Δ_k`, which the step-driven rules make finite in the local
+  regime;
+- `sum_delta2` = `Σ_k Δ_k²`;
+- `sum_delta2_over_M` = `Σ_k Δ_k²/M_k` with `M_k = L + max_{i≤k}‖H_i‖`, which is
+  the quantity the criticality-anchored propositions actually prove finite, and
+  is `NaN` unless the run was traced with `hessian_norm = true`.
+
+The third is not a refinement of the second. `Σ Δ_k²` is equivalent to it only
+while `{‖H_k‖}` is bounded, and that boundedness is exactly the hypothesis the
+`M_k` form was introduced to drop.
+
+`L` is the Lipschitz constant of the gradient. It is rarely known, and leaving it
+at zero changes the constant, not whether the series converges; say which was
+used when reporting a number.
+
+Sums are over the whole trajectory including the final radius, and are reported
+with `n` so that a partial sum is never mistaken for a converged one: on a run
+of forty iterations neither convergence nor divergence is established, and the
+honest reading is the shape of the partial sums, not their value.
+"""
+function radius_sums(stats; L::Real = 0.0)
+    Δ = _traj(stats, :delta_trajectory)
+    isempty(Δ) && return (sum_delta = NaN, sum_delta2 = NaN,
+                          sum_delta2_over_M = NaN, n = 0)
+    h = _traj(stats, :hessian_norm_trajectory)
+    s1 = sum(Δ)
+    s2 = sum(abs2, Δ)
+    s3 = NaN
+    if length(h) >= length(Δ)
+        acc = 0.0; running = 0.0; ok = true
+        for j in eachindex(Δ)
+            isfinite(h[j]) || (ok = false; break)
+            running = max(running, h[j])          # M_k is non-decreasing by construction
+            M = L + running
+            M > 0 || (ok = false; break)
+            acc += Δ[j]^2 / M
+        end
+        ok && (s3 = acc)
+    end
+    return (sum_delta = s1, sum_delta2 = s2, sum_delta2_over_M = s3, n = length(Δ))
+end
+
+"""
     branch_counts(stats) -> Dict{Symbol, Int}
 
 How many times each branch of the radius rule fired. See [`last_branch`](@ref)

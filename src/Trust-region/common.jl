@@ -261,6 +261,7 @@ mutable struct TRCore{T, V <: AbstractVector{T}, R <: RadiusRule,
     want_paired::Bool
     paired_δ::Float64
     paired_σ²::Float64
+    want_hnorm::Bool
 end
 
 """
@@ -279,7 +280,8 @@ the second-order sections of Part~II ask.
 function TRCore(nlp::AbstractNLPModel{T, V}, rule, model, subsolver,
                 params::TRParams{T};
                 x_ref::Union{Nothing, AbstractVector} = nothing,
-                true_curvature::Bool = false) where {T, V}
+                true_curvature::Bool = false,
+                hessian_norm::Bool = false) where {T, V}
     x0 = nlp.meta.x0
     rule_c = deepcopy(rule); mod_c = deepcopy(model); sub_c = deepcopy(subsolver)
 
@@ -321,7 +323,7 @@ function TRCore(nlp::AbstractNLPModel{T, V}, rule, model, subsolver,
         similar(x0), similar(x0), similar(x0), similar(x0), similar(x0),
         similar(x0), similar(x0), Hs_new, SubWorkspace(x0),
         rule_c, mod_c, sub_c, params, retro, want_curv, want_vec, sub_hs, Float64[],
-        xr, true_curvature, want_paired, NaN, NaN)
+        xr, true_curvature, want_paired, NaN, NaN, hessian_norm)
 end
 
 """
@@ -351,6 +353,7 @@ mutable struct TRState{T}
     cg_iters::Int       # inner iterations of the subproblem solver
     branch::Symbol      # which branch of the radius rule fired
     λtrue::Float64      # λ_min(∇²f(x_k)), when asked for
+    hnorm::Float64      # ‖H_k‖, the majorant M_k is built from
     dist::T             # ‖x_k − x_ref‖, when a reference solution was given
 end
 
@@ -362,7 +365,7 @@ The diagnostic fields of [`TRState`](@ref) before anything has been measured.
 one that was measured to be zero.
 """
 @inline _blank_diagnostics(::Type{T}) where {T} =
-    (T(NaN), T(NaN), T(NaN), 0, :none, NaN, T(NaN))
+    (T(NaN), T(NaN), T(NaN), 0, :none, NaN, NaN, T(NaN))
 
 """
     _true_lambda_min(c, nlp, x) -> Float64
@@ -418,6 +421,7 @@ function _init_state!(c::TRCore{T}, nlp) where {T}
                     false, false, false, false, _blank_diagnostics(T)...)
     st.λtrue = _true_lambda_min(c, nlp, c.x)
     st.dist  = _distance_to_ref(c, c.x)
+    st.hnorm = c.want_hnorm ? model_hessian_norm(c.model, nlp, c.x) : NaN
     return st
 end
 
@@ -442,6 +446,7 @@ function _refresh_state!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
     st.crit = T(criticality(c.rule, Float64(st.g_norm), c.want_curv ? st.λmin : 0.0))
     st.λtrue = _true_lambda_min(c, nlp, c.x)
     st.dist  = _distance_to_ref(c, c.x)
+    st.hnorm = c.want_hnorm ? model_hessian_norm(c.model, nlp, c.x) : NaN
     return nothing
 end
 
@@ -550,6 +555,7 @@ function _tr_step!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
     if st.accepted
         st.λtrue = _true_lambda_min(c, nlp, c.x)
         st.dist  = _distance_to_ref(c, c.x)
+        st.hnorm = c.want_hnorm ? model_hessian_norm(c.model, nlp, c.x) : NaN
     end
     st.crit = T(criticality(c.rule, Float64(st.g_norm), c.want_curv ? st.λmin : 0.0))
 
@@ -641,19 +647,21 @@ mutable struct TRTrace
     branch::Vector{Symbol}
     dist::Vector{Float64}
     λtrue::Vector{Float64}
+    hnorm::Vector{Float64}
 end
 
 TRTrace(on::Bool, curv::Bool) =
     TRTrace(on, curv, Float64[], Float64[], Float64[], Float64[], Float64[],
             Float64[], Float64[], Bool[], Bool[],
             Float64[], Float64[], Float64[], Float64[], Int[], Symbol[],
-            Float64[], Float64[])
+            Float64[], Float64[], Float64[])
 
 function trace_pre!(tr::TRTrace, st::TRState)
     tr.on || return nothing
     push!(tr.Δ, st.Δ); push!(tr.g, st.g_norm); push!(tr.f, st.f)
     tr.curv && (push!(tr.λ, st.λmin); push!(tr.τ, Float64(st.crit)))
     push!(tr.dist, Float64(st.dist)); push!(tr.λtrue, st.λtrue)
+    push!(tr.hnorm, st.hnorm)
     return nothing
 end
 
@@ -685,6 +693,7 @@ Beyond the seven original keys, and on the same alignment convention:
 | `:branch_trajectory` | `k` | which branch of the radius rule fired, see [`last_branch`](@ref) |
 | `:dist_trajectory` | `k+1` | `‖x_k − x_ref‖`, only when a reference solution was given |
 | `:lambda_min_true_trajectory` | `k+1` | `λ_min(∇²f(x_k))`, only when `true_curvature = true` |
+| `:hessian_norm_trajectory` | `k+1` | `‖H_k‖`, only when `hessian_norm = true`; the majorant `M_k` of Part I is built from it |
 
 The last two are attached only when they were actually measured, so their
 absence is unambiguous rather than a column of `NaN`.
@@ -712,6 +721,8 @@ function attach_trace!(stats, tr::TRTrace, Δ_final)
         set_solver_specific!(stats, :dist_trajectory, tr.dist)
     any(isfinite, tr.λtrue) &&
         set_solver_specific!(stats, :lambda_min_true_trajectory, tr.λtrue)
+    any(isfinite, tr.hnorm) &&
+        set_solver_specific!(stats, :hessian_norm_trajectory, tr.hnorm)
     set_solver_specific!(stats, :final_delta, Float64(Δ_final))
     return nothing
 end

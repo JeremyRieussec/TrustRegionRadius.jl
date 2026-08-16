@@ -280,6 +280,50 @@ function lambda_min_estimate(model::ModelHessian, nlp, x;
 end
 
 """
+    model_hessian_norm(model, nlp, x; nmax = 200, power_iters = 30) -> Float64
+
+`‖H_k‖`, the operator norm of the *model* Hessian at `x`.
+
+This is the quantity the majorant of Part I is built from: `M_k = L + max_{i≤k}
+‖H_i‖`, against which the radius summability of Part II is stated,
+`Σ_k Δ_k²/M_k < ∞`. Reporting `Σ_k Δ_k²` instead is equivalent only while
+`{‖H_k‖}` is bounded, which is exactly the hypothesis the weaker form was
+introduced to drop, so on a quasi-Newton model whose curvature grows the two
+statements are different.
+
+Dense and exact for `n ≤ nmax`; a power iteration on `H_kᵀH_k` otherwise, which
+converges to the largest singular value and so, `H_k` being symmetric, to the
+spectral norm. Returns `NaN` rather than throwing when the model cannot supply a
+Hessian at `x`: this is a diagnostic and must not be able to fail a run.
+"""
+function model_hessian_norm(model::ModelHessian, nlp, x;
+                            nmax::Int = 200, power_iters::Int = 30)
+    n = length(x)
+    try
+        if n <= nmax
+            return Float64(opnorm(Matrix(dense_hessian(model, nlp, x))))
+        end
+        B = hessian_op(model, nlp, x)
+        v = similar(x); w = similar(x)
+        fill!(v, one(eltype(x)))
+        nv = norm(v); nv == 0 && return 0.0
+        v ./= nv
+        λ = 0.0
+        for _ in 1:power_iters
+            _apply_op!(w, B, v)          # w = Bv
+            _apply_op!(v, B, w)          # v = B²v
+            nv = norm(v)
+            nv == 0 && return 0.0
+            v ./= nv
+            λ = sqrt(nv)                 # ‖B²v‖^{1/2} → |λ|_max
+        end
+        return Float64(λ)
+    catch
+        return NaN
+    end
+end
+
+"""
     curvature_estimate(model, nlp, x, want_vector; nmax, lanczos_k)
         -> (λ::Float64, v::Vector{Float64})
 

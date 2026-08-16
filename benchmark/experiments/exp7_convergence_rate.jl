@@ -23,6 +23,14 @@ The gradient trajectory restricted to the final run of inactive iterations.
 Returns an empty vector if the constraint never stopped binding, which is
 itself the finding for that configuration.
 """
+"""
+Fewest inactive iterations from which an order is worth fitting.
+
+Below this the regression has two or three points and returns a number that
+looks like a rate and is not one.
+"""
+const MIN_TAIL = 6
+
 function inactive_tail(r::RunRecord)
     (isempty(r.active_traj) || isempty(r.grad_traj)) && return Float64[]
     k = length(r.active_traj)
@@ -54,33 +62,66 @@ function CVRate()
     labels  = [c[1] for c in configs]
 
     orders = Dict(c[1] => Float64[] for c in configs)
-    first_inactive = Dict(c[1] => Float64[] for c in configs)
+    k_stars = Dict(c[1] => Float64[] for c in configs)
+    n_short = Dict(c[1] => 0 for c in configs)
+    n_never = Dict(c[1] => 0 for c in configs)
     io = IOBuffer()
-    @printf(io, "%-16s %-16s %10s %14s %14s\n",
-            "problem", "rule", "iters", "1st inactive", "order")
-    println(io, "-"^76)
-    for r in filter(solved, records)
+    @printf(io, "%-16s %-16s %8s %8s %12s %12s %8s %10s\n",
+            "problem", "rule", "status", "iters", "k* (perm.)", "1st inactive",
+            "tail", "order")
+    println(io, "-"^96)
+    # No `solved` filter: a run whose constraint never stops binding has no
+    # asymptotic phase to fit, and saying so is the result for that
+    # configuration rather than a gap in the table.
+    for r in records
+        isempty(r.active_traj) && continue
+        view = RecordView(r)
+        ki   = inactivity_index(view)          # first PERMANENTLY inactive iteration
+        fi   = findfirst(!, r.active_traj)     # first inactive of any kind
         tail = inactive_tail(r)
-        ord  = length(tail) >= 4 ? estimate_convergence_order(tail) : NaN
-        fi   = findfirst(!, r.active_traj)
-        isnan(ord) || push!(orders[r.config], ord)
-        fi === nothing || push!(first_inactive[r.config], Float64(fi))
-        @printf(io, "%-16s %-16s %10d %14s %14s\n", r.problem, r.config, r.iterations,
-                fi === nothing ? "never" : string(fi),
-                isnan(ord) ? "--" : @sprintf("%.3f", ord))
+        short = length(tail) < MIN_TAIL
+        ord  = short ? NaN : estimate_convergence_order(tail)
+        if ki === nothing
+            n_never[r.config] += 1
+        elseif short
+            n_short[r.config] += 1
+        else
+            push!(orders[r.config], ord); push!(k_stars[r.config], Float64(ki))
+        end
+        @printf(io, "%-16s %-16s %8s %8d %12s %12s %8d %10s\n",
+                r.problem, r.config, string(r.status), r.iterations,
+                ki === nothing ? "never" : string(ki),
+                fi === nothing ? "never" : string(fi - 1),
+                length(tail),
+                isnan(ord) ? (ki === nothing ? "never" : "short") :
+                             @sprintf("%.3f", ord))
     end
+    println(io)
+    println(io, "k* is the first iteration after which the constraint never binds again,")
+    println(io, "and is the quantity the mechanism controls. `1st inactive` is the first")
+    println(io, "inactive iteration of any kind; the two differ whenever the region")
+    println(io, "releases and binds again, and the order below is fitted from k*.")
+    println(io, "`short` marks a run with fewer than $MIN_TAIL inactive iterations: too")
+    println(io, "few to fit, and dropped from the medians rather than reported as a")
+    println(io, "number. `never` marks a constraint that bound to the end.")
     save_table(arch, "exp7_conv_order_summary.txt", String(take!(io)))
 
     io = IOBuffer()
-    @printf(io, "%-16s %10s %14s %18s\n",
-            "rule", "n", "median order", "median 1st inactive")
-    println(io, "-"^62)
+    @printf(io, "%-16s %8s %8s %8s %14s %14s\n",
+            "rule", "fitted", "short", "never", "median order", "median k*")
+    println(io, "-"^72)
     for (cname, _) in configs
-        o = orders[cname]; fi = first_inactive[cname]
-        @printf(io, "%-16s %10d %14s %18s\n", cname, length(o),
+        o = orders[cname]; ks = k_stars[cname]
+        @printf(io, "%-16s %8d %8d %8d %14s %14s\n", cname, length(o),
+                n_short[cname], n_never[cname],
                 isempty(o)  ? "--" : @sprintf("%.3f", _median(o)),
-                isempty(fi) ? "--" : @sprintf("%.0f",  _median(fi)))
+                isempty(ks) ? "--" : @sprintf("%.0f",  _median(ks)))
     end
+    println(io)
+    println(io, "The claim is that `median order` is the same across rules while")
+    println(io, "`median k*` is not. `short` and `never` are reported because a")
+    println(io, "median taken over the runs that reached inactivity early is biased")
+    println(io, "towards the mechanisms that do so.")
     save_table(arch, "exp7_order_by_rule.txt", String(take!(io)))
 
     data = [orders[c[1]] for c in configs]
@@ -91,10 +132,10 @@ function CVRate()
         savefig_archived(arch, "exp7_conv_order_boxplot.pdf", plt)
     end
 
-    plt = plot(; xlabel = "first inactive iteration", ylabel = "estimated order",
-                 legend = :best)
+    plt = plot(; xlabel = "k*, first permanently inactive iteration",
+                 ylabel = "estimated order", legend = :best)
     for (cname, _) in configs
-        o = orders[cname]; fi = first_inactive[cname]
+        o = orders[cname]; fi = k_stars[cname]
         n = min(length(o), length(fi))
         n == 0 && continue
         scatter!(plt, fi[1:n], o[1:n]; label = cname, ms = 5)

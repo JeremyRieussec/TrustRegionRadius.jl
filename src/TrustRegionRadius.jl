@@ -60,6 +60,7 @@ export SecondOrder, RGradTau, RGradCappedTau, RDFOTau
 export RAdaptiveGradTau, RRTRGradTau
 export criticality, needs_curvature, tau_criticality
 export lambda_min_estimate, curvature_estimate, EigenPoint, second_order_status
+export model_hessian_norm
 
 # ---- Axis 2: model Hessians -------------------------------------------------
 export ModelHessian
@@ -106,7 +107,7 @@ export tr_solve, model_grad_evals
 # ---- Diagnostics ------------------------------------------------------------
 export kappa_bar, kappa_bar_empirical
 export theta_trajectory, inactivity_index, active_fraction, branch_counts
-export observed_order, hypotheses_report
+export observed_order, hypotheses_report, radius_sums
 
 # ---- Benchmarking -----------------------------------------------------------
 export performance_profile, data_profile, profile_to_pgfplots

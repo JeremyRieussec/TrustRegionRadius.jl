@@ -171,6 +171,7 @@ struct RunRecord
     branch_traj::Vector{Symbol}
     dist_traj::Vector{Float64}
     lambda_true_traj::Vector{Float64}
+    hnorm_traj::Vector{Float64}
     # --- stochastic half, or nothing
     sample::Union{Nothing, SampleRecord}
 end
@@ -208,6 +209,52 @@ first-order run, where `tau_traj` and `lambda_traj` are empty rather than zero.
 has_curvature(r::RunRecord) = !isempty(r.lambda_traj)
 
 """
+    RecordView(rec)
+
+A `RunRecord` dressed as a solver result, so that every helper of the
+diagnostics layer — `active_fraction`, `inactivity_index`, `observed_order`,
+`radius_sums`, `branch_counts`, `kappa_bar_empirical` — applies unchanged to an
+archived run.
+
+Without it each experiment re-implements the same tail arithmetic and the same
+alignment, which is how a run and a table come to disagree.
+"""
+struct RecordView
+    solver_specific::Dict{Symbol, Any}
+end
+
+function RecordView(r::RunRecord)
+    d = Dict{Symbol, Any}(
+        :delta_trajectory      => r.delta_traj,
+        :grad_trajectory       => r.grad_traj,
+        :obj_trajectory        => r.obj_traj,
+        :ratio_trajectory      => r.ratio_traj,
+        :active_trajectory     => r.active_traj,
+        :step_trajectory       => r.step_traj,
+        :gamma_trajectory      => r.gamma_traj,
+        :xi_trajectory         => r.xi_traj,
+        :cos_cauchy_trajectory => r.cos_cauchy_traj,
+        :cg_iters_trajectory   => r.cg_iters_traj,
+        :branch_trajectory     => r.branch_traj,
+    )
+    isempty(r.tau_traj)         || (d[:tau_trajectory] = r.tau_traj)
+    isempty(r.lambda_traj)      || (d[:lambda_min_trajectory] = r.lambda_traj)
+    isempty(r.dist_traj)        || (d[:dist_trajectory] = r.dist_traj)
+    isempty(r.lambda_true_traj) || (d[:lambda_min_true_trajectory] = r.lambda_true_traj)
+    isempty(r.hnorm_traj)       || (d[:hessian_norm_trajectory] = r.hnorm_traj)
+    if r.sample !== nothing
+        d[:grad_sample_trajectory]      = r.sample.Ng_traj
+        d[:obj_sample_trajectory]       = r.sample.Nf_traj
+        d[:sigma_g2_trajectory]         = r.sample.sigma_g2_traj
+        d[:sigma_f2_trajectory]         = r.sample.sigma_f2_traj
+        d[:true_grad_trajectory]        = r.sample.true_grad_traj
+        d[:paired_decrease_trajectory]  = r.sample.paired_delta_traj
+        d[:paired_variance_trajectory]  = r.sample.paired_var_traj
+    end
+    return RecordView(d)
+end
+
+"""
     _sample_record(ss) -> Union{Nothing, SampleRecord}
 
 Collect the stochastic half of a run from `stats.solver_specific`, or `nothing`
@@ -240,13 +287,24 @@ quasi-Newton models carry mutable state and each run must start clean.
 
 If `archive` is given, each record is also written to `data/` as JLD2 so the
 run can be re-analysed without recomputing.
+
+`solver_kwargs` is forwarded to `tr_solve`, which is how an experiment asks for a
+diagnostic the default run does not pay for: `solver_kwargs = (hessian_norm =
+true,)` records `‖H_k‖` so that `Σ Δ_k²/M_k` can be formed afterwards.
+
+!!! warning "Resumed runs keep the flags they were run with"
+    A cached record is returned as archived. Adding a diagnostic to
+    `solver_kwargs` therefore has no effect on problems already in `data/`; pass
+    `resume = false`, or archive to a fresh directory, when the point of the run
+    is the new quantity.
 """
 function run_experiment(problems, configs;
                         params::TRParams = TRParams(),
                         trace::Bool = true,
                         archive = nothing,
                         resume::Bool = true,
-                        verbose::Bool = true)
+                        verbose::Bool = true,
+                        solver_kwargs = NamedTuple())
     records = RunRecord[]
     n_reused = 0
 
@@ -298,7 +356,8 @@ function run_experiment(problems, configs;
             rec = try
                 NLPModels.reset!(nlp)
                 st = tr_solve(nlp; rule = rule, model = model,
-                              subsolver = sub, params = params, trace = trace)
+                              subsolver = sub, params = params, trace = trace,
+                              solver_kwargs...)
                 ss = st.solver_specific
                 RunRecord(pname, cname, nlp.meta.nvar, st.status, st.iter,
                           neval_obj(nlp), neval_grad(nlp), neval_hprod(nlp),
@@ -321,6 +380,7 @@ function run_experiment(problems, configs;
                           get(ss, :branch_trajectory,     Symbol[]),
                           get(ss, :dist_trajectory,       Float64[]),
                           get(ss, :lambda_min_true_trajectory, Float64[]),
+                          get(ss, :hessian_norm_trajectory, Float64[]),
                           _sample_record(ss))
             catch err
                 err isa InterruptException && rethrow()
@@ -329,7 +389,7 @@ function run_experiment(problems, configs;
                           NaN, NaN, 0.0, Float64[], Float64[], Float64[],
                           Float64[], Bool[], Float64[], Float64[], 0,
                           Float64[], Float64[], Float64[], Float64[], Float64[],
-                          Int[], Symbol[], Float64[], Float64[], nothing)
+                          Int[], Symbol[], Float64[], Float64[], Float64[], nothing)
             end
             push!(records, rec)
             push!(row, solved(rec) ? @sprintf("%14d", rec.iterations) :
@@ -389,6 +449,7 @@ function save_record(a, rec::RunRecord)
         branch_trajectory     = rec.branch_traj,
         dist_trajectory       = rec.dist_traj,
         lambda_true_trajectory = rec.lambda_true_traj,
+        hessian_norm_trajectory = rec.hnorm_traj,
         # The stochastic half is flattened rather than stored as a struct, so a
         # future field is a new key with a default rather than a type mismatch on
         # every archive written before it existed.
@@ -437,6 +498,7 @@ function _record_from_data(d::AbstractDict)
         get(d, "branch_trajectory",      Symbol[]),
         get(d, "dist_trajectory",        Float64[]),
         get(d, "lambda_true_trajectory", Float64[]),
+        get(d, "hessian_norm_trajectory", Float64[]),
         _sample_from_data(d))
 end
 

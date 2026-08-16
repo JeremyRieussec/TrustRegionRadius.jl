@@ -140,9 +140,16 @@ end
 # CUTEst problem selection
 # -----------------------------------------------------------------------------
 const MIN_VAR = 2
-const MAX_VAR = 2
+const MAX_VAR = 100      # SteihaugCG is the default subsolver, so n is not
+                         # capped by ExactMS's dense limit; keep it under that
+                         # (200) so an exact-solver arm stays runnable.
 const MAX_CON = 0        # 0 = unconstrained only
-const PROBLEM_LIMIT = 3  # e.g. 50 for a quick pass
+const PROBLEM_LIMIT = 50 # A campaign, not a smoke test. Three two-variable
+                         # problems cannot resolve an asymptotic claim: runs are
+                         # ten iterations long, so a 10% tail is one iteration
+                         # and every tail statistic is quantised to {0, ½, 1}.
+                         # Drop to 3 deliberately when debugging a script, and
+                         # never report a table produced at that setting.
 
 const PROBLEM_SELECTION = Dict(
     "min_var" => MIN_VAR, "max_var" => MAX_VAR,
