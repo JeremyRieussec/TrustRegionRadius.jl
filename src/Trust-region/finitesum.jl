@@ -40,8 +40,11 @@ function FiniteSumTRSolver(nlp::FiniteSumNLP;
                            rule::RadiusRule            = RDelta(),
                            model::ModelHessian         = ExactHessian(),
                            subsolver::SubproblemSolver = SteihaugCG(),
-                           params::TRParams            = TRParams{Float64}())
-    c = TRCore(nlp, rule, model, subsolver, params)
+                           params::TRParams            = TRParams{Float64}(),
+                           x_ref::Union{Nothing, AbstractVector} = nothing,
+                           true_curvature::Bool        = false)
+    c = TRCore(nlp, rule, model, subsolver, params;
+               x_ref = x_ref, true_curvature = true_curvature)
     return FiniteSumTRSolver{Float64, Vector{Float64}, typeof(c.rule),
                              typeof(c.model), typeof(c.subsolver)}(c)
 end

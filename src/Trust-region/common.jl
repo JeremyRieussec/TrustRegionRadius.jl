@@ -256,10 +256,27 @@ mutable struct TRCore{T, V <: AbstractVector{T}, R <: RadiusRule,
     want_vec::Bool
     sub_hs::Bool
     vmin::Vector{Float64}
+    x_ref::Union{Nothing, V}
+    want_true_curv::Bool
 end
 
+"""
+    TRCore(nlp, rule, model, subsolver, params; x_ref, true_curvature)
+
+`x_ref` is a reference solution. When given, the trace carries
+`‖x_k − x_ref‖`, which is what the superlinear rate theorem of Part~II is stated
+in; without it only `‖g_k‖` is available, and the two differ by the condition
+number of the Hessian at the solution, which is the constant under study.
+
+`true_curvature = true` adds `λ_min(∇²f(x_k))` beside `λ_min(B_k)`. It costs one
+extra eigenvalue estimate per iteration and is off by default. The pair is what
+separates a saddle the model can see from one it cannot, which is the question
+the second-order sections of Part~II ask.
+"""
 function TRCore(nlp::AbstractNLPModel{T, V}, rule, model, subsolver,
-                params::TRParams{T}) where {T, V}
+                params::TRParams{T};
+                x_ref::Union{Nothing, AbstractVector} = nothing,
+                true_curvature::Bool = false) where {T, V}
     x0 = nlp.meta.x0
     rule_c = deepcopy(rule); mod_c = deepcopy(model); sub_c = deepcopy(subsolver)
 
@@ -288,10 +305,16 @@ function TRCore(nlp::AbstractNLPModel{T, V}, rule, model, subsolver,
     reset_model!(mod_c, nlp.meta.nvar)
     Hs_new = retro ? similar(x0) : similar(x0, 0)
 
+    xr = x_ref === nothing ? nothing : convert(V, collect(x_ref))
+    xr === nothing || length(xr) == nlp.meta.nvar || throw(ArgumentError(
+        "TRCore: x_ref has length $(length(xr)) but the problem has " *
+        "$(nlp.meta.nvar) variables."))
+
     return TRCore{T, V, typeof(rule_c), typeof(mod_c), typeof(sub_c)}(
         similar(x0), similar(x0), similar(x0), similar(x0), similar(x0),
         similar(x0), similar(x0), Hs_new, SubWorkspace(x0),
-        rule_c, mod_c, sub_c, params, retro, want_curv, want_vec, sub_hs, Float64[])
+        rule_c, mod_c, sub_c, params, retro, want_curv, want_vec, sub_hs, Float64[],
+        xr, true_curvature)
 end
 
 """
@@ -314,6 +337,54 @@ mutable struct TRState{T}
     active::Bool
     stalled::Bool
     failed::Bool
+    # --- diagnostics: hypotheses of Part II, measured rather than assumed ---
+    γ::T                # ‖g_{k+1} − g_k − H_k s_k‖ / ‖s_k‖   (Dennis–Moré)
+    ξ::T                # ‖H_k s_k + g_k‖ / ‖g_k‖             (realised inexactness)
+    cos_cauchy::T       # cos(s_k, −g_k); 1 exactly at the Cauchy point
+    cg_iters::Int       # inner iterations of the subproblem solver
+    branch::Symbol      # which branch of the radius rule fired
+    λtrue::Float64      # λ_min(∇²f(x_k)), when asked for
+    dist::T             # ‖x_k − x_ref‖, when a reference solution was given
+end
+
+"""
+    _blank_diagnostics(T) -> tuple
+
+The diagnostic fields of [`TRState`](@ref) before anything has been measured.
+`NaN` rather than zero: a quantity that was not computed must not be mistaken for
+one that was measured to be zero.
+"""
+@inline _blank_diagnostics(::Type{T}) where {T} =
+    (T(NaN), T(NaN), T(NaN), 0, :none, NaN, T(NaN))
+
+"""
+    _true_lambda_min(c, nlp, x) -> Float64
+
+`λ_min(∇²f(x))`, the curvature of the *problem* rather than of the model.
+
+Returns `NaN` when it was not requested, and also when the problem cannot supply
+a Hessian: a diagnostic must not be able to fail a run.
+"""
+function _true_lambda_min(c::TRCore, nlp, x)
+    c.want_true_curv || return NaN
+    try
+        return Float64(lambda_min_estimate(ExactHessian(), nlp, x))
+    catch
+        return NaN
+    end
+end
+
+"""
+    _distance_to_ref(c, x) -> T
+
+`‖x − x_ref‖`, or `NaN` when no reference solution was given. Uses the
+subproblem workspace as scratch, which is free at every point where this is
+called.
+"""
+@inline function _distance_to_ref(c::TRCore{T}, x) where {T}
+    c.x_ref === nothing && return T(NaN)
+    @. c.ws.cand = x - c.x_ref
+    return T(norm(c.ws.cand))
 end
 
 """
@@ -336,8 +407,11 @@ function _init_state!(c::TRCore{T}, nlp) where {T}
     crit = T(criticality(c.rule, Float64(g_norm), c.want_curv ? λmin : 0.0))
     Δ = clamp(T(initial_radius(c.rule, Float64(c.params.Δ0), Float64(crit))),
               c.params.Δmin, c.params.Δmax)
-    return TRState{T}(f, g_norm, Δ, crit, λmin, T(0), T(0), T(0), T(0),
-                      false, false, false, false)
+    st = TRState{T}(f, g_norm, Δ, crit, λmin, T(0), T(0), T(0), T(0),
+                    false, false, false, false, _blank_diagnostics(T)...)
+    st.λtrue = _true_lambda_min(c, nlp, c.x)
+    st.dist  = _distance_to_ref(c, c.x)
+    return st
 end
 
 """
@@ -359,6 +433,8 @@ function _refresh_state!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
         st.λmin, c.vmin = curvature_estimate(c.model, nlp, c.x, c.want_vec)
     end
     st.crit = T(criticality(c.rule, Float64(st.g_norm), c.want_curv ? st.λmin : 0.0))
+    st.λtrue = _true_lambda_min(c, nlp, c.x)
+    st.dist  = _distance_to_ref(c, c.x)
     return nothing
 end
 
@@ -386,6 +462,7 @@ function _tr_step!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
         st.failed = true; return nothing
     end
     st.s_norm = norm(c.s)
+    st.cg_iters = c.ws.iters
 
     # --- ratio ---
     @. c.x_cand = c.x + c.s
@@ -394,6 +471,27 @@ function _tr_step!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
     # declare `returns_hprod` needs it computed here.
     c.sub_hs || model_hprod!(c.model, nlp, c.x, c.s, c.Hs)
     st.predicted = -dot(c.g, c.s) - T(0.5) * dot(c.s, c.Hs)
+
+    # Two diagnostics taken here because this is the only point at which `c.g` is
+    # still g_k and `c.Hs` already holds H_k s_k. Both reuse the subproblem
+    # workspace, which the solver has finished with, so neither allocates.
+    #
+    #   ξ_k = ‖H_k s_k + g_k‖ / ‖g_k‖   is the *realised* inexactness of
+    #   Condition C.Inx, which every result of Part II §7 assumes tends to zero.
+    #   The forcing sequence a solver advertises is an upper bound on it.
+    #
+    #   cos(s_k, −g_k) = 1 exactly when the step is the Cauchy point, which with
+    #   truncated CG and a small radius is the silent degeneration to gradient
+    #   descent.
+    if st.g_norm > 0
+        @. c.ws.cand = c.Hs + c.g
+        st.ξ = T(norm(c.ws.cand)) / st.g_norm
+        st.cos_cauchy = st.s_norm > 0 ?
+            -dot(c.g, c.s) / (st.g_norm * st.s_norm) : T(NaN)
+    else
+        st.ξ = T(NaN); st.cos_cauchy = T(NaN)
+    end
+
     actual = st.f - f_cand
     st.ρ = (isfinite(f_cand) && st.predicted > 0) ? actual / st.predicted : T(-Inf)
 
@@ -413,13 +511,30 @@ function _tr_step!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
         grad!(nlp, c.x, c.g)
         st.g_norm = norm(c.g)
         @. c.y = c.g - c.g_old         # y_k in its own buffer, so g_old survives
+
+        # γ_k = ‖y_k − H_k s_k‖ / ‖s_k‖ is the Dennis–Moré residual, the
+        # hypothesis behind Proposition [steps are strictly decreasing] and behind
+        # the superlinear rate. Everything it needs is already in the workspace,
+        # and it has to be taken before `update_model!` replaces H_k by H_{k+1}.
+        if st.s_norm > 0
+            @. c.ws.cand = c.y - c.Hs
+            st.γ = T(norm(c.ws.cand)) / st.s_norm
+        else
+            st.γ = T(NaN)
+        end
+
         update_model!(c.model, c.s, c.y)
     end
+    st.accepted || (st.γ = T(NaN))
 
     # The curvature belongs to the model at the *new* iterate; on a rejected step
     # neither has moved and the previous value still stands.
     if c.want_curv && st.accepted
         st.λmin, c.vmin = curvature_estimate(c.model, nlp, c.x, c.want_vec)
+    end
+    if st.accepted
+        st.λtrue = _true_lambda_min(c, nlp, c.x)
+        st.dist  = _distance_to_ref(c, c.x)
     end
     st.crit = T(criticality(c.rule, Float64(st.g_norm), c.want_curv ? st.λmin : 0.0))
 
@@ -435,6 +550,7 @@ function _tr_step!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
                                   Float64(st.s_norm), Float64(crit_old),
                                   Float64(st.crit))),
                  p.Δmin, p.Δmax)
+    st.branch = last_branch(c.rule)
     return nothing
 end
 
@@ -468,8 +584,26 @@ rejects it, and the failure lands on the one path that succeeded.
 
 The per-iteration trajectories, collected only when `trace = true`.
 
-`Δ`, `‖g‖` and `f` have a value before the first iteration and so are one entry
-longer than the rest; align on the tail when plotting them together.
+# Alignment
+
+Entry `j` of every trajectory describes iteration `j-1`, counting from the
+initial point. The state trajectories `Δ`, `g`, `f` (and `λ`, `τ`, `dist`,
+`λtrue`, `tg`) carry one **extra entry at the end**: the state left behind by the
+final iteration.
+
+To pair a state with the iteration it produced, drop that last entry:
+
+```julia
+Δ = stats.solver_specific[:delta_trajectory]
+s = stats.solver_specific[:step_trajectory]
+active = stats.solver_specific[:active_trajectory]
+Δ[1:end-1] .>= s          # radius against the step taken inside it
+```
+
+Aligning on the *tail* instead pairs `Δ_k` with `‖s_{k-1}‖` and shifts every
+activity, ratio and step-versus-radius plot by one iteration. Prefer
+[`theta_trajectory`](@ref) and the other helpers in the diagnostics layer, which
+do the alignment once and correctly.
 """
 mutable struct TRTrace
     on::Bool
@@ -485,17 +619,29 @@ mutable struct TRTrace
     s::Vector{Float64}
     active::Vector{Bool}
     accepted::Vector{Bool}
+    # --- diagnostics ---
+    ρ̃::Vector{Float64}
+    γ::Vector{Float64}
+    ξ::Vector{Float64}
+    cosc::Vector{Float64}
+    cgit::Vector{Int}
+    branch::Vector{Symbol}
+    dist::Vector{Float64}
+    λtrue::Vector{Float64}
 end
 
 TRTrace(on::Bool, curv::Bool, truth::Bool) =
     TRTrace(on, curv, truth, Float64[], Float64[], Float64[], Float64[], Float64[],
-            Float64[], Float64[], Float64[], Bool[], Bool[])
+            Float64[], Float64[], Float64[], Bool[], Bool[],
+            Float64[], Float64[], Float64[], Float64[], Int[], Symbol[],
+            Float64[], Float64[])
 
 function trace_pre!(tr::TRTrace, st::TRState, truth_val)
     tr.on || return nothing
     push!(tr.Δ, st.Δ); push!(tr.g, st.g_norm); push!(tr.f, st.f)
     tr.curv && (push!(tr.λ, st.λmin); push!(tr.τ, Float64(st.crit)))
     tr.truth && push!(tr.tg, truth_val)
+    push!(tr.dist, Float64(st.dist)); push!(tr.λtrue, st.λtrue)
     return nothing
 end
 
@@ -504,9 +650,33 @@ function trace_post!(tr::TRTrace, st::TRState, truth_val)
     trace_pre!(tr, st, truth_val)
     push!(tr.ρ, st.ρ); push!(tr.s, st.s_norm)
     push!(tr.active, st.active); push!(tr.accepted, st.accepted)
+    push!(tr.ρ̃, Float64(st.ρ_rule)); push!(tr.γ, Float64(st.γ))
+    push!(tr.ξ, Float64(st.ξ)); push!(tr.cosc, Float64(st.cos_cauchy))
+    push!(tr.cgit, st.cg_iters); push!(tr.branch, st.branch)
     return nothing
 end
 
+"""
+    attach_trace!(stats, tr, Δ_final)
+
+Write the trajectories into `stats.solver_specific`.
+
+Beyond the seven original keys, and on the same alignment convention:
+
+| key | length | meaning |
+|:--|:--|:--|
+| `:rho_tilde_trajectory` | `k` | the ratio that drove the radius: `ρ_k`, or `ρ̃_{k+1}` under a retrospective rule |
+| `:gamma_trajectory` | `k` | `‖g_{k+1} − g_k − H_k s_k‖/‖s_k‖`, the Dennis–Moré residual; `NaN` on rejected steps |
+| `:xi_trajectory` | `k` | `‖H_k s_k + g_k‖/‖g_k‖`, the realised inexactness |
+| `:cos_cauchy_trajectory` | `k` | `cos(s_k, −g_k)`; `1` at the Cauchy point |
+| `:cg_iters_trajectory` | `k` | inner iterations of the subproblem solver |
+| `:branch_trajectory` | `k` | which branch of the radius rule fired, see [`last_branch`](@ref) |
+| `:dist_trajectory` | `k+1` | `‖x_k − x_ref‖`, only when a reference solution was given |
+| `:lambda_min_true_trajectory` | `k+1` | `λ_min(∇²f(x_k))`, only when `true_curvature = true` |
+
+The last two are attached only when they were actually measured, so their
+absence is unambiguous rather than a column of `NaN`.
+"""
 function attach_trace!(stats, tr::TRTrace, Δ_final)
     tr.on || return nothing
     set_solver_specific!(stats, :delta_trajectory,    tr.Δ)
@@ -521,6 +691,16 @@ function attach_trace!(stats, tr::TRTrace, Δ_final)
         set_solver_specific!(stats, :tau_trajectory,        tr.τ)
     end
     tr.truth && set_solver_specific!(stats, :true_grad_trajectory, tr.tg)
+    set_solver_specific!(stats, :rho_tilde_trajectory,  tr.ρ̃)
+    set_solver_specific!(stats, :gamma_trajectory,      tr.γ)
+    set_solver_specific!(stats, :xi_trajectory,         tr.ξ)
+    set_solver_specific!(stats, :cos_cauchy_trajectory, tr.cosc)
+    set_solver_specific!(stats, :cg_iters_trajectory,   tr.cgit)
+    set_solver_specific!(stats, :branch_trajectory,     tr.branch)
+    any(isfinite, tr.dist) &&
+        set_solver_specific!(stats, :dist_trajectory, tr.dist)
+    any(isfinite, tr.λtrue) &&
+        set_solver_specific!(stats, :lambda_min_true_trajectory, tr.λtrue)
     set_solver_specific!(stats, :final_delta, Float64(Δ_final))
     return nothing
 end

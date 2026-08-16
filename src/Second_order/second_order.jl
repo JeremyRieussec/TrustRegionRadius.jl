@@ -149,6 +149,8 @@ needs_curvature(::SecondOrder) = true
 initial_radius(r::SecondOrder, Δ0::Float64, crit::Float64) =
     initial_radius(r.inner, Δ0, crit)
 
+last_branch(r::SecondOrder) = last_branch(r.inner)
+
 update_radius!(r::SecondOrder, Δ::Float64, ρ::Float64, accepted::Bool,
                η1::Float64, η2::Float64, s_norm::Float64,
                crit_old::Float64, crit_new::Float64) =

@@ -55,17 +55,30 @@ parametric in the problem's vector type.
 
 Four buffers: the CG residual `r`, the direction `d`, the trial iterate `cand`,
 and `Hd = B·d`. `EigenPoint` reuses `cand` and `Hd` after the inner solver has
-finished with them.
+finished with them, and the trust-region loop reuses `cand` after
+`solve_subproblem!` has returned, to form the two residual diagnostics without
+allocating.
+
+It also carries `iters`, the inner-iteration count of the last solve. That count
+is what distinguishes a step the model shaped from the Cauchy point: truncated CG
+returning after one iteration has taken the step along `-g` and the model Hessian
+has influenced nothing. `0` for solvers with no meaningful iteration count.
 """
-struct SubWorkspace{V <: AbstractVector}
+mutable struct SubWorkspace{V <: AbstractVector}
     r::V
     d::V
     cand::V
     Hd::V
+    iters::Int
 end
 
 SubWorkspace(x::AbstractVector) =
-    SubWorkspace(similar(x), similar(x), similar(x), similar(x))
+    SubWorkspace(similar(x), similar(x), similar(x), similar(x), 0)
+
+# Positional four-buffer form, kept so that existing call sites and tests that
+# build a workspace from their own vectors continue to work.
+SubWorkspace(r::V, d::V, cand::V, Hd::V) where {V <: AbstractVector} =
+    SubWorkspace{V}(r, d, cand, Hd, 0)
 
 """
     solve_subproblem!(sub, model, nlp, x, g, Δ, s, Hs, ws; curv = nothing) -> Bool
@@ -163,7 +176,8 @@ function solve_subproblem!(sub::SteihaugCG, model::ModelHessian,
                            x::V, g::V, Δ::T, s::V, Hs::V,
                            ws::SubWorkspace{V}; curv = nothing) where {T, V}
     B = hessian_op(model, nlp, x)
-    active, _ = _steihaug!(sub, B, g, Δ, s, Hs, ws)
+    active, iters = _steihaug!(sub, B, g, Δ, s, Hs, ws)
+    ws.iters = iters
     return active
 end
 
@@ -271,6 +285,7 @@ function solve_subproblem!(sub::ExactMS, model::ModelHessian,
     n = length(g)
     n <= sub.nmax || throw(ArgumentError(
         "ExactMS: n = $n exceeds nmax = $(sub.nmax); use SteihaugCG or raise nmax"))
+    ws.iters = 0        # no meaningful inner-iteration count for a direct solve
     if norm(g) == 0 || Δ <= 0
         fill!(s, zero(T)); return false
     end
@@ -381,6 +396,7 @@ for (Tsub, fn) in ((:KrylovCG, :(Krylov.cg)), (:KrylovCGLanczos, :(Krylov.cg_lan
         sol, st = $fn(B, ws.r; radius = Δ, atol = T(sub.atol),
                       rtol = T(sub.rtol), itmax = sub.itmax)
         copyto!(s, sol)
+        ws.iters = hasproperty(st, :niter) ? Int(getproperty(st, :niter)) : 0
         return _on_boundary(st, s, Δ)
     end
 end

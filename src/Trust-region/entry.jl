@@ -40,9 +40,12 @@ function tr_solve(nlp::AbstractNLPModel{T, V};
                   model::ModelHessian         = ExactHessian(),
                   subsolver::SubproblemSolver = SteihaugCG(),
                   params::TRParams            = TRParams{T}(),
+                  x_ref::Union{Nothing, AbstractVector} = nothing,
+                  true_curvature::Bool        = false,
                   kwargs...) where {T, V}
     solver = DeterministicTRSolver(nlp; rule = rule, model = model,
-                                   subsolver = subsolver, params = params)
+                                   subsolver = subsolver, params = params,
+                                   x_ref = x_ref, true_curvature = true_curvature)
     return solve!(solver, nlp; kwargs...)
 end
 
@@ -51,9 +54,12 @@ function tr_solve(nlp::ExpectationNLP;
                   model::ModelHessian         = ExactHessian(),
                   subsolver::SubproblemSolver = SteihaugCG(),
                   params::TRParams            = TRParams{Float64}(),
+                  x_ref::Union{Nothing, AbstractVector} = nothing,
+                  true_curvature::Bool        = false,
                   kwargs...)
     solver = ExpectationTRSolver(nlp; rule = rule, model = model,
-                                 subsolver = subsolver, params = params)
+                                 subsolver = subsolver, params = params,
+                                 x_ref = x_ref, true_curvature = true_curvature)
     return solve!(solver, nlp; kwargs...)
 end
 
@@ -62,9 +68,12 @@ function tr_solve(nlp::FiniteSumNLP;
                   model::ModelHessian         = ExactHessian(),
                   subsolver::SubproblemSolver = SteihaugCG(),
                   params::TRParams            = TRParams{Float64}(),
+                  x_ref::Union{Nothing, AbstractVector} = nothing,
+                  true_curvature::Bool        = false,
                   kwargs...)
     solver = FiniteSumTRSolver(nlp; rule = rule, model = model,
-                               subsolver = subsolver, params = params)
+                               subsolver = subsolver, params = params,
+                               x_ref = x_ref, true_curvature = true_curvature)
     return solve!(solver, nlp; kwargs...)
 end
 

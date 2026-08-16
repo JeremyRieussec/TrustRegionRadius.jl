@@ -41,14 +41,17 @@ function ExpectationTRSolver(nlp::ExpectationNLP;
                              rule::RadiusRule            = RDelta(),
                              model::ModelHessian         = ExactHessian(),
                              subsolver::SubproblemSolver = SteihaugCG(),
-                             params::TRParams            = TRParams{Float64}())
+                             params::TRParams            = TRParams{Float64}(),
+                             x_ref::Union{Nothing, AbstractVector} = nothing,
+                             true_curvature::Bool        = false)
     confirmation_needs_truth(params) && !has_truth(nlp) && throw(ArgumentError(
         "TRParams(true_stop = :$(params.true_stop)) needs an exact gradient, but " *
         "$(nameof(typeof(nlp.prob))) is an expectation with no closed-form mean. " *
         "Use true_stop = :test, which needs only the variance estimate, or " *
         "PerturbedExpectation, or a finite sum, or true_stop = :none — the batch " *
         "test is then the only test available and should be reported as such."))
-    c = TRCore(nlp, rule, model, subsolver, params)
+    c = TRCore(nlp, rule, model, subsolver, params;
+               x_ref = x_ref, true_curvature = true_curvature)
     return ExpectationTRSolver{Float64, Vector{Float64}, typeof(c.rule),
                                typeof(c.model), typeof(c.subsolver)}(c)
 end

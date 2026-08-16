@@ -16,6 +16,7 @@ using SolverCore
     include("test_solver.jl")
     include("test_profiles.jl")
     include("test_thresholds.jl")
+    include("test_diagnostics.jl")
     include("test_second_order.jl")
     include("test_stochastic.jl")
     include("test_likelihood.jl")

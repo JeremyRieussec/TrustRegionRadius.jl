@@ -30,6 +30,7 @@ include("Second_order/main.jl")       # τ-anchoring, curvature, EigenPoint
 include("Sampling/main.jl")           # sampled problems, sampling rules, oracles
 include("Likelihood/main.jl")         # BHHH, BHHH-2, Gauss-Newton; likelihoods
 include("Trust-region/main.jl")       # TRParams and the three solvers
+include("Diagnostics/main.jl")        # κ̄, trace alignment, measured hypotheses
 include("Benchmark/main.jl")          # profiles and the run matrix
 
 # =============================================================================
@@ -52,6 +53,7 @@ export RRTR, RRTRGrad
 export initial_radius, update_radius!, reset_rule!
 export needs_retrospective, is_criticality_anchored, retrospective_ratio
 export asymptotic_regime, validate_thresholds, check_factors, check_bounds
+export last_branch
 
 # second order
 export SecondOrder, RGradTau, RGradCappedTau, RDFOTau
@@ -98,6 +100,11 @@ export TRParams, TRResult, AbstractTRSolver
 export confirms_stop, confirmation_needs_truth
 export DeterministicTRSolver, ExpectationTRSolver, FiniteSumTRSolver
 export tr_solve, model_grad_evals
+
+# ---- Diagnostics ------------------------------------------------------------
+export kappa_bar, kappa_bar_empirical
+export theta_trajectory, inactivity_index, active_fraction, branch_counts
+export observed_order, hypotheses_report
 
 # ---- Benchmarking -----------------------------------------------------------
 export performance_profile, data_profile, profile_to_pgfplots
