@@ -112,6 +112,31 @@ end
 One (problem, configuration) result. Flat and concrete so a vector of these can
 be reduced into a metric matrix without further dispatch.
 """
+"""
+    SampleRecord
+
+The stochastic half of a run, `nothing` on a deterministic one.
+
+Kept apart from [`RunRecord`](@ref) for the same reason `SampleTrace` is kept
+apart from `TRTrace`: a variance recorded from an exact evaluation is not a small
+number, it is a category error, and a table that carries a `σ̂²` column for
+deterministic rows invites exactly that reading.
+"""
+struct SampleRecord
+    Ng_traj::Vector{Int}
+    Nf_traj::Vector{Int}
+    sigma_g2_traj::Vector{Float64}
+    sigma_f2_traj::Vector{Float64}
+    true_grad_traj::Vector{Float64}
+    paired_delta_traj::Vector{Float64}
+    paired_var_traj::Vector{Float64}
+    samples_total::Int
+    cap_hits::Int
+end
+
+SampleRecord() = SampleRecord(Int[], Int[], Float64[], Float64[], Float64[],
+                              Float64[], Float64[], 0, 0)
+
 struct RunRecord
     problem::String
     config::String
@@ -134,6 +159,20 @@ struct RunRecord
     lambda_traj::Vector{Float64}
     # --- sampling: 0 on a deterministic run
     samples::Int
+    # --- the step, and the diagnostics that make the local claims checkable.
+    # `step_traj` was missing, which is why no archived run could yield the
+    # empirical κ̄ = max ‖s_k‖/‖g_k‖ or verify ‖s_k‖ ≤ Δ_k.
+    step_traj::Vector{Float64}
+    gamma_traj::Vector{Float64}
+    xi_traj::Vector{Float64}
+    rho_tilde_traj::Vector{Float64}
+    cos_cauchy_traj::Vector{Float64}
+    cg_iters_traj::Vector{Int}
+    branch_traj::Vector{Symbol}
+    dist_traj::Vector{Float64}
+    lambda_true_traj::Vector{Float64}
+    # --- stochastic half, or nothing
+    sample::Union{Nothing, SampleRecord}
 end
 
 """
@@ -167,6 +206,27 @@ subsolver or `tol_H` asked for a curvature estimate. `false` for a plain
 first-order run, where `tau_traj` and `lambda_traj` are empty rather than zero.
 """
 has_curvature(r::RunRecord) = !isempty(r.lambda_traj)
+
+"""
+    _sample_record(ss) -> Union{Nothing, SampleRecord}
+
+Collect the stochastic half of a run from `stats.solver_specific`, or `nothing`
+when the run was deterministic. Presence is decided by the sample-size
+trajectory, which every sampled solver attaches and no deterministic one does.
+"""
+function _sample_record(ss)
+    haskey(ss, :grad_sample_trajectory) || return nothing
+    return SampleRecord(
+        collect(Int, get(ss, :grad_sample_trajectory, Int[])),
+        collect(Int, get(ss, :obj_sample_trajectory,  Int[])),
+        get(ss, :sigma_g2_trajectory,        Float64[]),
+        get(ss, :sigma_f2_trajectory,        Float64[]),
+        get(ss, :true_grad_trajectory,       Float64[]),
+        get(ss, :paired_decrease_trajectory, Float64[]),
+        get(ss, :paired_variance_trajectory, Float64[]),
+        get(ss, :samples_total,   0),
+        get(ss, :sample_cap_hits, 0))
+end
 
 """
     run_experiment(problems, configs; params, trace, archive, verbose) -> Vector{RunRecord}
@@ -251,13 +311,25 @@ function run_experiment(problems, configs;
                           get(ss, :active_trajectory, Bool[]),
                           get(ss, :tau_trajectory,        Float64[]),
                           get(ss, :lambda_min_trajectory, Float64[]),
-                          get(ss, :samples_total, 0))
+                          get(ss, :samples_total, 0),
+                          get(ss, :step_trajectory,       Float64[]),
+                          get(ss, :gamma_trajectory,      Float64[]),
+                          get(ss, :xi_trajectory,         Float64[]),
+                          get(ss, :rho_tilde_trajectory,  Float64[]),
+                          get(ss, :cos_cauchy_trajectory, Float64[]),
+                          get(ss, :cg_iters_trajectory,   Int[]),
+                          get(ss, :branch_trajectory,     Symbol[]),
+                          get(ss, :dist_trajectory,       Float64[]),
+                          get(ss, :lambda_min_true_trajectory, Float64[]),
+                          _sample_record(ss))
             catch err
                 err isa InterruptException && rethrow()
                 verbose && @warn "run failed" problem=pname config=cname err
                 RunRecord(pname, cname, nlp.meta.nvar, :exception, 0, 0, 0, 0,
                           NaN, NaN, 0.0, Float64[], Float64[], Float64[],
-                          Float64[], Bool[], Float64[], Float64[], 0)
+                          Float64[], Bool[], Float64[], Float64[], 0,
+                          Float64[], Float64[], Float64[], Float64[], Float64[],
+                          Int[], Symbol[], Float64[], Float64[], nothing)
             end
             push!(records, rec)
             push!(row, solved(rec) ? @sprintf("%14d", rec.iterations) :
@@ -307,7 +379,29 @@ function save_record(a, rec::RunRecord)
         active_trajectory    = rec.active_traj,
         tau_trajectory        = rec.tau_traj,
         lambda_min_trajectory = rec.lambda_traj,
-        samples_total         = rec.samples)
+        samples_total         = rec.samples,
+        step_trajectory       = rec.step_traj,
+        gamma_trajectory      = rec.gamma_traj,
+        xi_trajectory         = rec.xi_traj,
+        rho_tilde_trajectory  = rec.rho_tilde_traj,
+        cos_cauchy_trajectory = rec.cos_cauchy_traj,
+        cg_iters_trajectory   = rec.cg_iters_traj,
+        branch_trajectory     = rec.branch_traj,
+        dist_trajectory       = rec.dist_traj,
+        lambda_true_trajectory = rec.lambda_true_traj,
+        # The stochastic half is flattened rather than stored as a struct, so a
+        # future field is a new key with a default rather than a type mismatch on
+        # every archive written before it existed.
+        has_sample            = rec.sample !== nothing,
+        sample_Ng             = rec.sample === nothing ? Int[] : rec.sample.Ng_traj,
+        sample_Nf             = rec.sample === nothing ? Int[] : rec.sample.Nf_traj,
+        sample_sigma_g2       = rec.sample === nothing ? Float64[] : rec.sample.sigma_g2_traj,
+        sample_sigma_f2       = rec.sample === nothing ? Float64[] : rec.sample.sigma_f2_traj,
+        sample_true_grad      = rec.sample === nothing ? Float64[] : rec.sample.true_grad_traj,
+        sample_paired_delta   = rec.sample === nothing ? Float64[] : rec.sample.paired_delta_traj,
+        sample_paired_var     = rec.sample === nothing ? Float64[] : rec.sample.paired_var_traj,
+        sample_total          = rec.sample === nothing ? 0 : rec.sample.samples_total,
+        sample_cap_hits       = rec.sample === nothing ? 0 : rec.sample.cap_hits)
 end
 
 """
@@ -333,7 +427,37 @@ function _record_from_data(d::AbstractDict)
         # lack these keys; default rather than fail, exactly as h_evals does.
         get(d, "tau_trajectory",        Float64[]),
         get(d, "lambda_min_trajectory", Float64[]),
-        get(d, "samples_total",         0))
+        get(d, "samples_total",         0),
+        get(d, "step_trajectory",        Float64[]),
+        get(d, "gamma_trajectory",       Float64[]),
+        get(d, "xi_trajectory",          Float64[]),
+        get(d, "rho_tilde_trajectory",   Float64[]),
+        get(d, "cos_cauchy_trajectory",  Float64[]),
+        get(d, "cg_iters_trajectory",    Int[]),
+        get(d, "branch_trajectory",      Symbol[]),
+        get(d, "dist_trajectory",        Float64[]),
+        get(d, "lambda_true_trajectory", Float64[]),
+        _sample_from_data(d))
+end
+
+"""
+    _sample_from_data(d) -> Union{Nothing, SampleRecord}
+
+Rebuild the stochastic half from the flattened keys. Archives written before the
+split carry none of them and load as deterministic, which is what they were.
+"""
+function _sample_from_data(d::AbstractDict)
+    get(d, "has_sample", false) || return nothing
+    return SampleRecord(
+        collect(Int, get(d, "sample_Ng", Int[])),
+        collect(Int, get(d, "sample_Nf", Int[])),
+        get(d, "sample_sigma_g2",     Float64[]),
+        get(d, "sample_sigma_f2",     Float64[]),
+        get(d, "sample_true_grad",    Float64[]),
+        get(d, "sample_paired_delta", Float64[]),
+        get(d, "sample_paired_var",   Float64[]),
+        get(d, "sample_total",    0),
+        get(d, "sample_cap_hits", 0))
 end
 
 """

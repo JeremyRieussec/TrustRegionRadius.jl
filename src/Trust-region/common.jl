@@ -258,6 +258,9 @@ mutable struct TRCore{T, V <: AbstractVector{T}, R <: RadiusRule,
     vmin::Vector{Float64}
     x_ref::Union{Nothing, V}
     want_true_curv::Bool
+    want_paired::Bool
+    paired_δ::Float64
+    paired_σ²::Float64
 end
 
 """
@@ -289,6 +292,10 @@ function TRCore(nlp::AbstractNLPModel{T, V}, rule, model, subsolver,
             "type $T. Construct it as $(nameof(typeof(mod_c)))(T = $T)."))
     end
 
+    # The paired decrease statistic is computed only when a sampling rule reads
+    # it. A deterministic run has no batch to pair over and pays nothing.
+    want_paired = nlp isa SampledNLP && needs_paired(nlp.rule)
+
     retro     = needs_retrospective(rule_c)
     want_vec  = needs_eigenvector(sub_c)
     want_curv = needs_curvature(rule_c) || params.tol_H > 0 || want_vec
@@ -314,7 +321,7 @@ function TRCore(nlp::AbstractNLPModel{T, V}, rule, model, subsolver,
         similar(x0), similar(x0), similar(x0), similar(x0), similar(x0),
         similar(x0), similar(x0), Hs_new, SubWorkspace(x0),
         rule_c, mod_c, sub_c, params, retro, want_curv, want_vec, sub_hs, Float64[],
-        xr, true_curvature)
+        xr, true_curvature, want_paired, NaN, NaN)
 end
 
 """
@@ -467,6 +474,14 @@ function _tr_step!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
     # --- ratio ---
     @. c.x_cand = c.x + c.s
     f_cand = obj(nlp, c.x_cand)
+
+    # Paired differences, taken here because this is the only point at which both
+    # x_k and the trial point are live and the batch has not moved. The rule is
+    # the consumer, so the statistic is handed straight to it.
+    if c.want_paired
+        c.paired_δ, c.paired_σ², N_paired = paired_decrease_stats(nlp, c.x, c.x_cand)
+        record_paired!(nlp.rule, c.paired_δ, c.paired_σ², N_paired)
+    end
     # CG accumulated B·s while building the step; only a subsolver that did not
     # declare `returns_hprod` needs it computed here.
     c.sub_hs || model_hprod!(c.model, nlp, c.x, c.s, c.Hs)
@@ -608,13 +623,11 @@ do the alignment once and correctly.
 mutable struct TRTrace
     on::Bool
     curv::Bool
-    truth::Bool
     Δ::Vector{Float64}
     g::Vector{Float64}
     f::Vector{Float64}
     λ::Vector{Float64}
     τ::Vector{Float64}
-    tg::Vector{Float64}
     ρ::Vector{Float64}
     s::Vector{Float64}
     active::Vector{Bool}
@@ -630,24 +643,23 @@ mutable struct TRTrace
     λtrue::Vector{Float64}
 end
 
-TRTrace(on::Bool, curv::Bool, truth::Bool) =
-    TRTrace(on, curv, truth, Float64[], Float64[], Float64[], Float64[], Float64[],
-            Float64[], Float64[], Float64[], Bool[], Bool[],
+TRTrace(on::Bool, curv::Bool) =
+    TRTrace(on, curv, Float64[], Float64[], Float64[], Float64[], Float64[],
+            Float64[], Float64[], Bool[], Bool[],
             Float64[], Float64[], Float64[], Float64[], Int[], Symbol[],
             Float64[], Float64[])
 
-function trace_pre!(tr::TRTrace, st::TRState, truth_val)
+function trace_pre!(tr::TRTrace, st::TRState)
     tr.on || return nothing
     push!(tr.Δ, st.Δ); push!(tr.g, st.g_norm); push!(tr.f, st.f)
     tr.curv && (push!(tr.λ, st.λmin); push!(tr.τ, Float64(st.crit)))
-    tr.truth && push!(tr.tg, truth_val)
     push!(tr.dist, Float64(st.dist)); push!(tr.λtrue, st.λtrue)
     return nothing
 end
 
-function trace_post!(tr::TRTrace, st::TRState, truth_val)
+function trace_post!(tr::TRTrace, st::TRState)
     tr.on || return nothing
-    trace_pre!(tr, st, truth_val)
+    trace_pre!(tr, st)
     push!(tr.ρ, st.ρ); push!(tr.s, st.s_norm)
     push!(tr.active, st.active); push!(tr.accepted, st.accepted)
     push!(tr.ρ̃, Float64(st.ρ_rule)); push!(tr.γ, Float64(st.γ))
@@ -690,7 +702,6 @@ function attach_trace!(stats, tr::TRTrace, Δ_final)
         set_solver_specific!(stats, :lambda_min_trajectory, tr.λ)
         set_solver_specific!(stats, :tau_trajectory,        tr.τ)
     end
-    tr.truth && set_solver_specific!(stats, :true_grad_trajectory, tr.tg)
     set_solver_specific!(stats, :rho_tilde_trajectory,  tr.ρ̃)
     set_solver_specific!(stats, :gamma_trajectory,      tr.γ)
     set_solver_specific!(stats, :xi_trajectory,         tr.ξ)
@@ -702,6 +713,78 @@ function attach_trace!(stats, tr::TRTrace, Δ_final)
     any(isfinite, tr.λtrue) &&
         set_solver_specific!(stats, :lambda_min_true_trajectory, tr.λtrue)
     set_solver_specific!(stats, :final_delta, Float64(Δ_final))
+    return nothing
+end
+
+# -----------------------------------------------------------------------------
+# The stochastic trace
+# -----------------------------------------------------------------------------
+
+"""
+    SampleTrace(on, want_truth)
+
+The trajectories that exist only under sampling, kept apart from
+[`TRTrace`](@ref) because none of them means anything on a deterministic run: a
+variance estimated from one exact evaluation is not a small number, it is a
+category error.
+
+The two solvers that sample own one of each and fill them at the same points.
+Everything a deterministic run can also produce — the radius, the ratio, the
+step, the residual diagnostics — stays in `TRTrace`.
+
+Alignment follows `TRTrace`: `tg` is a state trajectory with `k+1` entries, the
+rest are per-iteration with `k`.
+"""
+mutable struct SampleTrace
+    on::Bool
+    truth::Bool
+    tg::Vector{Float64}
+    σg²::Vector{Float64}
+    σf²::Vector{Float64}
+    δ::Vector{Float64}
+    σ²D::Vector{Float64}
+end
+
+SampleTrace(on::Bool, truth::Bool) =
+    SampleTrace(on, truth, Float64[], Float64[], Float64[], Float64[], Float64[])
+
+function sample_pre!(sr::SampleTrace, truth_val)
+    sr.on || return nothing
+    sr.truth && push!(sr.tg, Float64(truth_val))
+    return nothing
+end
+
+function sample_post!(sr::SampleTrace, c::TRCore, nlp, truth_val)
+    sr.on || return nothing
+    sample_pre!(sr, truth_val)
+    push!(sr.σg², Float64(nlp.σg²)); push!(sr.σf², Float64(nlp.σf²))
+    push!(sr.δ, c.paired_δ); push!(sr.σ²D, c.paired_σ²)
+    return nothing
+end
+
+"""
+    attach_sample_trace!(stats, sr)
+
+| key | length | meaning |
+|:--|:--|:--|
+| `:true_grad_trajectory` | `k+1` | `‖∇f(x_k)‖`, only when the problem has a truth |
+| `:sigma_g2_trajectory` | `k` | `σ̂_g²` of the batch that produced the step |
+| `:sigma_f2_trajectory` | `k` | `σ̂_f²` likewise |
+| `:paired_decrease_trajectory` | `k` | `δ̂_N`, the mean paired decrease |
+| `:paired_variance_trajectory` | `k` | `σ̂_N²`, its sample variance |
+
+The last two are attached only under a rule that asked for them, so their
+absence means the statistic was never formed rather than that it was zero.
+"""
+function attach_sample_trace!(stats, sr::SampleTrace)
+    sr.on || return nothing
+    sr.truth && set_solver_specific!(stats, :true_grad_trajectory, sr.tg)
+    set_solver_specific!(stats, :sigma_g2_trajectory, sr.σg²)
+    set_solver_specific!(stats, :sigma_f2_trajectory, sr.σf²)
+    if any(isfinite, sr.δ)
+        set_solver_specific!(stats, :paired_decrease_trajectory, sr.δ)
+        set_solver_specific!(stats, :paired_variance_trajectory, sr.σ²D)
+    end
     return nothing
 end
 

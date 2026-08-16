@@ -78,8 +78,8 @@ function SolverCore.solve!(solver::DeterministicTRSolver{T, V},
     c = solver.core; p = c.params
     t0 = time()
     st = _init_state!(c, nlp)
-    tr = TRTrace(trace, c.want_curv, false)
-    trace_pre!(tr, st, NaN)
+    tr = TRTrace(trace, c.want_curv)
+    trace_pre!(tr, st)
 
     _record!(stats, c, st, 0, t0)
     set_status!(stats, :unknown)
@@ -95,7 +95,7 @@ function SolverCore.solve!(solver::DeterministicTRSolver{T, V},
         st.failed  && (set_status!(stats, :exception); k -= 1; break)
         st.stalled && (set_status!(stats, :stalled);   break)
 
-        trace_post!(tr, st, NaN)
+        trace_post!(tr, st)
         _record!(stats, c, st, k, t0)
         callback(nlp, solver, stats)
         stats.status == :user && break

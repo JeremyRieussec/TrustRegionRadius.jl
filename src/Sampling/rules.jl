@@ -207,6 +207,33 @@ construction, against [`has_scores`](@ref) on the problem.
 needs_scores(::SamplingRule) = false
 
 """
+    needs_paired(rule) -> Bool
+
+Whether `rule` consumes the paired decrease statistic, and so whether the solver
+must evaluate the trial point on the *same* batch and difference it
+observation by observation. `false` by default, so no rule pays for a statistic
+it does not read.
+"""
+needs_paired(::SamplingRule) = false
+
+"""
+    record_paired!(rule, δ, σ², N) -> nothing
+
+Hand the rule the paired decrease statistic of the iteration just taken: the
+sample mean `δ` and sample variance `σ²` of
+
+    D_i = F(x_k, ξ_i) − F(x_k + s_k, ξ_i)
+
+over the `N` observations of the current batch. A no-op for every rule that does
+not declare [`needs_paired`](@ref).
+
+The statistic belongs to the rule rather than to the oracle because the rule is
+its only consumer, and because it is state carried across iterations in exactly
+the way [`SequentialEstimation`](@ref) carries the predicted reduction.
+"""
+record_paired!(::SamplingRule, ::Real, ::Real, ::Integer) = nothing
+
+"""
     requires_finite_population(rule) -> Bool
 
 Whether the rule is meaningful only on a [`FiniteSumProblem`](@ref).
@@ -593,6 +620,129 @@ grad_sample_size(r::SequentialEstimation, st::SamplingState) = _sequential_size!
 obj_sample_size(r::SequentialEstimation, st::SamplingState)  = _sequential_size!(r, st)
 reset_sampling_rule!(r::SequentialEstimation) =
     (r.N_last = 0; r.k_cached = -1; r.N_cached = 0; nothing)
+
+"""
+    CertifiedDecrease(; p = 0.9, N_min = 2, N_max = nothing, N_start = 8,
+                        monotone = false, growth = 4.0)
+
+Sample until the achieved decrease is **certified** against the noise in the
+estimate of that decrease, using paired differences under common random numbers.
+
+With the same realisations at both ends of the step,
+
+```math
+D_i = F(x_k, \xi_i) - F(x_k + s_k, \xi_i),
+\qquad
+N_{k+1} = \left\lceil z_p^2 \hat\sigma_N^2 / \hat\delta_N^2 \right\rceil ,
+```
+
+where `δ̂_N` and `σ̂_N²` are the sample mean and variance of the `D_i`.
+
+# Why pairing is the whole point
+
+Holding `ξ_i` fixed at both points makes `D_i → 0` pathwise as `s_k → 0`, so
+`σ_D² = O(‖s_k‖²)`. Two independent batches give `O(1)` instead, and the rule is
+then unusable near a solution. On a heavy-tailed sample problem the measured
+variance ratio between the paired and unpaired estimators runs to several orders
+of magnitude.
+
+# What the rule costs, and why it does not see the radius
+
+Both the numerator and the denominator are linear in the step:
+`δ̂ ∼ ‖g_k‖‖s_k‖` and `σ̂ ∼ C‖s_k‖`, so
+
+```math
+N_k \sim \frac{z_p^2 C^2 \|s_k\|^2}{\|g_k\|^2 \|s_k\|^2}
+      = \frac{z_p^2 C^2}{\|g_k\|^2} ,
+```
+
+and the step length cancels. Pairing buys a large constant, not a better rate,
+and the per-iteration sampling cost is insensitive to the radius rule: mechanisms
+differ in how many iterations they take, not in what each costs to certify. This
+is the opposite of [`RadiusProportional`](@ref), whose `N_k ∼ Δ_k^{-2}` makes the
+mechanism pay for its own radius, and the two together bracket the question of
+whether a sampling rule can see the radius at all.
+
+[`couples_to_radius`](@ref) is `true` because the statistic is read off the step;
+the cancellation above is a statement about the asymptotic rate, not about the
+rule ignoring `s_k`.
+
+!!! warning "The normal quantile is the weak point"
+    `z_p` presumes `δ̂_N ≈ 𝒩(δ, σ_D²/N)`. The rule selects a small `N` exactly
+    when the decrease is large, which is where that approximation is worst, and
+    `D_i` inherits whatever tail the problem has. Read as a fixed-`N` accept
+    test the calibration is poor; read as a sequential test, sampling until
+    either `δ̂_N ≥ z_p σ̂_N/√N` or `δ̂_N ≤ 0`, it is restored at the price of
+    conservatism. An empirical Bernstein bound is the principled replacement,
+    and it pays off precisely because pairing has made `σ̂_N` small.
+
+`monotone = false` by default, unlike [`SequentialEstimation`](@ref): the
+certified size is meaningful on its own at every iteration, and forcing it upward
+hides the `‖g_k‖^{-2}` growth this rule exists to exhibit.
+"""
+mutable struct CertifiedDecrease <: SamplingRule
+    p::Float64
+    z::Float64
+    N_min::Int
+    N_max::Union{Int, Nothing}
+    N_start::Int
+    growth::Float64
+    monotone::Bool
+    δ::Float64
+    σ²::Float64
+    N_last::Int
+    k_cached::Int
+    N_cached::Int
+    function CertifiedDecrease(; p::Real = 0.9, N_min::Int = 2,
+                                 N_max::Union{Int, Nothing} = nothing,
+                                 N_start::Int = 8, monotone::Bool = false,
+                                 growth::Real = 4.0)
+        0.5 < p < 1 || throw(ArgumentError("CertifiedDecrease: need 0.5 < p < 1, got $p"))
+        growth > 1 || throw(ArgumentError("CertifiedDecrease: need growth > 1"))
+        N_start > 0 || throw(ArgumentError("CertifiedDecrease: need N_start > 0"))
+        _check_nmax(:CertifiedDecrease, N_min, N_max)
+        # One-sided level p, so the two-sided quantile is taken at α = 2(1−p).
+        new(float(p), _z_quantile(2 * (1 - p)), N_min, N_max, N_start,
+            float(growth), monotone, NaN, NaN, 0, -1, 0)
+    end
+end
+
+needs_paired(::CertifiedDecrease)      = true
+couples_to_radius(::CertifiedDecrease) = true
+user_cap(r::CertifiedDecrease)         = r.N_max
+
+function record_paired!(r::CertifiedDecrease, δ::Real, σ²::Real, ::Integer)
+    r.δ = Float64(δ); r.σ² = Float64(σ²)
+    return nothing
+end
+
+function _certified_size!(r::CertifiedDecrease, st::SamplingState)
+    st.k == r.k_cached && return r.N_cached
+    cap = sample_cap(r)
+    prev = st.N_prev > 0 ? st.N_prev : r.N_start
+    N = if !isfinite(r.δ) || !isfinite(r.σ²)
+        max(r.N_start, prev)                      # nothing measured yet
+    elseif r.δ <= 0
+        # The batch did not certify a decrease. The size the formula would ask
+        # for is undefined or negative, so grow: a failure to certify is
+        # evidence that the batch was too small, not that it was too large.
+        _sample_size(r.growth * prev, r.N_min, cap)
+    else
+        _sample_size(r.z^2 * max(r.σ², 0.0) / r.δ^2, r.N_min, cap)
+    end
+    if r.monotone
+        N = max(N, r.N_last)
+        N = min(N, _sample_size(r.growth * max(r.N_last, r.N_start), r.N_min, cap))
+    end
+    N = clamp(N, r.N_min, cap)
+    r.N_last = N; r.k_cached = st.k; r.N_cached = N
+    return N
+end
+
+grad_sample_size(r::CertifiedDecrease, st::SamplingState) = _certified_size!(r, st)
+obj_sample_size(r::CertifiedDecrease, st::SamplingState)  = _certified_size!(r, st)
+reset_sampling_rule!(r::CertifiedDecrease) =
+    (r.δ = NaN; r.σ² = NaN; r.N_last = 0; r.k_cached = -1; r.N_cached = 0; nothing)
 
 # -----------------------------------------------------------------------------
 # The normal quantile

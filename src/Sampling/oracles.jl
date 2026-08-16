@@ -373,6 +373,47 @@ batch against it; no other rule reads it.
 record_prediction!(m::SampledNLP, pred::Real) = (m.last_pred = Float64(pred); pred)
 
 """
+    paired_decrease_stats(m::SampledNLP, x, x_cand) -> (δ, σ², N)
+
+The sample mean and variance of the paired differences
+
+    D_i = F(x, ξ_i) − F(x_cand, ξ_i),   i ∈ batch_f,
+
+over the objective batch of the current iteration.
+
+Both points are evaluated on the **same** realisations, which is what makes
+`σ_D² = O(‖x_cand − x‖²)`; see [`obs_objective`](@ref). Consumed by
+[`CertifiedDecrease`](@ref) through [`record_paired!`](@ref).
+
+# Cost
+
+None beyond what the iteration already pays. The solver has already evaluated
+`f(x)` and `f(x_cand)` as batch means over this batch; this recomputes the same
+two quantities at per-observation granularity. It is not charged to
+[`samples_used`](@ref), because no new realisation is drawn.
+
+Returns `(NaN, NaN, N)` when the batch is too small for a sample variance.
+"""
+function paired_decrease_stats(m::SampledNLP, x::AbstractVector, x_cand::AbstractVector)
+    b  = m.batch_f
+    v0 = obs_objective(m.prob, x, b)
+    v1 = obs_objective(m.prob, x_cand, b)
+    N  = length(v0)
+    N < 2 && return (NaN, NaN, N)
+    δ = 0.0
+    @inbounds for i in 1:N
+        δ += v0[i] - v1[i]
+    end
+    δ /= N
+    σ² = 0.0
+    @inbounds for i in 1:N
+        d = v0[i] - v1[i] - δ
+        σ² += d * d
+    end
+    return (δ, σ² / (N - 1), N)
+end
+
+"""
     samples_used(m) -> (grad = …, obj = …, confirm = …, total = …)
 
 Cumulative term evaluations — the cost measure for a sampled comparison. Iteration

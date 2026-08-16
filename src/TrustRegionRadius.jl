@@ -77,7 +77,9 @@ export solve_subproblem!, cg_step_info, returns_hprod, needs_eigenvector
 export SamplingRule, SamplingState, SampleStats, batch_stats
 export FullBatch, FixedSample, RadiusProportional, NormTest, GeometricSample
 export InnerProductTest, OrthogonalityTest, AugmentedInnerProduct
-export SequentialEstimation
+export SequentialEstimation, CertifiedDecrease
+export needs_paired, record_paired!, paired_decrease_stats
+export obs_objective, supports_paired
 export grad_sample_size, obj_sample_size, couples_to_radius, needs_scores
 export sample_cap, requires_finite_population, reset_sampling_rule!
 

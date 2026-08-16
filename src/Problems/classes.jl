@@ -310,6 +310,12 @@ function check_rule_problem(rule, prob::AbstractProblem)
         "$(nameof(typeof(rule))) needs the per-observation score matrix to " *
         "estimate Var(∇Fᵢᵀĝ), but $(nameof(typeof(prob))) does not supply one. " *
         "Use NormTest or RadiusProportional, or supply a ScoredProblem."))
+    needs_paired(rule) && !supports_paired(prob) && throw(ArgumentError(
+        "$(nameof(typeof(rule))) needs per-observation objective values to form " *
+        "the paired differences F(x, ξᵢ) − F(x + s, ξᵢ), but " *
+        "$(nameof(typeof(prob))) does not implement obs_objective. Certified " *
+        "decrease is unavailable on it; use SequentialEstimation, which needs " *
+        "only the objective variance."))
     return nothing
 end
 

@@ -68,6 +68,35 @@ objective half of [`RadiusProportional`](@ref) consume.
 function obj_variance end
 
 """
+    obs_objective(prob, x, batch) -> AbstractVector{Float64}
+
+The per-observation objective values `F(x, ξ_i)` on `batch`, whose mean is the
+batch estimate of `f(x)`.
+
+[`obj_variance`](@ref) already needs these values; exposing them is what makes a
+*paired* statistic possible. Evaluating the same `batch` at two points and
+differencing gives
+
+    D_i = F(x, ξ_i) − F(x + s, ξ_i),
+
+whose variance is `O(‖s‖²)` because the realisation is held fixed, against `O(1)`
+for two independent batches. That is the whole basis of certified decrease: see
+[`CertifiedDecrease`](@ref).
+
+A problem that cannot supply per-observation values cannot support the paired
+rules; [`supports_paired`](@ref) reports which can.
+"""
+function obs_objective end
+
+"""
+    supports_paired(prob) -> Bool
+
+Whether `prob` implements [`obs_objective`](@ref), and so whether the paired
+statistic of [`CertifiedDecrease`](@ref) is available on it.
+"""
+supports_paired(::AbstractProblem) = false
+
+"""
     draw_batch(prob, rng, N; replace = true)
 
 Produce a batch of size `N`.
@@ -174,6 +203,9 @@ function obj_variance(p::FiniteSum, x, batch)
     return sum((p.Fi(i, x) - m)^2 for i in batch) / (length(batch) - 1)
 end
 
+obs_objective(p::FiniteSum, x, batch) = [p.Fi(i, x) for i in batch]
+supports_paired(::FiniteSum) = true
+
 """
     PerturbedSum(base, M; σg = 1.0, σH = 0.0, seed = 0)
 
@@ -269,6 +301,15 @@ function obj_variance(p::PerturbedSum, x, batch)
     m̄ = sum(vals) / N
     return sum((v - m̄)^2 for v in vals) / (N - 1)
 end
+
+# The base term is common to every observation, so it shifts the mean of a paired
+# difference and leaves its variance alone. It belongs in the value all the same:
+# the mean *is* the estimated decrease, and dropping a common term would bias it.
+function obs_objective(p::PerturbedSum, x, batch)
+    fb = obj(p.base, x)
+    return [fb + dot(view(p.b, :, i), x) + 0.5 * dot(x, p.C[i] * x) for i in batch]
+end
+supports_paired(::PerturbedSum) = true
 
 true_objective(p::PerturbedSum, x) = obj(p.base, x)
 true_gradient(p::PerturbedSum, x)  = grad(p.base, x)
@@ -415,6 +456,13 @@ function obj_variance(p::PerturbedExpectation, x, d::GaussianDraw)
     return sum((v - m̄)^2 for v in vals) / (N - 1)
 end
 
+function obs_objective(p::PerturbedExpectation, x, d::GaussianDraw)
+    fb = obj(p.base, x)
+    return [fb + dot(view(d.b, :, i), x) +
+            (d.C === nothing ? 0.0 : 0.5 * dot(x, d.C[i] * x)) for i in 1:length(d)]
+end
+supports_paired(::PerturbedExpectation) = true
+
 true_objective(p::PerturbedExpectation, x) = obj(p.base, x)
 true_gradient(p::PerturbedExpectation, x)  = grad(p.base, x)
 
@@ -446,6 +494,9 @@ sum because their sample variance is what the adaptive rules need.
 function loss_terms end
 
 batch_obj(p::ScoredProblem, x, batch) = sum(loss_terms(p, x, batch)) / length(batch)
+
+obs_objective(p::ScoredProblem, x, batch) = loss_terms(p, x, batch)
+supports_paired(::ScoredProblem) = true
 
 function batch_grad!(p::ScoredProblem, x, batch, g)
     S = scores(p, x, batch)

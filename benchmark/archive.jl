@@ -139,6 +139,96 @@ Base.show(io::IO, a::ExperimentArchive) =
 # -----------------------------------------------------------------------------
 
 """
+    _repo_root() -> String
+
+The package root, found from this file rather than from the active project, so
+that provenance is recorded even when the benchmark is run from its own
+environment.
+"""
+_repo_root() = normpath(joinpath(@__DIR__, ".."))
+
+"""
+    _content_hash(path) -> String
+
+A short content hash of a file, or `""` when it is missing.
+
+`hash` from `Base`, not a cryptographic digest: this exists to detect that a
+`Manifest.toml` changed between two campaigns, not to defend against anyone
+forging one, and it avoids adding a dependency to record a dependency.
+"""
+function _content_hash(path::AbstractString)
+    isfile(path) || return ""
+    return string(hash(read(path, String)); base = 16)
+end
+
+"""
+    _git_state(root) -> (commit, dirty)
+
+The current commit and whether the tree is clean, or `("", false)` when `git` is
+unavailable or the directory is not a repository. Never throws: provenance that
+can fail a campaign is worse than provenance that is absent.
+"""
+function _git_state(root::AbstractString)
+    commit = try
+        readchomp(setenv(`git rev-parse HEAD`; dir = root))
+    catch
+        return ("", false)
+    end
+    dirty = try
+        !isempty(readchomp(setenv(`git status --porcelain`; dir = root)))
+    catch
+        false
+    end
+    return (commit, dirty)
+end
+
+"""
+    _package_version(root) -> String
+
+The `version` field of the package's `Project.toml`, or `""`.
+"""
+function _package_version(root::AbstractString)
+    path = joinpath(root, "Project.toml")
+    isfile(path) || return ""
+    try
+        return string(get(TOML.parsefile(path), "version", ""))
+    catch
+        return ""
+    end
+end
+
+"""
+    provenance(; seed = nothing) -> Dict{String, Any}
+
+What is needed to reproduce a campaign, beyond the parameters themselves: the
+Julia version, the package version and commit, whether the tree was dirty, a
+content hash of both `Project.toml` and `Manifest.toml`, and the master seed.
+
+Written into every `experiment_config.toml` automatically. A stochastic table
+whose seed is not recorded cannot be reproduced, only resampled, and a
+dependency set that is not pinned makes a rerun a different experiment.
+
+`git_dirty = true` is not a warning to be silenced: it says the recorded commit
+does not describe the code that ran.
+"""
+function provenance(; seed = nothing)
+    root = _repo_root()
+    commit, dirty = _git_state(root)
+    d = Dict{String, Any}(
+        "julia_version"   => string(VERSION),
+        "package_version" => _package_version(root),
+        "git_commit"      => commit,
+        "git_dirty"       => dirty,
+        "project_hash"    => _content_hash(joinpath(root, "Project.toml")),
+        "manifest_hash"   => _content_hash(joinpath(root, "Manifest.toml")),
+        "recorded_at"     => string(Dates.now()),
+        "nthreads"        => Threads.nthreads(),
+    )
+    seed === nothing || (d["seed"] = seed)
+    return d
+end
+
+"""
     save_config(archive; rules, params, problem_selection = Dict(), extra = Dict())
 
 Write `experiment_config.toml` into the archive.
@@ -152,9 +242,13 @@ function save_config(a::ExperimentArchive;
                      rules = [],
                      params = nothing,
                      problem_selection::Dict = Dict{String, Any}(),
+                     seed = nothing,
                      extra::Dict = Dict{String, Any}())
     cfg = Dict{String, Any}()
     cfg["generated_at"] = string(a.created)
+    # Always, and not through `extra`: provenance that is optional is provenance
+    # that is missing from the one campaign whose numbers end up in the paper.
+    cfg["provenance"] = provenance(seed = seed)
     isempty(a.tag) || (cfg["tag"] = a.tag)
 
     params === nothing || (cfg["solver_params"] = struct_to_dict(params))

@@ -71,8 +71,10 @@ function SolverCore.solve!(solver::FiniteSumTRSolver,
     t0 = time()
     reset_sampling!(nlp)
     st = _init_state!(c, nlp)
-    tr = TRTrace(trace, c.want_curv, trace)
-    trace_pre!(tr, st, norm(true_gradient(nlp, c.x)))
+    tr = TRTrace(trace, c.want_curv)
+    sr = SampleTrace(trace, trace)
+    trace_pre!(tr, st)
+    sample_pre!(sr, norm(true_gradient(nlp, c.x)))
 
     _record!(stats, c, st, 0, t0)
     set_status!(stats, :unknown)
@@ -95,7 +97,8 @@ function SolverCore.solve!(solver::FiniteSumTRSolver,
         st.stalled && (set_status!(stats, :stalled);   break)
         record_prediction!(nlp, Float64(st.predicted))
 
-        trace_post!(tr, st, norm(true_gradient(nlp, c.x)))
+        trace_post!(tr, st)
+        sample_post!(sr, c, nlp, norm(true_gradient(nlp, c.x)))
         _record!(stats, c, st, k, t0)
         callback(nlp, solver, stats)
         stats.status == :user && break
@@ -103,6 +106,7 @@ function SolverCore.solve!(solver::FiniteSumTRSolver,
 
     _finish!(stats, c, st, k, t0)
     attach_trace!(stats, tr, st.Δ)
+    attach_sample_trace!(stats, sr)
     _attach_sampling!(stats, nlp, trace)
     if trace
         set_solver_specific!(stats, :full_batch_trajectory, copy(nlp.full_hist))

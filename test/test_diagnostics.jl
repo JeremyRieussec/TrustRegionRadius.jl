@@ -214,6 +214,92 @@
     end
 
     # ---------------------------------------------------------------------
+    @testset "the deterministic trace carries nothing stochastic" begin
+        nlp = ADNLPModel(quad, [3.0, -2.0])
+        stats = tr_solve(nlp; params = TRParams(tol = 1e-10), trace = true)
+        ss = stats.solver_specific
+        for key in (:sigma_g2_trajectory, :sigma_f2_trajectory,
+                    :true_grad_trajectory, :paired_decrease_trajectory,
+                    :paired_variance_trajectory, :grad_sample_trajectory)
+            @test !haskey(ss, key)
+        end
+    end
+
+    # ---------------------------------------------------------------------
+    @testset "paired differences and CertifiedDecrease" begin
+        # A finite sum whose terms differ: F_i(x) = ½‖x‖² + i·x₁/M, so the
+        # per-observation values are distinct and the paired difference has a
+        # variance that is genuinely O(‖s‖²).
+        M = 40
+        Fi  = (i, x) -> 0.5 * (x[1]^2 + x[2]^2) + i * x[1] / M
+        Gi! = (i, x, g) -> (g[1] = x[1] + i / M; g[2] = x[2]; nothing)
+        Hi  = (i, x) -> [1.0 0.0; 0.0 1.0]
+        prob = FiniteSum(2, M, Fi, Gi!, Hi)
+
+        @test supports_paired(prob)
+        v = obs_objective(prob, [1.0, 1.0], collect(1:M))
+        @test length(v) == M
+        @test v ≈ [Fi(i, [1.0, 1.0]) for i in 1:M]
+
+        # Pairing is the whole point: on the same batch the variance of the
+        # difference vanishes with the step, while two independent evaluations
+        # keep the O(1) spread of F itself.
+        x  = [1.0, 1.0]
+        for h in (1e-1, 1e-2, 1e-3)
+            xc = x .+ [h, 0.0]
+            d  = obs_objective(prob, x, collect(1:M)) .-
+                 obs_objective(prob, xc, collect(1:M))
+            @test std(d) < 2h            # O(‖s‖), not O(1)
+        end
+        @test std(obs_objective(prob, x, collect(1:M))) > 0.1
+
+        # The rule: N = ⌈z²σ̂²/δ̂²⌉ once a paired statistic has been recorded.
+        r = CertifiedDecrease(p = 0.9, N_min = 2)
+        stt = SamplingState(3, 1.0, 1.0, 0.0, 0.0)
+        @test grad_sample_size(r, stt) >= 2          # nothing recorded yet
+        record_paired!(r, 1.0, 4.0, 10)
+        stt2 = SamplingState(4, 1.0, 1.0, 0.0, 0.0)
+        @test grad_sample_size(r, stt2) == ceil(Int, r.z^2 * 4.0)
+        # Halving the decrease quadruples the demand: the ‖g‖⁻² scaling.
+        record_paired!(r, 0.5, 4.0, 10)
+        stt3 = SamplingState(5, 1.0, 1.0, 0.0, 0.0)
+        @test grad_sample_size(r, stt3) == ceil(Int, r.z^2 * 4.0 / 0.25)
+        # A failure to certify grows the batch rather than shrinking it.
+        record_paired!(r, -1.0, 4.0, 10)
+        stt4 = SamplingState(6, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, NaN, 16)
+        @test grad_sample_size(r, stt4) > 16
+        # Cached within an iteration: grad and obj must agree.
+        @test grad_sample_size(r, stt4) == obj_sample_size(r, stt4)
+
+        @test needs_paired(r)
+        @test !needs_paired(NormTest())
+        @test record_paired!(NormTest(), 1.0, 1.0, 8) === nothing
+
+        @test_throws ArgumentError CertifiedDecrease(p = 0.4)
+        @test_throws ArgumentError CertifiedDecrease(growth = 1.0)
+    end
+
+    @testset "a sampled run records the stochastic half" begin
+        M = 60
+        Fi  = (i, x) -> 0.5 * (x[1]^2 + x[2]^2) + i * x[1] / M
+        Gi! = (i, x, g) -> (g[1] = x[1] + i / M; g[2] = x[2]; nothing)
+        Hi  = (i, x) -> [1.0 0.0; 0.0 1.0]
+        prob = FiniteSum(2, M, Fi, Gi!, Hi)
+        nlp = FiniteSumNLP(prob, CertifiedDecrease(p = 0.9, N_min = 4);
+                           x0 = [2.0, 2.0], seed = 1)
+        stats = tr_solve(nlp; rule = RDelta(),
+                         params = TRParams(tol = 1e-6, max_iterations = 40),
+                         trace = true)
+        ss = stats.solver_specific
+        @test haskey(ss, :paired_decrease_trajectory)
+        @test haskey(ss, :sigma_g2_trajectory)
+        @test length(ss[:paired_decrease_trajectory]) ==
+              length(ss[:step_trajectory])
+        # The deterministic half is still there and still aligned.
+        @test length(ss[:delta_trajectory]) == length(ss[:step_trajectory]) + 1
+    end
+
+    # ---------------------------------------------------------------------
     @testset "reference solution and true curvature are opt-in" begin
         nlp = ADNLPModel(quad, [3.0, -2.0])
         stats = tr_solve(nlp; rule = RDelta(), model = ExactHessian(),

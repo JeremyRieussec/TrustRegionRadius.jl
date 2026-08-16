@@ -71,6 +71,10 @@ Adds to the deterministic trace, when `trace = true`:
 | `:samples_total` | — | cumulative term evaluations |
 | `:sample_cap_hits` | — | iterations that hit the budget |
 | `:true_grad_trajectory` | `k+1` | `‖∇f(x_i)‖`, only when `has_truth` |
+| `:sigma_g2_trajectory` | `k` | `σ̂_g²` of the batch that produced the step |
+| `:sigma_f2_trajectory` | `k` | `σ̂_f²` likewise |
+| `:paired_decrease_trajectory` | `k` | `δ̂_N`, under a rule that pairs |
+| `:paired_variance_trajectory` | `k` | `σ̂_N²`, likewise |
 
 `:grad_trajectory` holds `‖ĝ_k‖` — one batch's estimate. A mechanism that shrinks
 the radius fast enough will drive it below `tol` on noise alone, which is why
@@ -86,8 +90,10 @@ function SolverCore.solve!(solver::ExpectationTRSolver,
     reset_sampling!(nlp)
     st = _init_state!(c, nlp)
     truth = has_truth(nlp)
-    tr = TRTrace(trace, c.want_curv, trace && truth)
-    trace_pre!(tr, st, truth ? norm(true_gradient(nlp, c.x)) : NaN)
+    tr = TRTrace(trace, c.want_curv)
+    sr = SampleTrace(trace, trace && truth)
+    trace_pre!(tr, st)
+    sample_pre!(sr, truth ? norm(true_gradient(nlp, c.x)) : NaN)
 
     _record!(stats, c, st, 0, t0)
     set_status!(stats, :unknown)
@@ -112,7 +118,8 @@ function SolverCore.solve!(solver::ExpectationTRSolver,
         st.stalled && (set_status!(stats, :stalled);   break)
         record_prediction!(nlp, Float64(st.predicted))
 
-        trace_post!(tr, st, truth ? norm(true_gradient(nlp, c.x)) : NaN)
+        trace_post!(tr, st)
+        sample_post!(sr, c, nlp, truth ? norm(true_gradient(nlp, c.x)) : NaN)
         _record!(stats, c, st, k, t0)
         callback(nlp, solver, stats)
         stats.status == :user && break
@@ -120,6 +127,7 @@ function SolverCore.solve!(solver::ExpectationTRSolver,
 
     _finish!(stats, c, st, k, t0)
     attach_trace!(stats, tr, st.Δ)
+    attach_sample_trace!(stats, sr)
     _attach_sampling!(stats, nlp, trace)
     return stats
 end
