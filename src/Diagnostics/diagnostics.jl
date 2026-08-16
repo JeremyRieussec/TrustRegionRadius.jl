@@ -12,8 +12,8 @@
 # =============================================================================
 
 """
-    kappa_bar(λ_min::Real; convention = :eigenvalue) -> Float64
-    kappa_bar(nlp, x_star; convention = :eigenvalue, nmax, lanczos_k) -> Float64
+    kappa_bar(λ_min::Real; convention = :neighbourhood) -> Float64
+    kappa_bar(nlp, x_star; convention = :neighbourhood, nmax, lanczos_k) -> Float64
 
 The inactivity threshold `κ̄` of Condition C.Sg at a solution.
 
@@ -29,24 +29,26 @@ say where the observed transition sits relative to the predicted one.
 The local lemma gives `κ̄ = 4/m` where `m` lower-bounds `∇²f` on a neighbourhood
 of `x*`, and there are two ways to quote it.
 
-- `:eigenvalue` (default) takes `m = λ_min(∇²f(x*))`, giving `κ̄ = 4/λ*_min`.
-  The neighbourhood can be shrunk until `m` is as close to `λ*_min` as one likes,
-  and every statement in which `κ̄` is compared with a parameter is asymptotic, so
-  this is the constant that is actually attained.
-- `:neighbourhood` takes the concrete choice `m = λ*_min/2`, giving
+- `:neighbourhood` (default) takes the concrete choice `m = λ*_min/2`, giving
   `κ̄ = 8/λ*_min`. It is what a fixed neighbourhood costs, and the extra factor
-  of `2` is removable.
+  of `2` is removable. This is the default because it is the convention Part III
+  of the survey is written in throughout, and a package whose default disagrees
+  with the paper it accompanies is a trap.
+- `:eigenvalue` takes `m = λ_min(∇²f(x*))`, giving `κ̄ = 4/λ*_min`. The
+  neighbourhood can be shrunk until `m` is as close to `λ*_min` as one likes,
+  and every statement in which `κ̄` is compared with a parameter is asymptotic,
+  so this is the constant that is actually attained.
 
 Report which one a number was produced under. A threshold quoted in one
 convention and compared against a parameter chosen in the other is off by a
 factor of two, which is the width of the interval most sweeps resolve.
 
 ```julia
-κ = kappa_bar(nlp, x_star)            # 4/λ*_min
+κ = kappa_bar(nlp, x_star)            # 8/λ*_min
 tr_solve(nlp; rule = RDFO(ζ = 2κ))    # comfortably above the threshold
 ```
 """
-function kappa_bar(λ_min::Real; convention::Symbol = :eigenvalue)
+function kappa_bar(λ_min::Real; convention::Symbol = :neighbourhood)
     convention in (:eigenvalue, :neighbourhood) || throw(ArgumentError(
         "kappa_bar: convention must be :eigenvalue or :neighbourhood, got :$convention"))
     λ_min > 0 || throw(ArgumentError(
@@ -57,7 +59,7 @@ function kappa_bar(λ_min::Real; convention::Symbol = :eigenvalue)
 end
 
 function kappa_bar(nlp::AbstractNLPModel, x_star::AbstractVector;
-                   convention::Symbol = :eigenvalue,
+                   convention::Symbol = :neighbourhood,
                    nmax::Int = 200, lanczos_k::Int = 40)
     λ = lambda_min_estimate(ExactHessian(), nlp, x_star;
                             nmax = nmax, lanczos_k = lanczos_k)

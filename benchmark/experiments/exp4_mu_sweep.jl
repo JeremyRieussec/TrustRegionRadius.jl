@@ -5,7 +5,9 @@
 #
 # Two claims under test.
 #
-# 1. The cap has a threshold at κ̄ = 4/λ*_min, below which the trust region
+# 1. The cap has a threshold at κ̄ (4/λ*_min under :eigenvalue, 8/λ*_min under
+#    :neighbourhood, which is the `kappa_bar` default and what Part III
+#    quotes), below which the trust region
 #    binds for ever. Unlike ζ, this one is not merely a reliability issue: with
 #    a truncated-CG subsolver a small cap makes CG truncate on its first
 #    iteration, so the step is the Cauchy point and the model Hessian stops

@@ -3,7 +3,9 @@
 #
 # EXPERIMENT 3 -- the criticality parameter ζ of RDFO.
 #
-# Part II: eventual inactivity of the trust region needs ζ > κ̄ = 4/λ*_min,
+# Part II: eventual inactivity of the trust region needs ζ > κ̄, which is
+# 4/λ*_min in the :eigenvalue convention and 8/λ*_min in :neighbourhood, the
+# default of `kappa_bar` and the convention Part III quotes throughout,
 # a constant that depends on the solution and so cannot be chosen a priori.
 # Below the threshold the constraint binds at every iteration and convergence
 # degrades to linear.

@@ -127,7 +127,8 @@ function inactivity()
         Values near 1 mean it never stops binding.
 
         RDFO(z=0.01) and RGradCapped(mu=0.05) are included precisely because
-        their parameters sit below any plausible κ̄ = 4/λ*_min: they should stay
+        their parameters sit below any plausible κ̄ (4/λ*_min under :eigenvalue,
+        8/λ*_min under :neighbourhood, the `kappa_bar` default): they should stay
         pinned near 1 while every other rule falls to 0. Note that all of them
         still drive ‖g_k‖ → 0, which is why a first-order convergence test
         cannot tell the two groups apart.

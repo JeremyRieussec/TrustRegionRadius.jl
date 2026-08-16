@@ -8,20 +8,31 @@
 
     # ---------------------------------------------------------------------
     @testset "kappa_bar" begin
-        # The two conventions differ by exactly the removable factor of two.
-        @test kappa_bar(0.5) ≈ 8.0
+        # The default is :neighbourhood, κ̄ = 8/λ*_min, which is the convention
+        # Part III is written in. Pin the default explicitly rather than only
+        # pinning the two named conventions: the whole point of the default is
+        # that a caller who names nothing agrees with the paper.
+        @test kappa_bar(0.5) ≈ 16.0
         @test kappa_bar(0.5; convention = :neighbourhood) ≈ 16.0
-        @test kappa_bar(0.5; convention = :neighbourhood) == 2 * kappa_bar(0.5)
+        @test kappa_bar(0.5; convention = :eigenvalue) ≈ 8.0
+        # and they still differ by exactly the removable factor of two
+        @test kappa_bar(0.5; convention = :neighbourhood) ==
+              2 * kappa_bar(0.5; convention = :eigenvalue)
+        @test kappa_bar(0.5) == 2 * kappa_bar(0.5; convention = :eigenvalue)
 
         @test_throws ArgumentError kappa_bar(0.5; convention = :whatever)
         @test_throws ArgumentError kappa_bar(0.0)
         @test_throws ArgumentError kappa_bar(-1.0)
 
         # From a problem and a solution: f = ½(x₁² + 4x₂²) has ∇²f = diag(1,4),
-        # so λ*_min = 1 and κ̄ = 4 exactly.
+        # so λ*_min = 1, and κ̄ = 8 in the default convention, 4 in the other.
         nlp = ADNLPModel(quad, [1.0, 1.0])
-        @test kappa_bar(nlp, [0.0, 0.0]) ≈ 4.0 atol = 1e-8
+        @test kappa_bar(nlp, [0.0, 0.0]) ≈ 8.0 atol = 1e-8
         @test kappa_bar(nlp, [0.0, 0.0]; convention = :neighbourhood) ≈ 8.0 atol = 1e-8
+        @test kappa_bar(nlp, [0.0, 0.0]; convention = :eigenvalue) ≈ 4.0 atol = 1e-8
+        # the default must agree with the named convention on both methods
+        @test kappa_bar(nlp, [0.0, 0.0]) ==
+              kappa_bar(nlp, [0.0, 0.0]; convention = :neighbourhood)
     end
 
     # ---------------------------------------------------------------------
@@ -203,7 +214,12 @@
         # κ̄ measured against κ̄ predicted. The empirical constant is the largest
         # realised ‖s‖/‖g‖ on inactive iterations, and the theory's 4/λ*_min is
         # an upper bound on it asymptotically.
-        κ = kappa_bar(nlp, [0.0, 0.0])
+        #
+        # :eigenvalue named explicitly, not left to the default. The sharp bound
+        # is the attained one, 4/λ*_min; the default is now :neighbourhood, and
+        # taking it here would double κ and make this assertion strictly weaker
+        # without anything in the line saying so.
+        κ = kappa_bar(nlp, [0.0, 0.0]; convention = :eigenvalue)
         κe = kappa_bar_empirical(stats)
         @test isnan(κe) || κe <= κ + 1e-6
 
