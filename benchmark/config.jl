@@ -156,6 +156,41 @@ const PROBLEM_SELECTION = Dict(
     "max_con" => MAX_CON,
 )
 
+"""
+    flat_well(ε; x0 = [0.0, 1.2]) -> ADNLPModel
+
+The family P2 of the manuscript, `f(x,y) = ½x² + ε(¼y⁴ − ½y²)` with `ε ∈ (0, ½)`.
+
+A nonsingular saddle at the origin with `∇²f = diag(1, −ε)`, and minimisers at
+`(0, ±1)` with `∇²f = diag(1, 2ε)`. So
+
+    λ* = λ_min(∇²f(0,±1)) = 2ε,    κ̄ = 8/λ* = 4/ε,    1/λ* = 1/(2ε),
+
+and `ε` tunes the curvature at the solution without moving the solution. The
+restriction `ε < ½` is what makes `2ε` the smaller of the two eigenvalues; above
+it the roles swap and `λ*` is `1`, so the thresholds below stop being about `ε`.
+
+The line `{x = 0}` is invariant, since `∂f/∂x = x`, and the Hessian is diagonal,
+so a run started on it stays on it and is exactly the scalar problem
+`φ(y) = ε(¼y⁴ − ½y²)`. Every `y₀ > 0` converges monotonically to `y = 1`.
+
+This is the problem on which the radius thresholds are measurable rather than
+estimated: the two constants of `eqn: three thresholds` are `1/(2ε)` and `0.1/ε`
+exactly, so a bisection on `ε` reads them off directly.
+"""
+flat_well(ε; x0 = [0.0, 1.2]) =
+    ADNLPModel(p -> 0.5p[1]^2 + ε * (p[2]^4 / 4 - p[2]^2 / 2), copy(float.(x0)),
+               name = "P2(eps=$ε)")
+
+"φ''(y) for the scalar problem the invariant line reduces to: ε(3y² − 1)."
+flat_well_curvature(ε, y) = ε * (3y^2 - 1)
+
+"The three thresholds of `eqn: three thresholds` at `λ* = 2ε`, as a named tuple."
+flat_well_thresholds(ε; γ2 = 0.5, γ3 = 2.0) =
+    (rdfo  = (1 - γ2) / (2ε * (γ3 + 1 - γ2)),   # ζ must sit below this
+     exact = 1 / (2ε),                          # μ̄ must sit below this
+     kbar  = 4 / ε)                             # 8/λ*, the sufficient constant
+
 "The problem set: CUTEst when available, the analytic set otherwise."
 function default_problems()
     ps = cutest_problems(min_var = MIN_VAR, max_var = MAX_VAR,

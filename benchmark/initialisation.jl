@@ -37,6 +37,7 @@ include("experiments/exp9_second_order.jl")
 # they need the Sampling layer rather than just the three deterministic axes.
 include("experiments/exp11_bhhh.jl")
 include("experiments/exp12_sampling_examples.jl")
+include("experiments/exp13_flat_well.jl")
 
 # -----------------------------------------------------------------------------
 # Two gaps, flagged rather than papered over
