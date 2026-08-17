@@ -17,13 +17,6 @@
 # =============================================================================
 
 """
-    inactive_tail(r) -> Vector{Float64}
-
-The gradient trajectory restricted to the final run of inactive iterations.
-Returns an empty vector if the constraint never stopped binding, which is
-itself the finding for that configuration.
-"""
-"""
 Fewest inactive iterations from which an order is worth fitting.
 
 Below this the regression has two or three points and returns a number that
@@ -31,6 +24,13 @@ looks like a rate and is not one.
 """
 const MIN_TAIL = 6
 
+"""
+    inactive_tail(r) -> Vector{Float64}
+
+The gradient trajectory restricted to the final run of inactive iterations.
+Returns an empty vector if the constraint never stopped binding, which is
+itself the finding for that configuration.
+"""
 function inactive_tail(r::RunRecord)
     (isempty(r.active_traj) || isempty(r.grad_traj)) && return Float64[]
     k = length(r.active_traj)

@@ -107,12 +107,6 @@ end
 # -----------------------------------------------------------------------------
 
 """
-    RunRecord
-
-One (problem, configuration) result. Flat and concrete so a vector of these can
-be reduced into a metric matrix without further dispatch.
-"""
-"""
     SampleRecord
 
 The stochastic half of a run, `nothing` on a deterministic one.
@@ -137,6 +131,12 @@ end
 SampleRecord() = SampleRecord(Int[], Int[], Float64[], Float64[], Float64[],
                               Float64[], Float64[], 0, 0)
 
+"""
+    RunRecord
+
+One (problem, configuration) result. Flat and concrete so a vector of these can
+be reduced into a metric matrix without further dispatch.
+"""
 struct RunRecord
     problem::String
     config::String
