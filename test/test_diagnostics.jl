@@ -468,15 +468,14 @@
         @test model_hessian_norm(ms, sep, xb) ≈ 10.0 rtol = 1e-10
         @test model_hessian_norm(ms, sep, xb; nmax = 10_000) ≈ 10.0 rtol = 1e-10
 
-        # (b) Clustered spectrum {i/25 : i = 1…250}, λ2/λ1 = 0.996. The default
-        #     power_iters = 30 does NOT converge here: the per-step factor for
-        #     the iteration on H² is (λ2/λ1)² = 0.992, so thirty steps remove
-        #     almost nothing. The estimate is 9.9346 against a true 10.0.
-        #
-        #     This is pinned rather than tolerated. The value is a genuine
-        #     underestimate of ‖H‖, it converges monotonically from below, and
-        #     the assertions below would fail if the default silently changed,
-        #     if the iteration stopped converging, or if it ever overshot.
+        # (b) Clustered spectrum {i/25 : i = 1…250}, λ2/λ1 = 0.996. This is the
+        #     case the old power iteration on H² could not do: its per-step
+        #     factor is (λ2/λ1)² = 0.992, so the thirty steps it defaulted to
+        #     removed almost nothing and returned 9.9346 against a true 10.0, a
+        #     relative error of 6.5e-3 that no amount of tightening a stopping
+        #     test would have fixed. Lanczos on the same operator, at the same
+        #     `lanczos_k = 40` that `lambda_min_estimate` already uses, reaches
+        #     2e-5 in *forty* matrix-vector products against that method's sixty.
         w = collect(1.0:n) ./ 25
         big = ADNLPModel(z -> 0.5 * sum(w .* z .^ 2), zeros(n))
         mb = ExactHessian(); reset_model!(mb, n)
@@ -484,15 +483,30 @@
 
         @test model_hessian_norm(mb, big, xb; nmax = 10_000) ≈ truth rtol = 1e-10
 
-        d30  = model_hessian_norm(mb, big, xb)                      # default
-        d300 = model_hessian_norm(mb, big, xb; power_iters = 300)
-        d3k  = model_hessian_norm(mb, big, xb; power_iters = 3_000)
-        @test d30 < truth                       # underestimates, never overshoots
-        @test d300 < truth
-        @test d30 < d300 < d3k                  # and increases monotonically
-        @test d3k ≈ truth rtol = 1e-8           # converges when given the steps
-        # the default's error is ~6.5e-3 here, which is the documented limitation
-        @test 1e-3 < abs(d30 - truth) / truth < 1e-2
+        d40  = model_hessian_norm(mb, big, xb)                      # default k = 40
+        d60  = model_hessian_norm(mb, big, xb; lanczos_k = 60)
+        d120 = model_hessian_norm(mb, big, xb; lanczos_k = 120)
+        # Ritz values interlace the spectrum, so the estimate is a lower bound at
+        # every k and rises with k. That one-sidedness is what makes an understated
+        # ‖H‖ safe for "Σ Δ²/M is finite" and unsafe for a quoted value.
+        @test d40 < truth
+        @test d60 < truth
+        @test d40 < d60 < d120
+        @test d120 ≈ truth rtol = 1e-8
+        # The default's error on this spectrum, pinned so a regression is visible.
+        # The power iteration it replaced was at 6.5e-3 for half again the cost.
+        @test abs(d40 - truth) / truth < 1e-4
+        @test abs(d60 - truth) / truth < 1e-7
+
+        # Cost is counted in matrix-vector products: k Lanczos steps cost k, p
+        # power steps cost 2p, since the power branch formed B²v. So the default
+        # k = 40 is *cheaper* than the thirty power steps it replaced, 40 products
+        # against 60, and still two orders more accurate; and k = 60 costs exactly
+        # what they did while being six orders better.
+        @test 40 < 2 * 30
+        @test abs(d40 - truth) / truth < 6.5e-3   # the power branch's error at 60 products
+        @test 60 == 2 * 30
+        @test abs(d60 - truth) / truth < 1e-7
 
         # NaN rather than an exception: a diagnostic must not be able to fail a
         # run. An LBFGS model that was never reset has no operator to ask.

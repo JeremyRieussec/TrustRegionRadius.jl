@@ -280,7 +280,7 @@ function lambda_min_estimate(model::ModelHessian, nlp, x;
 end
 
 """
-    model_hessian_norm(model, nlp, x; nmax = 200, power_iters = 30) -> Float64
+    model_hessian_norm(model, nlp, x; nmax = 200, lanczos_k = 40) -> Float64
 
 `‖H_k‖`, the operator norm of the *model* Hessian at `x`.
 
@@ -291,47 +291,48 @@ This is the quantity the majorant of Part I is built from: `M_k = L + max_{i≤k
 introduced to drop, so on a quasi-Newton model whose curvature grows the two
 statements are different.
 
-Dense and exact for `n ≤ nmax`; a power iteration on `H_kᵀH_k` otherwise, which
-converges to the largest singular value and so, `H_k` being symmetric, to the
-spectral norm. Returns `NaN` rather than throwing when the model cannot supply a
-Hessian at `x`: this is a diagnostic and must not be able to fail a run.
+Dense and exact for `n ≤ nmax`; `lanczos_k` Lanczos steps otherwise, taking
+`max(|θ_min|, |θ_max|)` over the Ritz values. Returns `NaN` rather than throwing
+when the model cannot supply a Hessian at `x`: this is a diagnostic and must not
+be able to fail a run.
 
-!!! warning "The default iteration count does not always converge"
-    The power branch runs a fixed `power_iters` steps with no convergence test,
-    so what it returns is a lower bound on `‖H_k‖` rather than the norm. The
-    per-step contraction is `(λ₂/λ₁)²`, and on a clustered spectrum that is close
-    to one: with eigenvalues `{i/25 : i = 1…250}` the default thirty steps return
-    `9.9346` against a true `10.0`, an error of `6.5e-3`, while three thousand
-    steps return the exact value. A well-separated spectrum is exact at thirty.
+The large-`n` branch shares its recurrence with [`lambda_min_estimate`](@ref) —
+`lanczos_k` means the same thing in both, and the two ends of the spectrum come
+off the same tridiagonal.
 
-    The error is one-sided. `‖H_k‖` is understated, so `M_k = L + max_i‖H_i‖` is
-    understated and `Σ_k Δ_k²/M_k` is *over*stated, which is the safe direction
-    for a claim that the series is finite but the wrong one for a reported value.
-    Raise `power_iters`, or force the dense branch with `nmax`, before quoting a
-    number from a large problem.
+!!! note "It was a power iteration, and on a clustered spectrum it did not converge"
+    The branch previously ran a fixed thirty steps of power iteration on `H²`
+    with no convergence test. The per-step contraction is `(λ₂/λ₁)²`, so on a
+    clustered spectrum it removes almost nothing. Measured on eigenvalues
+    `{i/25 : i = 1…250}`, where `(λ₂/λ₁)² = 0.992`:
+
+    | method | matrix-vector products | relative error |
+    |:--|--:|--:|
+    | power iteration, 30 steps | 60 | `6.5e-03` |
+    | power iteration, 300 steps | 600 | `3.3e-05` |
+    | power iteration, 3000 steps | 6000 | `0` |
+    | Lanczos, `k = 40` | 40 | `2.1e-05` |
+    | Lanczos, `k = 60` | 60 | `9.5e-09` |
+
+    Raising the fixed count and adding a convergence test were both considered;
+    neither is worth doing to the wrong algorithm. At *equal cost* Lanczos is
+    nearly six orders of magnitude more accurate here, and on a well-separated
+    spectrum both are exact, so nothing is given up.
+
+    The error remains one-sided: Ritz values interlace the spectrum, so `‖H_k‖`
+    is understated, `M_k = L + max_i‖H_i‖` is understated, and `Σ_k Δ_k²/M_k` is
+    *over*stated. That is the safe direction for a claim that the series is
+    finite and the wrong one for a reported value. Raise `lanczos_k`, or force
+    the dense branch with `nmax`, before quoting a number from a large problem.
 """
 function model_hessian_norm(model::ModelHessian, nlp, x;
-                            nmax::Int = 200, power_iters::Int = 30)
+                            nmax::Int = 200, lanczos_k::Int = 40)
     n = length(x)
     try
         if n <= nmax
             return Float64(opnorm(Matrix(dense_hessian(model, nlp, x))))
         end
-        B = hessian_op(model, nlp, x)
-        v = similar(x); w = similar(x)
-        fill!(v, one(eltype(x)))
-        nv = norm(v); nv == 0 && return 0.0
-        v ./= nv
-        λ = 0.0
-        for _ in 1:power_iters
-            _apply_op!(w, B, v)          # w = Bv
-            _apply_op!(v, B, w)          # v = B²v
-            nv = norm(v)
-            nv == 0 && return 0.0
-            v ./= nv
-            λ = sqrt(nv)                 # ‖B²v‖^{1/2} → |λ|_max
-        end
-        return Float64(λ)
+        return _lanczos_absmax(hessian_op(model, nlp, x), n; k = lanczos_k)
     catch
         return NaN
     end
@@ -362,15 +363,21 @@ function curvature_estimate(model::ModelHessian, nlp, x, want_vector::Bool;
 end
 
 """
-    _lanczos_min(B, n; k, vector) -> λ  or  (λ, v)
+    _lanczos_tridiag(B, n; k) -> (Tm, Q, j_last)
 
-Smallest Ritz value of `B` from `k` Lanczos steps with full reorthogonalisation.
+`k` Lanczos steps on `B` with full reorthogonalisation, returning the projected
+tridiagonal `Tm`, the basis `Q` that produced it, and the number of steps taken.
 
 The starting vector is deterministic, so repeated runs of an experiment agree.
 Full reorthogonalisation costs `O(k²n)` and is worth it here: `k` is small, and a
 loss of orthogonality would show up directly as a spurious `τ`.
+
+Both ends of the spectrum are read off the same recurrence:
+[`_lanczos_min`](@ref) takes the smallest Ritz value and
+[`model_hessian_norm`](@ref) the largest in modulus. They were separate loops,
+which is the duplication that drifts.
 """
-function _lanczos_min(B, n::Int; k::Int = 40, vector::Bool = false)
+function _lanczos_tridiag(B, n::Int; k::Int = 40)
     m = min(k, n)
     Q = zeros(Float64, n, m)
     α = zeros(Float64, m)
@@ -401,12 +408,34 @@ function _lanczos_min(B, n::Int; k::Int = 40, vector::Bool = false)
         q = z ./ nz
     end
 
-    Tm = SymTridiagonal(α[1:j_last], β[1:max(j_last - 1, 0)])
+    return SymTridiagonal(α[1:j_last], β[1:max(j_last - 1, 0)]), Q, j_last
+end
+
+"""
+    _lanczos_min(B, n; k, vector) -> λ  or  (λ, v)
+
+Smallest Ritz value of `B` from `k` Lanczos steps with full reorthogonalisation.
+"""
+function _lanczos_min(B, n::Int; k::Int = 40, vector::Bool = false)
+    Tm, Q, j_last = _lanczos_tridiag(B, n; k = k)
     if vector
         F = eigen(Tm)
         return F.values[1], Q[:, 1:j_last] * F.vectors[:, 1]
     end
     return eigvals(Tm)[1]
+end
+
+"""
+    _lanczos_absmax(B, n; k) -> Float64
+
+Largest Ritz value in modulus, i.e. the spectral norm of `B` restricted to the
+Krylov subspace. Ritz values interlace the spectrum, so this is always a **lower**
+bound on `‖B‖` — the same one-sided error the power iteration had, but reached far
+sooner.
+"""
+function _lanczos_absmax(B, n::Int; k::Int = 40)
+    ev = eigvals(first(_lanczos_tridiag(B, n; k = k)))
+    return max(abs(ev[1]), abs(ev[end]))
 end
 
 # -----------------------------------------------------------------------------
