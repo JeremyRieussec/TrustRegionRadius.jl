@@ -28,15 +28,17 @@
     # ------
     # every rule is compatible with every model and every subsolver, but we don't need to test all combinations.
     # ------
-    # -----
-    # NEED to check KrylovCGLanczos()
-    # -----
     @testset "every rule is compatible with every model and subsolver" begin
+        # KrylovCG and KrylovCR are in the grid now. They were left out of it, with
+        # a "NEED to check" comment in their place, and that is exactly why
+        # `KrylovCGLanczos` could sit in the exported API raising a MethodError on
+        # every call: `Krylov.cg_lanczos` has no `radius` keyword, so the wrapper
+        # generated for it had never once run.
         for r in (RDelta(), RStep(), RDFO(ζ = 1.0), RGrad(), RGradCapped(μ_max = 8.0),
                   RAdaptiveStep(), RAdaptiveGrad(), 
                   RRTR(), RRTRGrad())
             for m in (ExactHessian(), LBFGSModel(mem = 5), SR1Model(mem = 5))
-                for sub in (SteihaugCG(), ExactMS())
+                for sub in (SteihaugCG(), ExactMS(), KrylovCG(), KrylovCR())
                     nlp = ADNLPModel(rosen, [-1.2, 1.0])
                     st = tr_solve(nlp; rule = r, model = m, subsolver = sub,
                                   params = TRParams(tol = 1e-6, max_iterations = 3))
@@ -58,16 +60,51 @@
         @test solver.subsolver isa SubproblemSolver
     end
 
-    # -----
-    # NEED to check KrylovCGLanczos()
-    # -----
     @testset "every subsolver converges" begin
-        for sub in (SteihaugCG(), ExactMS())
+        for sub in (SteihaugCG(), ExactMS(), KrylovCR())
             nlp = ADNLPModel(rosen, [-1.2, 1.0])
             st = tr_solve(nlp; rule = RDelta(), subsolver = sub,
                           params = TRParams(tol = 1e-6, max_iterations = 5_000))
             @test st.status === :first_order
         end
+    end
+
+    @testset "the Krylov wrappers actually call something that takes a radius" begin
+        # A regression test for a defect that a compatibility grid would have caught:
+        # the wrapper body passes `radius = Δ`, so a Krylov routine without that
+        # keyword raises on every call. Assert against Krylov itself rather than
+        # against our own wrapper, so the test names the real precondition.
+        Kry = TrustRegionRadius.Krylov
+        for f in (Kry.cg, Kry.cr)
+            kw = union(Base.kwarg_decl.(methods(f))...)
+            @test :radius in kw
+        end
+        @test :radius ∉ union(Base.kwarg_decl.(methods(Kry.cg_lanczos))...)
+
+        nlp = ADNLPModel(rosen, [-1.2, 1.0])
+        for sub in (KrylovCG(), KrylovCR())
+            st = tr_solve(nlp; rule = RDelta(), subsolver = sub,
+                          params = TRParams(tol = 1e-6, max_iterations = 5_000))
+            @test st.status in (:first_order, :stalled)
+            @test st.solution ≈ [1.0, 1.0] atol = 1e-4
+        end
+
+        # Indefinite `B` is the case `KrylovCG` cannot serve and `KrylovCR` can:
+        # the step must reach the boundary rather than raise or return zero.
+        indef(x) = 0.5 * (2x[1]^2 - x[2]^2)
+        nlp2 = ADNLPModel(indef, [1.0, 0.5])
+        x = [1.0, 0.5]; g = grad(nlp2, x)
+        s = similar(x); Hs = similar(x)
+        active = solve_subproblem!(KrylovCR(), ExactHessian(), nlp2, x, g, 0.75, s, Hs)
+        @test active
+        @test norm(s) ≈ 0.75 rtol = 1e-6
+        @test dot(g, s) + 0.5 * dot(s, Symmetric(hess(nlp2, x)) * s) < 0
+
+        # The old name still resolves, and to the new type. Asserted as an identity
+        # rather than with @test_deprecated, whose log capture depends on the
+        # --depwarn setting the suite happens to be run under.
+        @test KrylovCGLanczos === KrylovCR
+        @test KrylovCGLanczos() isa KrylovCR
     end
 
     @testset "trace records the trajectories" begin
@@ -101,6 +138,54 @@
                     :accepted_trajectory)
             @test length(ss[key]) == k
         end
+    end
+
+    @testset "the alignment survives every exit route, not just :first_order" begin
+        # The convention above was only ever tested on a run that converged. On a
+        # :stalled exit `_tr_step!` returns early, so the loop used to break without
+        # tracing while still counting the iteration: `st.iter` was 1 with one entry
+        # in :delta_trajectory and none in :ratio_trajectory. Anything zipping a
+        # per-state series against a per-iteration one silently misaligned.
+        per_state = (:delta_trajectory, :grad_trajectory, :obj_trajectory)
+        per_iter  = (:ratio_trajectory, :step_trajectory, :active_trajectory,
+                     :accepted_trajectory, :rho_tilde_trajectory, :xi_trajectory,
+                     :cos_cauchy_trajectory, :cg_iters_trajectory,
+                     :branch_trajectory, :gamma_trajectory)
+
+        function check_alignment(st, want_status)
+            @test st.status === want_status
+            ss, k = st.solver_specific, st.iter
+            for key in per_state
+                @test length(ss[key]) == k + 1
+            end
+            for key in per_iter
+                @test length(ss[key]) == k
+            end
+            return ss, k
+        end
+
+        # A radius pinned below the level at which f(x) - f(x+s) carries any
+        # information: the first step stalls, and it is a real iteration.
+        stall = TRParams(Δ0 = 1e-18, Δmax = 1e-18, tol = 1e-16, max_iterations = 50)
+        ss, k = check_alignment(
+            tr_solve(ADNLPModel(rosen, [-1.2, 1.0]); rule = RDelta(), trace = true,
+                     params = stall), :stalled)
+        @test k == 1
+        @test length(ss[:ratio_trajectory]) == 1
+
+        # The fields the acceptance test and the radius update would have written
+        # are set on the stalled path rather than left stale from the iteration
+        # before, so the last traced entry describes *this* iteration.
+        @test ss[:accepted_trajectory][end] == false
+        @test ss[:branch_trajectory][end] === :none
+        @test isnan(ss[:gamma_trajectory][end])
+        @test isfinite(ss[:ratio_trajectory][end]) || ss[:ratio_trajectory][end] == -Inf
+
+        # :max_iter, the other early exit, has always been aligned; assert it so
+        # the convention is pinned on more than one route.
+        check_alignment(
+            tr_solve(ADNLPModel(rosen, [-1.2, 1.0]); rule = RDelta(), trace = true,
+                     params = TRParams(tol = 1e-16, max_iterations = 4)), :max_iter)
     end
 
     @testset "acceptance follows ρ ≥ η and nothing else" begin

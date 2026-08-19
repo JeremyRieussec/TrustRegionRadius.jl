@@ -21,7 +21,7 @@ interacts with. Four orthogonal axes:
 |---|---|
 | **radius rule** | `RDelta`, `RStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RRTR`, `RRTRGrad` |
 | **model Hessian** | `ExactHessian`, `LBFGSModel`, `SR1Model`, `ScaledIdentity`, `SPDTarget`, `BHHHModel`, `BHHH2Model`, `GaussNewtonModel` |
-| **subproblem solver** | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCGLanczos`, `EigenPoint` |
+| **subproblem solver** | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCR`, `EigenPoint` |
 | **sampling rule** | `FullBatch`, `FixedSample`, `RadiusProportional`, `NormTest`, `GeometricSample`, `InnerProductTest`, `OrthogonalityTest`, `AugmentedInnerProduct`, `SequentialEstimation`, `CertifiedDecrease` |
 
 The nine radius rules are the first-order ones; `SecondOrder(inner)` wraps any

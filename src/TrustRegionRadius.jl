@@ -71,7 +71,7 @@ export phi_target, reports_negative_curvature, model_eltype
 
 # ---- Axis 3: subproblem solvers ---------------------------------------------
 export SubproblemSolver, SubWorkspace
-export SteihaugCG, ExactMS, KrylovCG, KrylovCGLanczos
+export SteihaugCG, ExactMS, KrylovCG, KrylovCR, KrylovCGLanczos
 export solve_subproblem!, cg_step_info, returns_hprod, needs_eigenvector
 
 # ---- Axis 4: sampling -------------------------------------------------------

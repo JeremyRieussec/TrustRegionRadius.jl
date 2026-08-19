@@ -363,7 +363,7 @@ end
     KrylovCG(; atol = 1e-6, rtol = 1e-6, itmax = 0)
 
 `Krylov.cg` with the `radius` keyword (Steihaug-style truncation).
-Assumes positive definite `B`; use [`KrylovCGLanczos`](@ref) otherwise.
+Assumes positive definite `B`; use [`KrylovCR`](@ref) otherwise.
 """
 struct KrylovCG <: SubproblemSolver
     atol::Float64
@@ -374,19 +374,38 @@ struct KrylovCG <: SubproblemSolver
 end
 
 """
-    KrylovCGLanczos(; atol = 1e-6, rtol = 1e-6, itmax = 0)
+    KrylovCR(; atol = 1e-6, rtol = 1e-6, itmax = 0)
 
-`Krylov.cg_lanczos` with `radius`; handles indefinite `B`.
+`Krylov.cr` with the `radius` keyword; handles indefinite `B`, stepping to the
+boundary on negative curvature exactly as [`SteihaugCG`](@ref) does.
+
+!!! note "This was `KrylovCGLanczos`, and that wrapper never ran"
+    The type was previously generated from `Krylov.cg_lanczos`, which **has no
+    `radius` keyword** — `Base.kwarg_decl` on it lists `check_curvature` and no
+    `radius` in any released version — so every call raised a `MethodError`
+    before doing any work. The docstring's claim that it solved the constrained
+    subproblem was therefore never exercised.
+
+    `Krylov.cr` is the routine in the same package that does accept `radius`
+    *and* handles indefinite `B`, so it is what the type always meant. The
+    alternative, keeping `cg_lanczos` and rescaling its unconstrained iterate
+    down to `‖s‖ = Δ`, was rejected: a scaled Newton-ish direction is not the
+    trust-region step, and on indefinite `B` the iterate being rescaled can
+    already have diverged.
+
+    `KrylovCGLanczos` remains as a deprecated alias.
 """
-struct KrylovCGLanczos <: SubproblemSolver
+struct KrylovCR <: SubproblemSolver
     atol::Float64
     rtol::Float64
     itmax::Int
-    KrylovCGLanczos(; atol::Real = 1e-6, rtol::Real = 1e-6, itmax::Int = 0) =
+    KrylovCR(; atol::Real = 1e-6, rtol::Real = 1e-6, itmax::Int = 0) =
         new(float(atol), float(rtol), itmax)
 end
 
-for (Tsub, fn) in ((:KrylovCG, :(Krylov.cg)), (:KrylovCGLanczos, :(Krylov.cg_lanczos)))
+Base.@deprecate_binding KrylovCGLanczos KrylovCR true
+
+for (Tsub, fn) in ((:KrylovCG, :(Krylov.cg)), (:KrylovCR, :(Krylov.cr)))
     @eval function solve_subproblem!(sub::$Tsub, model::ModelHessian,
                                      nlp::AbstractNLPModel{T, V},
                                      x::V, g::V, Δ::T, s::V, Hs::V,

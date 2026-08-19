@@ -15,7 +15,7 @@ interacts with. Four orthogonal axes:
 |---|---|
 | [radius rule](rules.md) | `RDelta`, `RStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RRTR`, `RRTRGrad` |
 | [model Hessian](models.md) | `ExactHessian`, `LBFGSModel`, `SR1Model`, `ScaledIdentity`, `SPDTarget`, `BHHHModel`, `BHHH2Model`, `GaussNewtonModel` |
-| [subproblem solver](subsolvers.md) | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCGLanczos`, `EigenPoint` |
+| [subproblem solver](subsolvers.md) | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCR`, `EigenPoint` |
 | [sampling rule](stochastic.md) | `FullBatch`, `FixedSample`, `RadiusProportional`, `NormTest`, `GeometricSample`, `InnerProductTest`, `OrthogonalityTest`, `AugmentedInnerProduct`, `SequentialEstimation` |
 
 Every combination runs through one driver *per regime*, so a comparison measures the axis you

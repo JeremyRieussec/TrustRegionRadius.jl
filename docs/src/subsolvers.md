@@ -15,7 +15,7 @@ mechanisms whose first-order behaviour is identical.
 | [`SteihaugCG`](@ref) | `B * v` only | yes, stops on negative curvature | any |
 | [`ExactMS`](@ref) | dense eigendecomposition | yes, including the hard case | `n ≤ nmax` |
 | [`KrylovCG`](@ref) | `B * v` | no — assumes `H ≻ 0` | any |
-| [`KrylovCGLanczos`](@ref) | `B * v` | yes | any |
+| [`KrylovCR`](@ref) | `B * v` | yes, stops on negative curvature | any |
 
 ## `SteihaugCG` and the Cauchy point
 
@@ -102,7 +102,7 @@ SubWorkspace
 SteihaugCG
 ExactMS
 KrylovCG
-KrylovCGLanczos
+KrylovCR
 solve_subproblem!
 cg_step_info
 returns_hprod
