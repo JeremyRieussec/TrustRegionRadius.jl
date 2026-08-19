@@ -6,11 +6,11 @@
     \toprule
     Rule & $N$ & $\sum_{k<N}\Delta_k$ & $\sum_{k<N}\Delta_k^2$ \\
     \midrule
-    R-delta & 607 & $1.172\times10^{59}$ & $3.530\times10^{117}$ \\
-    R-step & 393 & $7.976\times10^{2}$ & $1.881\times10^{3}$ \\
+    R-delta & 608 & $1.172\times10^{59}$ & $3.530\times10^{117}$ \\
+    R-step & 394 & $8.017\times10^{2}$ & $1.898\times10^{3}$ \\
     R-DFO & 700 & $5.900\times10^{0}$ & $1.430\times10^{0}$ \\
     R-grad ($\mu$ bounded) & 700 & $7.248\times10^{0}$ & $1.430\times10^{0}$ \\
-    R-grad ($\mu$ unbounded) & 539 & $3.733\times10^{2}$ & $2.586\times10^{2}$ \\
+    R-grad ($\mu$ unbounded) & 540 & $3.740\times10^{2}$ & $2.591\times10^{2}$ \\
     \bottomrule
   \end{tabular}
 \end{table}

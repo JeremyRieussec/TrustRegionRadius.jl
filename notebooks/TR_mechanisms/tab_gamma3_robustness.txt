@@ -1,6 +1,6 @@
 \begin{table}[htbp]
   \centering
-  \caption{Effect of $\gamma_3$ on R-grad with $\mu$ unbounded ($N=30$ iterations, $f(x)=e^{-x}$, $x_0=0$). The dividing line is $\gamma_3$ versus $e\approx2.71828$: for $\gamma_3<e$ the radius never reaches the unconstrained Newton step, branch~4 never fires, $\mu_k=\gamma_3^k\mu_0$ diverges, and $\Delta_k$ settles at the fixed point $\ln\gamma_3$; for $\gamma_3\ge e$ branch~4 fires, $\mu$ stalls, and $\liminf_k\Delta_k\ge2/e$.}
+  \caption{Effect of $\gamma_3$ on R-grad with $\mu$ unbounded ($N=30$ iterations, $f(x)=e^{-x}$, $x_0=0$). The dividing line is $\gamma_3$ versus $e\approx2.71828$: for $\gamma_3\le e$ the radius never reaches the unconstrained Newton step, branch~4 never fires, $\mu_k=\gamma_3^k\mu_0$ diverges, and $\Delta_k$ settles at the fixed point $\ln\gamma_3$; for $\gamma_3>e$ branch~4 fires, $\mu$ stalls, and $\liminf_k\Delta_k\ge2/e$.}
   \label{tab: gamma3 robustness}
   \begin{tabular}{rrrrr}
     \toprule
