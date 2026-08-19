@@ -25,15 +25,19 @@
 # panels look fine for every mechanism and only the countdown distinguishes
 # them.
 #
-#   julia --project=benchmark benchmark/experiments/exp8_single_problem.jl
-#   julia --project=benchmark benchmark/experiments/exp8_single_problem.jl WOOD
-#   TRR_PROBLEM=ROSENBR julia --project=benchmark .../exp8_single_problem.jl
+# Run it the way every other experiment here is run -- through
+# initialisation.jl, which loads the package, the harness and config.jl exactly
+# once. This file deliberately carries no `using` and no `include` of its own:
+# it used to include archive.jl, harness.jl and config.jl itself, and re-running
+# config.jl over an already-loaded session raised
+# `invalid redefinition of constant Main.DEFAULT_MODEL`, which is why the suite
+# had it commented out.
+#
+#   julia --project=benchmark -e 'include("benchmark/initialisation.jl");
+#                                 single_problem_experiment("ROSENBR")'
+#
+# The problem may also come from TRR_PROBLEM.
 # =============================================================================
-
-using Plots
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
 
 "Problem traced when none is given on the command line or in TRR_PROBLEM."
 const DEFAULT_TRACE_PROBLEM = "ROSENBR"
@@ -278,7 +282,7 @@ end
 # Main
 # -----------------------------------------------------------------------------
 
-function main(args = String[])
+function single_problem_experiment(args = String[])
     pname_wanted = chosen_problem(args)
     problem = select_problem(pname_wanted)
     problems = [problem]
@@ -367,6 +371,11 @@ function main(args = String[])
         """)
 end
 
-if abspath(PROGRAM_FILE) == @__FILE__
-    main(ARGS)
-end
+# The notebook and the suite call this by name; `main` was the old spelling and
+# collided with experiments 9, 11 and 12, all of which have since been renamed to
+# their own entry points.
+single_problem_experiment(name::AbstractString) = single_problem_experiment([name])
+
+# No `PROGRAM_FILE` guard: this file is not runnable on its own any more, by
+# design. Direct execution would need the harness, and loading it from here is
+# exactly the double-definition that kept experiment 8 out of the suite.
