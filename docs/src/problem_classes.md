@@ -33,12 +33,24 @@ deliberate sub-population budget (`< M`) — two different intentions that shoul
 share a keyword. [`FiniteSumNLP`](@ref) therefore **rejects** a rule carrying an
 `N_max` and takes `budget` explicitly:
 
-```julia
-FiniteSumNLP(prob, RadiusProportional(N_max = 500))     # ArgumentError
-FiniteSumNLP(prob, RadiusProportional())                # cap is M
-FiniteSumNLP(prob, RadiusProportional(); budget = 500)  # a deliberate experiment
+```@example classes
+using TrustRegionRadius, ADNLPModels, NLPModels, LinearAlgebra
 
-ExpectationNLP(prob, RadiusProportional(N_max = 500))   # fine: N_max IS the budget
+base = ADNLPModel(x -> 0.5 * sum(abs2, x .- 1), [0.0, 0.0])
+prob = PerturbedSum(base, 500; σg = 1.0, seed = 1)
+
+try
+    FiniteSumNLP(prob, RadiusProportional(N_max = 500))
+catch e
+    showerror(stdout, e)
+end
+```
+
+```@example classes
+eprob = PerturbedExpectation(base; σg = 1.0)
+(FiniteSumNLP(prob, RadiusProportional())               isa FiniteSumNLP,   # cap is M
+ FiniteSumNLP(prob, RadiusProportional(); budget = 500) isa FiniteSumNLP,   # deliberate
+ ExpectationNLP(eprob, RadiusProportional(N_max = 500)) isa ExpectationNLP) # N_max IS the budget
 ```
 
 **The full-batch limit.** At `N_k = M` a finite-sum iteration is *exactly*
@@ -48,10 +60,10 @@ expectation has no such limit, so its hypotheses can never be discharged by
 sampling harder. [`FullBatch`](@ref) makes the limit reachable, is rejected on an
 expectation, and gives the sharpest regression test in the package:
 
-```julia
-det = tr_solve(FullBatchNLP(prob);                    rule = RDelta())
-fs  = tr_solve(FiniteSumNLP(prob, FullBatch());       rule = RDelta())
-det.solution ≈ fs.solution        # iterate for iterate
+```@example classes
+det = tr_solve(FullBatchNLP(prob);              rule = RDelta())
+fs  = tr_solve(FiniteSumNLP(prob, FullBatch()); rule = RDelta())
+(det.iter, fs.iter, det.solution ≈ fs.solution)
 ```
 
 That is the only place the sampled and exact code paths can be compared directly,
@@ -95,9 +107,17 @@ variance estimate and an RNG that mean nothing.
 | [`GaussNewtonModel`](@ref) | `NLSProblem` | it needs the residual Jacobian |
 | everything else | `AbstractProblem` | — |
 
-```julia
-tr_solve(ADNLPModel(f, x0); model = BHHHModel())     # ArgumentError, naming both types
-tr_solve(FullBatchNLP(logistic); model = BHHHModel())    # fine
+```@example classes
+try
+    tr_solve(ADNLPModel(x -> sum(abs2, x), [1.0, 2.0]); model = BHHHModel())
+catch e
+    showerror(stdout, e)
+end
+```
+
+```@example classes
+logistic = LogisticRegression(K = 3, M = 200, seed = 1)
+tr_solve(FullBatchNLP(logistic); model = BHHHModel()).status
 ```
 
 This matters because the failure it prevents is silent. Applied to a problem that

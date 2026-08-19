@@ -6,7 +6,13 @@
 # =============================================================================
 
 """
-    tr_solve(nlp; rule, model, subsolver, params, trace, callback) -> TRResult
+    tr_solve(nlp; rule, model, subsolver, params, x_ref, true_curvature,
+             hessian_norm, kwargs...) -> TRResult
+
+The declared keywords are `rule`, `model`, `subsolver`, `params`, `x_ref`,
+`true_curvature` and `hessian_norm`. Everything else, `trace` and `callback` above
+all, is forwarded through `kwargs...` to `SolverCore.solve!`, so `trace = true` is
+the supported spelling rather than a keyword of this function.
 
 Solve `nlp`, choosing the solver from the problem class:
 

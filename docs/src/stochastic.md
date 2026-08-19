@@ -5,22 +5,28 @@ Hessian and the subproblem solver. It applies in the two sampled
 [problem classes](problem_classes.md) and not in the deterministic one, so which
 solver runs is decided by the oracle you build:
 
-```julia
+```@example stochastic
+using TrustRegionRadius, ADNLPModels, NLPModels, LinearAlgebra
+
 # finite sum: N_k ≤ M, imposed by the problem
-prob = PerturbedSum(base_nlp, 4_000; σg = 1.0)       # mean is exactly base_nlp
+base_nlp = ADNLPModel(x -> 0.5 * sum(abs2, x .- 1), [0.0, 0.0])
+prob = PerturbedSum(base_nlp, 4_000; σg = 1.0, seed = 1)   # mean is exactly base_nlp
 nlp  = FiniteSumNLP(prob, RadiusProportional(κ_g = 1.0))
 
 stats = tr_solve(nlp; rule = RDelta(), model = ExactHessian(),
                  subsolver = ExactMS(), trace = true)
 
-stats.solver_specific[:samples_total]               # the cost measure that matters
-stats.solver_specific[:full_batch_trajectory]       # which iterations were exact
-norm(true_gradient(prob, stats.solution))           # score on the truth, not on ĝ
+(stats.solver_specific[:samples_total],                   # the cost measure that matters
+ count(stats.solver_specific[:full_batch_trajectory]),    # iterations that were exact
+ norm(true_gradient(prob, stats.solution)))               # score on the truth, not on ĝ
+```
 
+```@example stochastic
 # expectation: no M, so the cap is a budget you choose
 eprob = PerturbedExpectation(base_nlp; σg = 1.0)
 enlp  = ExpectationNLP(eprob, RadiusProportional(); budget = 50_000)
-tr_solve(enlp; rule = RDelta(), subsolver = ExactMS(), trace = true)
+est = tr_solve(enlp; rule = RDelta(), subsolver = ExactMS(), trace = true)
+(est.status, est.iter, est.solver_specific[:samples_total])
 ```
 
 Both oracles satisfy the ordinary NLP interface, so every mechanism, model and
@@ -68,10 +74,17 @@ different things depending on the class:
 | expectation | unbounded | **is** your budget — allowed and meaningful |
 | finite sum | `M` | **rejected**: the cap belongs to the problem |
 
-```julia
-FiniteSumNLP(prob, RadiusProportional(N_max = 500))     # ArgumentError
-FiniteSumNLP(prob, RadiusProportional(); budget = 500)  # a deliberate experiment
-ExpectationNLP(prob, RadiusProportional(N_max = 500))   # fine
+```@example stochastic
+try
+    FiniteSumNLP(prob, RadiusProportional(N_max = 500))
+catch e
+    showerror(stdout, e)
+end
+```
+
+```@example stochastic
+(FiniteSumNLP(prob, RadiusProportional(); budget = 500) isa FiniteSumNLP,
+ ExpectationNLP(eprob, RadiusProportional(N_max = 500)) isa ExpectationNLP)
 ```
 
 The effective cap is `min(sample_cap(rule), budget, population(prob))`, and hitting it
@@ -117,6 +130,32 @@ without switching off the growth.
 | [`AugmentedInnerProduct`](@ref) | the maximum of the previous two | no |
 | [`GeometricSample`](@ref) | `N₀·rate^k`, fixed in advance | no |
 | [`SequentialEstimation`](@ref) | `2z²σ_f²/(κ²·pred²)` | **yes**, through `pred` |
+| [`CertifiedDecrease`](@ref) | `z_p²σ̂_N²/δ̂_N²`, paired | **yes**, through the step |
+
+### Certifying the decrease instead of the gradient
+
+[`CertifiedDecrease`](@ref) is the one rule that sizes the sample against the achieved
+decrease rather than against the gradient, using **paired differences** under common
+random numbers: with the same realisation at both ends of the step,
+
+```math
+D_i = F(x_k, \\xi_i) - F(x_k + s_k, \\xi_i)
+```
+
+and `N_{k+1}` is the ceiling of `z_p² σ̂_N² / δ̂_N²`, where `δ̂_N` and `σ̂_N²` are the
+sample mean and variance of the `D_i`.
+
+Holding the realisation fixed at both ends is the whole point: it makes `D_i → 0`
+pathwise as `s_k → 0`, so the variance of `D` is `O(‖s_k‖²)`. Two independent batches
+give `O(1)` instead, and the rule is then unusable near a solution.
+
+The machinery this needs is separate from the rest of the sampling interface, because
+only this rule uses it: [`needs_paired`](@ref) declares that a rule wants paired
+differences, [`supports_paired`](@ref) declares that a problem can supply them,
+[`obs_objective`](@ref) evaluates one term at one realisation,
+[`paired_decrease_stats`](@ref) forms the two statistics in one pass, and
+[`record_paired!`](@ref) hands them back to the rule. A run under this rule records
+`:paired_decrease_trajectory` and `:paired_variance_trajectory`.
 
 ### Why the inner-product tests are cheaper
 
@@ -210,6 +249,7 @@ OrthogonalityTest
 AugmentedInnerProduct
 GeometricSample
 SequentialEstimation
+CertifiedDecrease
 record_prediction!
 reset_sampling_rule!
 couples_to_radius
@@ -225,4 +265,11 @@ reset_sampling!
 draw_batch
 true_objective
 true_gradient
+needs_paired
+record_paired!
+paired_decrease_stats
+supports_paired
+obs_objective
+confirm_gradient_norm!
+grad_standard_error
 ```

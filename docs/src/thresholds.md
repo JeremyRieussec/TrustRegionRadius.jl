@@ -29,9 +29,12 @@ and they answer different questions:
 and nothing else in the package compares `ρ` with it. `η₁` and `η₂` never decide whether a
 step is taken.
 
-```julia
-TRParams(η = 0.0, η1 = 0.1, η2 = 0.9)     # decoupled
-TRParams(η1 = 0.1, η2 = 0.9)              # η defaults to η1: the classical algorithm
+```@example thresholds
+using TrustRegionRadius, ADNLPModels
+
+a = TRParams(η = 0.0, η1 = 0.1, η2 = 0.9)     # decoupled
+b = TRParams(η1 = 0.1, η2 = 0.9)              # η defaults to η1
+(a.η, a.η1, b.η, b.η1)
 ```
 
 The keywords are ASCII, matching `update_radius!`. `η₁`, `η₂` and `Δ₀` are accepted as
@@ -81,10 +84,14 @@ because at `η₁ = 0` their aggressive branch is unreachable and the lower-boun
 Part I degenerates. [`validate_thresholds`](@ref) is called once when the solver is built, so
 the failure is a constructor error rather than a silent change of behaviour:
 
-```julia
-DeterministicTRSolver(nlp; rule = RStep(),
-                      params = TRParams(η = 0.0, η1 = 0.0, η2 = 0.9))
-# ArgumentError: RStep: the step-driven update needs η1 > 0
+```@example thresholds
+nlp = ADNLPModel(x -> sum(abs2, x), [1.0, 2.0])
+try
+    DeterministicTRSolver(nlp; rule = RStep(),
+                          params = TRParams(η = 0.0, η1 = 0.0, η2 = 0.9))
+catch e
+    showerror(stdout, e)
+end
 ```
 
 Rules with no such requirement accept `η₁ = 0` unchanged. To add a requirement for a new
@@ -106,11 +113,23 @@ use one of the three passes `nothing` for it; the remaining inequalities are sti
 `ArgumentError` rather than `@assert` deliberately: `@assert` is documented as liable to be
 disabled, and these are argument checks rather than internal invariants.
 
-```julia
-RGrad(γ₂ = 2.0)                      # ArgumentError: γ₂ is the mild contraction
-RDelta(γ₁ = 0.8, γ₂ = 0.3)           # ArgumentError: need γ₁ ≤ γ₂
-RDelta(γ₃ = 0.9)                     # ArgumentError: need γ₃ > 1
-RGrad(γ₁ = 0.25, γ₂ = 0.5, γ₃ = 2.0) # fine
+The rule constructors take **ASCII** factor names, `γ1, γ2, γ3`. The Unicode aliases
+`η₁, η₂, Δ₀` exist on [`TRParams`](@ref) but do **not** extend to the rules, so
+`RGrad(γ₂ = 2.0)` raises `MethodError: no method matching RGrad(; γ₂::Float64)` rather
+than the validation error you were reaching for.
+
+```@example thresholds
+for f in (() -> RGrad(γ2 = 2.0),
+          () -> RDelta(γ1 = 0.8, γ2 = 0.3),
+          () -> RDelta(γ3 = 0.9),
+          () -> RGrad(γ1 = 0.25, γ2 = 0.5, γ3 = 2.0))
+    try
+        f()
+        println("constructed")
+    catch e
+        println(sprint(showerror, e))
+    end
+end
 ```
 
 The Hei family carries one extra requirement, `γ₃ > 1 + γ₂`, so that the smooth factor can
@@ -148,4 +167,6 @@ TRParams
 validate_thresholds
 check_factors
 check_bounds
+confirms_stop
+confirmation_needs_truth
 ```

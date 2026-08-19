@@ -15,12 +15,17 @@ change**. That is why [`SecondOrder`](@ref) is a wrapper rather than a new famil
 rules — it forwards `update_radius!` to the rule it wraps and overrides only
 [`criticality`](@ref).
 
-```julia
-tr_solve(nlp;
+```@example secondorder
+using TrustRegionRadius, ADNLPModels
+
+nlp = ADNLPModel(p -> p[1]^4 - p[1]^3 + (0.25 - p[1]/2)*p[2]^2 + p[2]^4/4, [-0.5, 0.6])
+stats = tr_solve(nlp;
     rule      = RGradTau(μ = 1.0),        # Δ_k = μ_k τ_k, μ updated exactly as in RGrad
     model     = ExactHessian(),           # must be able to report negative curvature
     subsolver = EigenPoint(SteihaugCG()), # must be able to exploit it
-    params    = TRParams(tol = 1e-8, tol_H = 1e-6))
+    params    = TRParams(tol = 1e-8, tol_H = 1e-6),
+    trace     = true)
+(stats.status, stats.solution)
 ```
 
 ## The three pieces, and why all three are needed
@@ -50,16 +55,12 @@ radius it would use at a solution. The two anchored families then fail different
 Both are repaired by `τ`, which equals `-λ_min > 0` there and holds the radius at the
 scale of the curvature actually available.
 
-```julia
-julia> λ, gn = -1.0, 0.0;                       # an exact saddle
-
-julia> r = RGrad(μ = 1.0);
-julia> initial_radius(r, 1.0, criticality(r, gn, λ))
-0.0                                              # dead
-
-julia> rτ = RGradTau(μ = 1.0);
-julia> initial_radius(rτ, 1.0, criticality(rτ, gn, λ))
-1.0                                              # alive
+```@example secondorder
+λ, gn = -1.0, 0.0                    # an exact saddle
+r  = RGrad(μ = 1.0)
+rτ = RGradTau(μ = 1.0)
+(initial_radius(r,  1.0, criticality(r,  gn, λ)),    # dead
+ initial_radius(rτ, 1.0, criticality(rτ, gn, λ)))    # alive
 ```
 
 ## Stopping
@@ -117,9 +118,10 @@ longer recomputes an eigendecomposition the solver has just done.
 
 With `trace = true` and a curvature estimate in play, two further trajectories appear:
 
-```julia
-ss[:lambda_min_trajectory]   # λ_min(B_k)
-ss[:tau_trajectory]          # τ_k, the measure the rule actually saw
+```@example secondorder
+ss = stats.solver_specific
+(length(ss[:lambda_min_trajectory]),   # λ_min(B_k)
+ length(ss[:tau_trajectory]))          # τ_k, the measure the rule actually saw
 ```
 
 Comparing `:tau_trajectory` against `:grad_trajectory` is the cheapest second-order
@@ -139,6 +141,7 @@ criticality
 needs_curvature
 tau_criticality
 lambda_min_estimate
+model_hessian_norm
 curvature_estimate
 EigenPoint
 second_order_status

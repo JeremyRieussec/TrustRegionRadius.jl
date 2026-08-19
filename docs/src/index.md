@@ -13,7 +13,7 @@ interacts with. Four orthogonal axes:
 
 | axis | choices |
 |---|---|
-| [radius rule](rules.md) | `RDelta`, `RStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RAdaptiveFanYuan`, `RRTR`, `RRTRGrad` |
+| [radius rule](rules.md) | `RDelta`, `RStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RRTR`, `RRTRGrad` |
 | [model Hessian](models.md) | `ExactHessian`, `LBFGSModel`, `SR1Model`, `ScaledIdentity`, `SPDTarget`, `BHHHModel`, `BHHH2Model`, `GaussNewtonModel` |
 | [subproblem solver](subsolvers.md) | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCGLanczos`, `EigenPoint` |
 | [sampling rule](stochastic.md) | `FullBatch`, `FixedSample`, `RadiusProportional`, `NormTest`, `GeometricSample`, `InnerProductTest`, `OrthogonalityTest`, `AugmentedInnerProduct`, `SequentialEstimation` |
@@ -46,9 +46,12 @@ using Pkg
 Pkg.add(url = "https://github.com/USER/TrustRegionRadius.jl")
 ```
 
+!!! note "Not executed"
+    Shown for reference; not run when the documentation is built.
+
 ## Thirty seconds
 
-```julia
+```@example index
 using TrustRegionRadius, ADNLPModels
 
 nlp = ADNLPModel(x -> (1 - x[1])^2 + 100(x[2] - x[1]^2)^2, [-1.2, 1.0])
@@ -60,8 +63,9 @@ stats = tr_solve(nlp;
     params    = TRParams(tol = 1e-8),
     trace     = true)
 
-stats.status                                       # :first_order
-count(stats.solver_specific[:active_trajectory])   # iterations with ‖s‖ = Δ
+(stats.status,
+ stats.iter,
+ count(stats.solver_specific[:active_trajectory]))   # iterations with ‖s‖ = Δ
 ```
 
 Continue with [Getting started](quickstart.md).

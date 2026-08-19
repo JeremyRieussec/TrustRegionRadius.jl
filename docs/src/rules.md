@@ -90,7 +90,7 @@ the safeguard factor `max[γ₁, θₖ]` of Part I, held at a constant here.
     rejection, and the run continues to `max_iterations` making no progress. It also violates
     the contraction condition, so the convergence theorem of Part I does not cover it. A rule
     added outside the package must contract on every unsuccessful iteration;
-    `test/test_thresholds.jl` checks this for all ten rules at six values of ρ below `η`,
+    `test/test_thresholds.jl` checks this for all nine rules at five values of ρ below `η`,
 including `-Inf` — which is what the solver passes whenever the predicted reduction is
 non-positive.
 
@@ -122,8 +122,12 @@ Both take the four-branch form of Part I:
 ```
 
 The second branch contracts `μ` on mildly successful iterations, so the climb is not monotone.
-`contract_middle = false` holds `μ` fixed there instead; the boundedness argument for `μ` is
-stated for the four-branch form, so the default keeps it.
+
+The fourth branch is the one with a keyword. `half_test = true`, the default, grows `μ`
+only when `‖s_k‖ > ½Δ_k`; `half_test = false` drops that guard and grows it on every
+very successful iteration. The guard is what turns "`μ` grows" into "`‖s_k‖` is
+comparable to `μ_k‖g_k‖`", which is the step the boundedness argument for `μ` runs on,
+so the default keeps it. Any constant in `(0,1)` would serve in place of `½`.
 
 `RGradCapped` supplies the bound `μₖ ≤ μ_max` that the global asymptotic theory assumes
 (`Δₖ → 0` needs it). The cost is real: with a truncated-CG subsolver a small `μ_max` makes CG
@@ -161,6 +165,63 @@ an artefact: no continuous function satisfies both `R ≤ γ₂` below the thres
 The kink sits at the solver's `η₁` rather than at a threshold stored on the rule, so the
 family is directly comparable with the three-case rules under one `(η, η₁, η₂)`.
 
+## The catalogue, executed
+
+The nine first-order rules, with the two traits that decide where each one belongs in
+the theory. `is_criticality_anchored` says whether the radius is tied to a criticality
+measure; `asymptotic_regime` says what the radius does in the limit; and
+`needs_retrospective` marks the two rules that score an iteration with the *new* model
+rather than the old one.
+
+```@example rules
+using TrustRegionRadius, ADNLPModels, Printf
+
+catalogue = ["RDelta"        => RDelta(),
+             "RStep"         => RStep(),
+             "RDFO"          => RDFO(),
+             "RGrad"         => RGrad(),
+             "RGradCapped"   => RGradCapped(),
+             "RAdaptiveStep" => RAdaptiveStep(),
+             "RAdaptiveGrad" => RAdaptiveGrad(),
+             "RRTR"          => RRTR(),
+             "RRTRGrad"      => RRTRGrad()]
+
+for (name, r) in catalogue
+    @printf("%-15s anchored=%-6s regime=%-15s retrospective=%s
+",
+            name, is_criticality_anchored(r), asymptotic_regime(r), needs_retrospective(r))
+end
+```
+
+The three regimes partition the nine: `:bounded_below` keeps the radius away from zero,
+`:step_summable` makes `Σ Δ_k` finite in the local phase, and `:vanishing` drives
+`Δ_k → 0`. Every anchored rule is `:vanishing`, and that is not a coincidence: anchoring
+the radius to a criticality measure that tends to zero is what makes it tend to zero.
+
+## One problem, four mechanisms
+
+The same Rosenbrock solve under four rules, with the radius it started and finished on.
+
+```@example rules
+nlp = ADNLPModel(x -> (1 - x[1])^2 + 100(x[2] - x[1]^2)^2, [-1.2, 1.0])
+
+for (name, mk) in ["RDelta" => () -> RDelta(), "RStep" => () -> RStep(),
+                   "RGrad"  => () -> RGrad(),  "RDFO"  => () -> RDFO()]
+    st = tr_solve(nlp; rule = mk(), params = TRParams(tol = 1e-8), trace = true)
+    Δ  = st.solver_specific[:delta_trajectory]
+    @printf("%-8s status=%-12s iter=%3d  Δ_0=%9.3g  Δ_end=%9.3g
+",
+            name, st.status, st.iter, Δ[1], Δ[end])
+end
+```
+
+Read the last column against the regimes above. `RDelta` ends on a radius larger than it
+started with, `RStep` on one nine orders of magnitude smaller, and `RGrad` on zero, which
+is `Δ_k = μ_k‖g_k‖` doing exactly what it says once `‖g_k‖` reaches machine precision.
+
+`RGrad` also ignores `Δ0` entirely: its `Δ_0` above is `233`, not the `1` the other three
+started from, because [`initial_radius`](@ref) for a `μ`-scaled rule returns `μ₀‖g_0‖`.
+
 ## API
 
 ```@docs
@@ -181,4 +242,5 @@ needs_retrospective
 is_criticality_anchored
 asymptotic_regime
 retrospective_ratio
+last_branch
 ```

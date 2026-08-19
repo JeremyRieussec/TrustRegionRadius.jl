@@ -10,7 +10,8 @@
 # =============================================================================
 
 """
-    DeterministicTRSolver(nlp; rule, model, subsolver, params)
+    DeterministicTRSolver(nlp; rule, model, subsolver, params, x_ref,
+                          true_curvature, hessian_norm)
 
 Trust-region solver for a problem evaluated exactly: any `AbstractNLPModel`, or the
 full-batch view [`FullBatchNLP`](@ref) of a finite sum.

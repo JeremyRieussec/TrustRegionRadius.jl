@@ -16,13 +16,15 @@
 # =============================================================================
 
 """
-    ExpectationTRSolver(nlp; rule, model, subsolver, params, budget)
+    ExpectationTRSolver(nlp; rule, model, subsolver, params, x_ref,
+                        true_curvature, hessian_norm)
 
 Trust-region solver for an [`ExpectationNLP`](@ref).
 
 The sampling rule lives on the oracle, not here — it decides what the *oracle*
-returns, so it belongs with the oracle. `budget` is a safety cap on `N_k` applied on
-top of the rule's own `N_max`; the accuracy theory imposes none, so without a cap a
+returns, so it belongs with the oracle. So does the budget: `budget` is a keyword of
+[`ExpectationNLP`](@ref), not of this constructor. It is a safety cap on `N_k` applied
+on top of the rule's own `N_max`; the accuracy theory imposes none, so without a cap a
 criticality-anchored mechanism will ask for `Θ(Δ_k^{-4})` objective terms and get it.
 
 `TRParams(true_stop = :full)` and `:both` require `has_truth(prob)`. That is `true`

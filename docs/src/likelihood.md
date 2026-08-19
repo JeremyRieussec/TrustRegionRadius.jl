@@ -15,9 +15,19 @@ The **requires** column is enforced, not documented: [`required_problem`](@ref)
 declares it and the solver constructor checks it, so `BHHHModel` over anything that
 is not a negative log-likelihood is an `ArgumentError` naming both types.
 
-```julia
-tr_solve(ADNLPModel(f, x0); model = BHHHModel())        # ArgumentError
-tr_solve(FullBatchNLP(logistic); model = BHHHModel())   # fine
+```@example likelihood
+using TrustRegionRadius, ADNLPModels
+
+try
+    tr_solve(ADNLPModel(x -> sum(abs2, x), [1.0, 2.0]); model = BHHHModel())
+catch e
+    showerror(stdout, e)
+end
+```
+
+```@example likelihood
+logistic = LogisticRegression(K = 3, M = 200, seed = 1)
+tr_solve(FullBatchNLP(logistic); model = BHHHModel()).status
 ```
 
 That check exists because the failure it prevents is silent: applied to the wrong

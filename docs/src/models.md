@@ -62,10 +62,12 @@ Point a `SPDTarget` at a saddle to obtain a run in which every hypothesis of the
 theory holds, every ρ is successful, `‖g‖ → 0` — and the limit is a saddle. The failure is
 the model, and no radius rule can repair it.
 
-```julia
+```@example models
+using TrustRegionRadius, ADNLPModels
+
 nlp = ADNLPModel(p -> p[1]^4 - p[1]^3 + (0.25 - p[1]/2)*p[2]^2 + p[2]^4/4, [-0.5, 0.6])
 stats = tr_solve(nlp; rule = RDelta(), model = SPDTarget(target = [0.75, 0.0]))
-stats.solution     # ≈ [0.75, 0.0] — the saddle
+stats.solution     # the saddle
 ```
 
 ## Adding a model
@@ -86,6 +88,10 @@ Two further traits are worth declaring:
 TrustRegionRadius.reports_negative_curvature(::MyModel) = false  # if B ⪰ 0 by construction
 TrustRegionRadius.required_problem(::MyModel) = LikelihoodProblem  # if it needs one
 ```
+
+!!! note "Not executed"
+    The two blocks above are extension templates with elided right-hand sides. They are
+    shown for reference and are not run when the documentation is built.
 
 The first makes the solver warn when the model meets `SecondOrder` or `tol_H`, where it
 would be an expensive no-op reporting `:second_order` at a saddle. The second is checked

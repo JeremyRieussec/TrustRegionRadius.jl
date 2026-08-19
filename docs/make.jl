@@ -26,6 +26,7 @@ makedocs(
             "Sampling rules"      => "stochastic.md",
         ],
         "Second-order variants" => "second_order.md",
+        "Diagnostics"   => "diagnostics.md",
         "Benchmarking"  => "benchmarking.md",
         "API reference" => "api.md",
     ],

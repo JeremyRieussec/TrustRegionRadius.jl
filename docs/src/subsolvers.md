@@ -27,12 +27,19 @@ This is not a corner case. When the radius is small — a low `μ_max` in `RGrad
 `ζ` in `RDFO` — it happens at *every* iteration, and the method is gradient descent in
 disguise. Nothing in ρ, `‖g‖` or the radius trace reveals it. [`cg_step_info`](@ref) does:
 
-```julia
-info = cg_step_info(SteihaugCG(), ExactHessian(), nlp, x, g, Δ)
-info.cg_iters     # 1
-info.active       # true
-info.cos_cauchy   # 1.0 to machine precision
+```@example subsolvers
+using TrustRegionRadius, ADNLPModels, NLPModels
+
+nlp = ADNLPModel(x -> (1 - x[1])^2 + 100(x[2] - x[1]^2)^2, [-1.2, 1.0])
+x = [-1.2, 1.0]
+g = grad(nlp, x)
+info = cg_step_info(SteihaugCG(), ExactHessian(), nlp, x, g, 0.01)
+(info.cg_iters, info.active, info.cos_cauchy)
 ```
+
+A radius small enough to truncate CG on its first iteration returns the Cauchy point:
+`cg_iters == 1`, the constraint active, and `cos(s, -g) == 1`, so the model Hessian
+played no part in choosing the direction.
 
 `cg_iters == 1 && active` together with `cos_cauchy ≈ 1` certify the degeneration.
 
@@ -68,6 +75,9 @@ function TrustRegionRadius.solve_subproblem!(::MySolver, model::ModelHessian, nl
     return norm(s) ≥ (1 - 1e-8) * Δ     # active?
 end
 ```
+
+!!! note "Not executed"
+    An extension template with an elided body; shown for reference, not run.
 
 Take the curvature from `model`, not from `nlp`: that is what lets one solver serve every
 model Hessian.

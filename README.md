@@ -15,13 +15,21 @@ Companion code for *A survey of trust-region radius update mechanisms*, Parts I�
 
 Most trust-region codes fix one radius rule and vary everything else. This package does the
 opposite: the radius rule is a first-class, swappable component, and so are the two things it
-interacts with. Three orthogonal axes:
+interacts with. Four orthogonal axes:
 
 | axis | choices |
 |---|---|
-| **radius rule** | `RDelta`, `RStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RAdaptiveFanYuan`, `RRTR`, `RRTRGrad` |
-| **model Hessian** | `ExactHessian`, `LBFGSModel`, `SR1Model`, `ScaledIdentity`, `SPDTarget` |
-| **subproblem solver** | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCGLanczos` |
+| **radius rule** | `RDelta`, `RStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RRTR`, `RRTRGrad` |
+| **model Hessian** | `ExactHessian`, `LBFGSModel`, `SR1Model`, `ScaledIdentity`, `SPDTarget`, `BHHHModel`, `BHHH2Model`, `GaussNewtonModel` |
+| **subproblem solver** | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCGLanczos`, `EigenPoint` |
+| **sampling rule** | `FullBatch`, `FixedSample`, `RadiusProportional`, `NormTest`, `GeometricSample`, `InnerProductTest`, `OrthogonalityTest`, `AugmentedInnerProduct`, `SequentialEstimation`, `CertifiedDecrease` |
+
+The nine radius rules are the first-order ones; `SecondOrder(inner)` wraps any
+criticality-anchored rule, with the aliases `RGradTau`, `RGradCappedTau`, `RDFOTau`,
+`RAdaptiveGradTau` and `RRTRGradTau`.
+
+The sampling rule belongs to the *oracle*, not to `tr_solve`: build a `FiniteSumNLP`
+or an `ExpectationNLP` around it and pass that. There is no `sampling` keyword.
 
 Every combination runs through one driver, so a comparison measures the axis you varied and
 not the difference between two code bases.
@@ -63,19 +71,44 @@ Start with [`notebooks/tutorial.ipynb`](notebooks/tutorial.ipynb), or the
 One struct and two methods:
 
 ```julia
-mutable struct MyRule <: RadiusRule
-    up::Float64
-    down::Float64
+struct MyRule <: RadiusRule
+    γ1::Float64
+    γ2::Float64
+    γ3::Float64
+    function MyRule(; γ1 = 0.25, γ2 = 0.5, γ3 = 2.0)
+        check_factors(:MyRule; γ1 = γ1, γ2 = γ2, γ3 = γ3)
+        new(γ1, γ2, γ3)
+    end
 end
 
-TrustRegionRadius.initial_radius(::MyRule, Δ₀, g_norm) = Δ₀
+function TrustRegionRadius.update_radius!(r::MyRule, Δ::Float64, ρ::Float64, ::Bool,
+                                          η1::Float64, η2::Float64,
+                                          ::Float64, ::Float64, ::Float64)
+    ρ < η1  && return r.γ1 * Δ        # unsuccessful: the result MUST be < Δ
+    ρ >= η2 && return r.γ3 * Δ
+    return Δ
+end
 
-TrustRegionRadius.update_radius!(r::MyRule, Δ, ρ, η₁, η₂, s_norm, g_old, g_new) =
-    ρ ≥ η₁ ? Δ * r.up : Δ * r.down
+TrustRegionRadius.asymptotic_regime(::MyRule) = :bounded_below
 ```
 
-Then `tr_solve(nlp; rule = MyRule(2.0, 0.5))`. Add `reset_rule!` if the struct carries
-mutable state, and `needs_retrospective(::MyRule) = true` to be driven by ρ̃ rather than ρ.
+Then `tr_solve(nlp; rule = MyRule())`. Add `reset_rule!` if the struct carries mutable
+state, and `needs_retrospective(::MyRule) = true` to be driven by ρ̃ rather than ρ.
+
+Three things the earlier version of this template got wrong, all of which stop it
+dispatching or constructing:
+
+- `update_radius!` takes **nine** arguments, with `accepted::Bool` third. An
+  eight-argument method never dispatches and the rule is silently ignored.
+- `check_factors` takes **ASCII** keywords `γ1, γ2, γ3`. The Unicode aliases `η₁, η₂,
+  Δ₀` exist on `TRParams` but not on the rule validators.
+- Do **not** define `initial_radius` unless your rule ignores `Δ0`. The fallback
+  already returns `Δ0`, and an unannotated `initial_radius(::MyRule, Δ0, g_norm) = Δ0`
+  is *ambiguous* with it rather than an override.
+
+Every rule must strictly contract on an unsuccessful iteration. A rule that can return
+`Δ` unchanged after a rejection re-solves an identical subproblem for ever, since a
+rejected step leaves both the model and the iterate unchanged.
 
 ## Benchmarks
 

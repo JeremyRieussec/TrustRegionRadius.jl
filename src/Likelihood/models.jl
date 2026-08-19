@@ -25,7 +25,8 @@
 
 """
     LogisticRegression(X, y)
-    LogisticRegression(; K = 5, M = 2_000, β_star = nothing, seed = 0, intercept = true)
+    LogisticRegression(; K = 5, M = 2_000, β_star = nothing, seed = 0,
+                         intercept = true, signal = 1.0)
 
 Binary logistic regression: minimise the average negative log-likelihood
 
