@@ -80,14 +80,39 @@
               grad_sample_size(r, st)
 
         # Monotone: never decreases, and rises by at most `growth` per iteration.
+        #
+        # The growth cap is a statement about *consecutive iterations*, so the
+        # state has to advance for the test to touch it. Calling
+        # `grad_sample_size` twice on one `SamplingState` cannot: `_sequential_size!`
+        # caches on `st.k` and the second call returns `r.N_cached` verbatim, so
+        # `n2 == n1` identically. The assertion `n2 <= 2 * n1` that used to stand
+        # here held with `monotone = false` too, where the rule returns 491_706_137
+        # at every k and the cap is not applied at all.
         rm = SequentialEstimation(κ = 0.25, N_min = 1, N_max = 10^9,
                                   monotone = true, growth = 2.0, N_start = 10)
-        big  = SamplingState(1, 0.1, 2.0, 4.0, 4.0, 0.0, 0.0, 1e-3, 10)  # demands a lot
-        n1 = grad_sample_size(rm, big)
-        n2 = grad_sample_size(rm, big)
-        @test n2 <= 2 * n1                       # capped growth
-        small = SamplingState(3, 0.1, 2.0, 4.0, 4.0, 0.0, 0.0, 1e6, 10) # demands ~nothing
-        @test grad_sample_size(rm, small) >= n2  # never shrinks
+        # `big` demands far more than the cap allows, so the cap is what decides
+        # every size: N_start = 10 doubling to 20, 40, 80 rather than jumping to
+        # the ~4.9e8 the variance alone would ask for.
+        ns = [grad_sample_size(rm, SamplingState(k, 0.1, 2.0, 4.0, 4.0, 0.0, 0.0, 1e-3, 10))
+              for k in 1:4]
+        @test ns == [20, 40, 80, 160]
+        @test all(ns[i + 1] <= 2 * ns[i] for i in 1:(length(ns) - 1))   # capped growth
+        @test all(ns[i + 1] >= ns[i] for i in 1:(length(ns) - 1))       # never shrinks
+        # and the cap is doing the work: without it the very first size is enormous.
+        rf = SequentialEstimation(κ = 0.25, N_min = 1, N_max = 10^9,
+                                  monotone = false, growth = 2.0, N_start = 10)
+        @test grad_sample_size(rf, SamplingState(1, 0.1, 2.0, 4.0, 4.0, 0.0, 0.0, 1e-3, 10)) >
+              1000 * ns[1]
+
+        # Two queries within one iteration must agree. This is what keeps the
+        # gradient batch and the objective batch on common random numbers, and it
+        # is the assertion the repeated call above was mistaken for.
+        one_k = SamplingState(7, 0.1, 2.0, 4.0, 4.0, 0.0, 0.0, 1e-3, 10)
+        @test grad_sample_size(rm, one_k) == obj_sample_size(rm, one_k)
+        @test grad_sample_size(rm, one_k) == grad_sample_size(rm, one_k)
+
+        small = SamplingState(9, 0.1, 2.0, 4.0, 4.0, 0.0, 0.0, 1e6, 10) # demands ~nothing
+        @test grad_sample_size(rm, small) >= ns[end]  # never shrinks
         reset_sampling_rule!(rm)
         @test rm.N_last == 0
 
