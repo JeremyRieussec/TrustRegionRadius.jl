@@ -94,6 +94,30 @@
         @test !haskey(st2.solver_specific, :samples_total)
     end
 
+    @testset "a stalled sampled run leaves the two trajectories in step" begin
+        # The worse half of the :stalled off-by-one. `resample!` runs at the top of
+        # the iteration and pushes to Ng_hist, so on a stalled exit that was not
+        # traced :grad_sample_trajectory had k entries while :ratio_trajectory and
+        # :sigma_g2_trajectory had k-1, and the two sampled series disagreed with
+        # each other. Anything pairing N[i] against ρ[i] read the wrong iteration.
+        base = quad(); p = PerturbedSum(base, 2_000; σg = 1.0, seed = 11)
+        m = FiniteSumNLP(p, RadiusProportional(κ_g = 1.0, κ_f = 1.0); seed = 1)
+        st = tr_solve(m; rule = RDelta(), trace = true,
+                      params = TRParams(Δ0 = 1e-18, Δmax = 1e-18, tol = 1e-16,
+                                        max_iterations = 20))
+        ss = st.solver_specific
+        @test st.status === :stalled
+        @test st.iter >= 1
+        for key in (:ratio_trajectory, :grad_sample_trajectory, :sigma_g2_trajectory,
+                    :sigma_f2_trajectory, :step_trajectory, :accepted_trajectory)
+            @test length(ss[key]) == st.iter
+        end
+        for key in (:delta_trajectory, :grad_trajectory, :obj_trajectory,
+                    :true_grad_trajectory)
+            @test length(ss[key]) == st.iter + 1
+        end
+    end
+
     @testset "radius-proportional sampling grows N as Δ falls" begin
         base = quad(); p = PerturbedSum(base, 20_000; σg = 1.0, seed = 11)
         # No N_max: on a finite sum the cap is M, imposed by the problem

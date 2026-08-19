@@ -96,7 +96,16 @@ function SolverCore.solve!(solver::FiniteSumTRSolver,
 
         _tr_step!(c, nlp, st)
         st.failed  && (set_status!(stats, :exception); k -= 1; break)
-        st.stalled && (set_status!(stats, :stalled);   break)
+        # Traced before the break, unlike the :exception path above, which winds `k`
+        # back instead. A stalled iteration produced a real ρ and a real step norm;
+        # discarding them would leave the per-iteration trajectories one entry short
+        # of `st.iter` and silently misalign them against the per-state ones.
+        if st.stalled
+            set_status!(stats, :stalled)
+            trace_post!(tr, st)
+            sample_post!(sr, c, nlp, norm(true_gradient(nlp, c.x)))
+            break
+        end
         record_prediction!(nlp, Float64(st.predicted))
 
         trace_post!(tr, st)

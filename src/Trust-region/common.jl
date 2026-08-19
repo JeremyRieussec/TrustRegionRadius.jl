@@ -517,8 +517,21 @@ function _tr_step!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
 
     # Stagnation: |actual| at the rounding level of f and a numerically nil step.
     # ρ is then noise, every step is rejected, and the radius collapses for ever.
+    #
+    # The iteration nonetheless *happened*: a step was computed, a trial point was
+    # evaluated, and ρ was formed from real numbers. What did not happen is the
+    # acceptance test and the radius update, so the fields those would have written
+    # are set here instead of being left holding the previous iteration's values —
+    # a stale `branch` or `accepted` on the last entry of a trajectory is worse than
+    # no entry at all. The three loops trace this iteration before breaking, which
+    # is what keeps `length(:ratio_trajectory) == st.iter` on a `:stalled` exit.
     if abs(actual) <= eps(T) * max(one(T), abs(st.f)) && st.s_norm < eps(T)^T(0.75)
-        st.stalled = true; return nothing
+        st.stalled  = true
+        st.accepted = false
+        st.γ        = T(NaN)       # no step was taken, so no Dennis-Moré residual
+        st.ρ_rule   = st.ρ         # nothing retrospective ran; ρ is what there is
+        st.branch   = :none        # the radius rule was never consulted
+        return nothing
     end
 
     crit_old = st.crit
