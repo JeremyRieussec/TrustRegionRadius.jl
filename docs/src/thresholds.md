@@ -149,8 +149,10 @@ Four rules previously used `γ₂` for expansion, which is now the mild contract
 
 `RDelta`, `RStep` and `RDFO` keep their values; only their checks are tighter, since `γ₂ < 1`
 and `γ₁ ≤ γ₂` were previously unverified. Old keyword calls now throw, so none of these can
-pass silently. `MIGRATION.md` in the repository root lists the one case that can — a
-four-argument positional `RGrad(...)` written against the old signature.
+pass silently. `MIGRATION.md` in the repository root lists the case that can: a
+*positional* call, to any of the four rules that take positional factors, whose numbers
+happen to satisfy `0 < γ1 ≤ γ2 < 1 < γ3` under the new reading. The renumbering moved
+what slot 3 means, and nothing can distinguish that from a deliberate call.
 
 ## Radius bounds
 
