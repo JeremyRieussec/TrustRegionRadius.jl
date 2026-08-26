@@ -289,10 +289,50 @@ The mean of the likelihood scores, **plus** `λθ`.
 
 Overrides the `ScoredProblem` default so that the penalty enters the gradient
 once, after averaging, rather than being folded into every score column.
+
+One batched forward and backward pass, not `|batch|` unbatched ones. This used to
+call [`scores`](@ref) and sum the result, which built the whole `n × |batch|`
+score matrix in order to reduce it away immediately — the cost [`scores`](@ref)'s
+own docstring warns about, paid on every gradient rather than only where the
+per-observation terms are actually wanted. On the `n = 1156` network of
+experiment 11 that is 1.7 million entries materialised per gradient, and
+`batch_hess` asks for `2n = 2312` gradients to build one Hessian.
+
+Measured against the previous implementation: identical to `1.3e-15` relative,
+and between `6.8` and `7.9` times faster. It also turns the inner work from
+`|batch|` BLAS-2 calls into four BLAS-3 ones, which is what makes the layer
+portable to an array type that is not a `Matrix{Float64}`.
+
+!!! note "`scores` is unchanged and still needed"
+    BHHH and BHHH-2 are outer products of the per-observation scores, so they
+    need the columns kept apart. Only the *gradient*, which sums them, can take
+    the batched route.
 """
 function batch_grad!(p::MLPClassifier, θ, batch, g)
-    S = scores(p, θ, batch)
-    g .= vec(sum(S; dims = 2)) ./ length(batch)
+    W1, b1, W2, b2 = _unpack(p, θ)
+    N  = length(batch)
+    Xb = @view p.X[batch, :]                       # N × d
+
+    A1 = W1 * transpose(Xb)                        # h × N
+    A1 .+= b1
+    A1 .= tanh.(A1)
+
+    Z2 = W2 * A1                                   # c × N
+    Z2 .+= b2
+    Z2 .= exp.(Z2 .- maximum(Z2; dims = 1))        # same max-shift as `_softmax!`
+    Z2 ./= sum(Z2; dims = 1)
+    @inbounds for j in 1:N                         # dz₂ = softmax − onehot(y)
+        Z2[p.y[batch[j]], j] -= 1.0
+    end
+    DZ2 = Z2                                       # c × N
+    DZ1 = (transpose(W2) * DZ2) .* (1 .- A1 .^ 2)  # h × N
+
+    o = 0
+    copyto!(view(g, o+1 : o+p.h*p.d), vec(DZ1 * Xb));            o += p.h * p.d
+    copyto!(view(g, o+1 : o+p.h),     vec(sum(DZ1; dims = 2)));  o += p.h
+    copyto!(view(g, o+1 : o+p.c*p.h), vec(DZ2 * transpose(A1))); o += p.c * p.h
+    copyto!(view(g, o+1 : o+p.c),     vec(sum(DZ2; dims = 2)))
+    g ./= N
     p.λ > 0 && (g .+= p.λ .* θ)
     return nothing
 end
