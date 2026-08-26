@@ -70,11 +70,11 @@ const EXAMPLES = [
          p = linear_least_squares(n = 8, M = 20_000, noise = 0.1, seed = seed)
          (prob = p, x0 = zeros(p.n), model = () -> GaussNewtonModel(ridge = 1e-10))
      end),
-    ("LS-expfit", seed -> begin
-         p = exponential_fit(n_terms_model = 2, M = 4_000, noise = 0.05,
-                             misfit = 0.0, seed = seed)
-         (prob = p, x0 = [0.8, 0.4, 1.2, 1.2], model = () -> GaussNewtonModel(ridge = 1e-8))
-     end),
+    #("LS-expfit", seed -> begin
+    #     p = exponential_fit(n_terms_model = 2, M = 4_000, noise = 0.05,
+    #                         misfit = 0.0, seed = seed)
+    #     (prob = p, x0 = [0.8, 0.4, 1.2, 1.2], model = () -> GaussNewtonModel(ridge = 1e-8))
+    # end),
     ("Logistic",  seed -> begin
          p = LogisticRegression(K = 10, M = 20_000, seed = seed)
          (prob = p, x0 = zeros(p.n), model = () -> BHHHModel(ridge = 1e-10))
@@ -96,13 +96,13 @@ const SAMPLERS = [
     ("FixedSample(64)",      () -> FixedSample(64)),
     ("RadiusProportional",   () -> RadiusProportional(κ_g = 1.0, κ_f = 1.0)),
     ("NormTest(0.5)",        () -> NormTest(θ = 0.5)),
-    ("InnerProduct(0.9)",    () -> InnerProductTest(θ = 0.9, N_min = 8)),
-    ("Orthogonality(2.0)",   () -> OrthogonalityTest(ν = 2.0, N_min = 8)),
-    ("Augmented(0.9,2.0)",   () -> AugmentedInnerProduct(θ = 0.9, ν = 2.0,
-                                                         N_min = 8)),
+    # ("InnerProduct(0.9)",    () -> InnerProductTest(θ = 0.9, N_min = 8)),
+    # ("Orthogonality(2.0)",   () -> OrthogonalityTest(ν = 2.0, N_min = 8)),
+    # ("Augmented(0.9,2.0)",   () -> AugmentedInnerProduct(θ = 0.9, ν = 2.0,
+    #                                                     N_min = 8)),
     ("Geometric(8,1.06)",    () -> GeometricSample(N₀ = 8, rate = 1.06)),
-    ("Sequential(0.25)",     () -> SequentialEstimation(κ = 0.25, α = 0.05,
-                                                        N_min = 8)),
+    # ("Sequential(0.25)",     () -> SequentialEstimation(κ = 0.25, α = 0.05,
+    #                                                   N_min = 8)),
     # Certified decrease: N from the paired differences D_i = F(x_k,ξ_i) −
     # F(x_k+s_k,ξ_i) under common random numbers. This is the rule whose cost is
     # ‖g_k‖^{-2} with the step length cancelling, and the contrast with

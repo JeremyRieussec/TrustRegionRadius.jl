@@ -18,7 +18,7 @@
 #   julia --project=benchmark benchmark/experiments/exp3_zeta_sweep.jl
 # =============================================================================
 
-const ZETAS = [0.01, 0.1, 0.5, 1.0, 2.0, 10.0, 100.0]
+const ZETAS = [0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 10.0, 50.0, 100.0]
 
 function zeta_sweep()
     arch = ExperimentArchive(tag = "zeta_sweep")

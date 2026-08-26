@@ -6,6 +6,9 @@
 TRR_RESUME=benchmark/results/exp_2026-07-29_02-15-23_comparison \
   julia --project=benchmark benchmark/experiments/exp1_comparison.jl
 ```
+TRR_RESUME=benchmark/results/exp_2026-08-22_20-59-14_convergence_rate \ 
+julia --project=benchmark benchmark/experiments/exp7_convergence_rate.jl 
+
 This syntax is a feature of Unix shells (Bash, Zsh, etc.). It temporarily creates an environment variable only for the command that follows.
 
 Before starting Julia, the shell creates

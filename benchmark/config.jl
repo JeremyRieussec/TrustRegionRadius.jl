@@ -78,7 +78,7 @@ curvature estimate.
 """
 const SECOND_ORDER_PARAMS = TRParams(
     η              = 0.1,
-    η1             = 0.1,
+    η1             = 0.2,
     η2             = 0.9,
     Δ0             = 1.0,
     max_iterations = 10_000,
@@ -140,11 +140,12 @@ end
 # CUTEst problem selection
 # -----------------------------------------------------------------------------
 const MIN_VAR = 2
-const MAX_VAR = 2      # SteihaugCG is the default subsolver, so n is not
+const MAX_VAR = 200      # SteihaugCG is the default subsolver, so n is not
                          # capped by ExactMS's dense limit; keep it under that
                          # (200) so an exact-solver arm stays runnable.
 const MAX_CON = 0        # 0 = unconstrained only
-const PROBLEM_LIMIT = 3 # A campaign, not a smoke test. Three two-variable
+const PROBLEM_LIMIT = nothing
+                         # A campaign, not a smoke test. Three two-variable
                          # problems cannot resolve an asymptotic claim: runs are
                          # ten iterations long, so a 10% tail is one iteration
                          # and every tail statistic is quantised to {0, ½, 1}.

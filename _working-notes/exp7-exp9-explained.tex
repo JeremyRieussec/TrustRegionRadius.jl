@@ -1,0 +1,782 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=25mm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage[colorlinks=true,linkcolor=NavyAccent,urlcolor=NavyAccent,
+            citecolor=NavyAccent]{hyperref}
+
+\definecolor{NavyAccent}{HTML}{26405E}
+\definecolor{CodeBg}{HTML}{F2F5F8}
+\definecolor{Rule}{HTML}{C8CCD2}
+\definecolor{Alert}{HTML}{A8322D}
+\definecolor{Good}{HTML}{1F6F43}
+\definecolor{Muted}{HTML}{5B6470}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{CodeBg},
+  frame=single,
+  rulecolor=\color{Rule},
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  xleftmargin=0pt,
+  framexleftmargin=4pt,
+  framexrightmargin=4pt,
+  aboveskip=8pt,
+  belowskip=8pt,
+}
+
+% Long ttfamily identifiers cannot hyphenate; let TeX stretch the line instead of
+% overflowing the margin.
+\emergencystretch=3em
+
+\newcommand{\jl}[1]{\texttt{\small #1}}
+\newcommand{\file}[1]{\texttt{\small #1}}
+\newcommand{\finding}[1]{\textcolor{Alert}{\textbf{#1}}}
+\newcommand{\ok}[1]{\textcolor{Good}{#1}}
+\newcommand{\gnorm}{\lVert g\rVert}
+\newcommand{\gk}{\lVert g_k\rVert}
+
+\title{\vspace{-14mm}\textcolor{NavyAccent}{\textbf{What experiments 5, 7 and 9 do}}}
+\author{\normalsize A reading of \file{exp5\_inactivity.jl},
+        \file{exp7\_convergence\_rate.jl} and \file{exp9\_second\_order.jl}}
+\date{\normalsize Read against branch \file{checking-w-Claude-Code}, 2026-08-20}
+
+\begin{document}
+\maketitle
+\vspace{-6mm}
+
+\noindent\textcolor{Muted}{\small All three files are read as source and
+cross-checked against their most recent archived run (2026-08-19, 16:28). Where
+the code and the archive disagree, the disagreement is reported rather than
+reconciled.}
+
+\vspace{2mm}
+\hrule
+\vspace{4mm}
+
+\section*{Summary in one paragraph each}
+
+\textbf{Experiment 5} measures whether the trust-region constraint ever
+\emph{stops} binding. The claim is that the mechanisms split cleanly into two
+groups by this property, and -- the part that matters -- that the split is
+\emph{invisible} to a first-order convergence test, because both groups drive
+$\gk \to 0$ perfectly well. The observable is the fraction of late iterations with
+$\lVert s_k\rVert = \Delta_k$. Two configurations are included with parameters
+deliberately set below any plausible threshold, as a positive control: they should
+stay pinned at 1 while every other rule falls to 0.
+
+\smallskip
+\textbf{Experiment 7} measures the \emph{observed local convergence order} of each
+radius mechanism and tests a negative claim: that the order does \emph{not} depend
+on the mechanism. Once the trust-region constraint stops binding, the step is the
+unconstrained model minimiser, so the rate is a property of the model rather than
+of the radius rule. What the mechanism controls is \emph{when} that happens. The
+script therefore fits a rate only on the inactive tail of each run, and reports the
+fitted order beside $k_\star$, the first permanently inactive iteration.
+
+\smallskip
+\textbf{Experiment 9} tests what happens when a radius rule anchored to $\gnorm$
+meets a saddle point. At a saddle $\gnorm = 0$ exactly as at a minimiser, so a
+$\gnorm$-anchored rule sets the radius it would use at a solution and the run
+stops, reporting success. The script demonstrates the collapse, then shows that
+repairing it needs \emph{three} ingredients simultaneously: the criticality measure
+$\tau = \max\{\gnorm, -\lambda_{\min}\}$, a subsolver that can move along a
+negative-curvature direction, and a model capable of reporting negative curvature
+at all.
+
+\section{Experiment 5: direct measurement of inactivity}
+
+\subsection{The claim under test}
+
+Part~II divides the mechanisms by whether the trust-region constraint eventually
+stops binding. Experiment 5 measures that division directly, and its real subject
+is the second half of the claim:
+
+\begin{quote}
+\emph{Both groups drive $\gk \to 0$ monotonically. A first-order convergence test
+cannot tell them apart.}
+\end{quote}
+
+This is why the experiment exists as a separate script rather than as a column in
+the comparison table. A method whose constraint binds for ever still converges, and
+still reports \jl{:first\_order}. What it loses is the local rate: the step is never
+the unconstrained model minimiser, so the superlinear phase never arrives. Nothing
+in $\gk$, in $\rho_k$, or in the exit status reveals this. Only the activity flag
+does.
+
+\subsection{The observable, and the floor placed under it}
+
+The observable is \jl{:active\_trajectory}, the per-iteration Boolean
+$\lVert s_k\rVert = \Delta_k$ that the solver records when \jl{trace = true}. It is
+reduced to a single number per run by \jl{active\_fraction}, the share of the last
+10\% of iterations on which the constraint bound.
+
+That reduction is fragile on short runs, and the file guards it:
+
+\begin{lstlisting}
+const MIN_ITERS_FOR_TAIL = 30
+
+tail_active(r::RunRecord; frac::Float64 = 0.1) =
+    length(r.active_traj) < MIN_ITERS_FOR_TAIL ? NaN :
+        active_fraction(RecordView(r); tail = frac)
+\end{lstlisting}
+
+The reasoning is in the docstring: on a ten-iteration run the last 10\% is a single
+iteration, so \jl{tail\_active} can only be $0$ or $1$ and a table of such values
+measures rounding rather than asymptotics. Runs below the floor return \jl{NaN},
+are excluded from the mean, and are counted separately in a \jl{measured} column.
+Section~\ref{sec:exp5-selection} argues that this guard, while correct, has a
+consequence the summary table does not currently account for.
+
+\subsection{The rule list, and two deliberate controls}
+
+Experiment 5 does not use the shared \jl{RULES}. It defines its own six:
+
+\begin{longtable}{@{}p{34mm}p{112mm}@{}}
+\toprule
+\textbf{configuration} & \textbf{why it is in the list} \\
+\midrule
+\endhead
+\jl{RDelta} & Classical, criticality-blind. Expected to go inactive. \\[2pt]
+\jl{RStep} & Step-driven. Expected to go inactive. \\[2pt]
+\jl{RDFO($\zeta$=1)} & Criticality-anchored at a sane parameter. \\[2pt]
+\jl{RDFO($\zeta$=0.01)} & \textbf{Control.} $\zeta$ far below any plausible
+$\bar\kappa$. \\[2pt]
+\jl{RGrad} & Gradient-scaled, uncapped. \\[2pt]
+\jl{RGradCapped($\mu = \mu_{\max} = 0.05$)} & \textbf{Control.} The cap pins the
+multiplier below threshold, so the region can never grow enough to release. \\
+\bottomrule
+\end{longtable}
+
+The two controls are the design's strongest feature. The closing note says why
+explicitly: their parameters sit below any plausible
+$\bar\kappa$ ($4/\lambda^*_{\min}$ under \jl{:eigenvalue}, $8/\lambda^*_{\min}$
+under \jl{:neighbourhood}), so they \emph{should} stay pinned near 1 while every
+other rule falls to 0. An experiment that only shows the expected group succeeding
+proves much less than one carrying a case engineered to fail in a known way. If a
+control came out inactive, the measurement would be wrong.
+
+\subsection{What the script does}
+
+\begin{enumerate}[leftmargin=7mm,itemsep=3pt]
+  \item Opens an archive tagged \jl{inactivity} and records the six rules, the
+        shared \jl{SOLVER\_PARAMS} and the problem selection.
+  \item Runs the (problem $\times$ rule) grid through \jl{run\_experiment} with
+        \jl{trace = true} and, crucially, with\\
+        \jl{solver\_kwargs = (hessian\_norm = true,)}.
+  \item Reduces each run to a tail-active fraction and aggregates per rule.
+  \item Emits the three radius series \emph{per run}, without averaging.
+  \item Draws a bar chart of mean tail activity and a cumulative-activity plot.
+\end{enumerate}
+
+The \jl{hessian\_norm = true} in step 2 is not incidental. It makes the solver
+record $\lVert H_k\rVert$ at every iterate, which is what lets \jl{radius\_sums}
+form
+\[
+  \sum_k \frac{\Delta_k^2}{M_k},
+  \qquad M_k = L + \max_{i \le k}\lVert H_i\rVert ,
+\]
+and the in-line comment states the reason: \emph{that}, not $\sum_k\Delta_k^2$, is
+what Part~II proves finite for the criticality-anchored rules. The two agree only
+while $\{\lVert H_k\rVert\}$ is bounded, and that boundedness is precisely the
+hypothesis the $M_k$ form was introduced to drop. Experiment 5 is currently the
+only script in the suite that populates this column.
+
+\subsection{Two refusals to average}
+
+Both are deliberate and both are worth noting, because each removes a way the table
+could mislead.
+
+\textbf{No \jl{solved} filter.} The comment is blunt: a configuration trapped below
+its threshold is the one that exhausts the budget, so filtering on success would
+remove exactly the evidence the experiment exists to collect.
+
+\textbf{No averaging of the radius series across problems.} The second table prints
+one row per run. Averaging $\sum_k\Delta_k$ across problems would mix a divergent
+series with convergent ones and produce a number with no reading. The reader is
+told instead to read the shape across rules \emph{on the same problem}.
+
+\subsection{Outputs}
+
+\begin{longtable}{@{}p{52mm}p{94mm}@{}}
+\toprule
+\textbf{artefact} & \textbf{content} \\
+\midrule
+\endhead
+\file{exp5\_inactivity\_summary.txt} &
+Per rule: runs, solved, \jl{measured}, mean tail activity, \jl{never inactive}.
+\textbf{The table the claim lives in.} \\[3pt]
+\file{exp5\_radius\_series.txt} &
+Per run: iterations, status, $\sum\Delta_k$, $\sum\Delta_k^2$,
+$\sum\Delta_k^2/M_k$. \\[3pt]
+\file{exp5\_tail\_active.pdf} &
+Bar chart of mean tail activity with a dashed line at $0.5$. \\[3pt]
+\file{exp5\_active\_}\linebreak[0]\file{trajectory\_AKIVA.pdf} &
+Cumulative active fraction along the run. Named for the first problem in the set,
+and drawn for that one only. \\
+\bottomrule
+\end{longtable}
+
+\subsection{What the archived run shows}
+
+From \file{exp\_2026-08-19\_16-28-10\_inactivity}:
+
+\begin{lstlisting}
+rule                 runs   solved   measured  mean tail act never inactive
+RDelta                  3        3          1          0.000              0
+RStep                   3        3          1          0.800              0
+RDFO(z=1)               3        3          1          0.000              0
+RDFO(z=0.01)            3        3          2          0.600              1
+RGrad                   3        3          1          0.400              0
+RGradCapped             3        3          3          1.000              3
+\end{lstlisting}
+
+\ok{The headline claim is confirmed, and cleanly.} Every configuration solves
+every problem -- the \jl{solved} column is $3/3$ throughout -- while
+\jl{RGradCapped} never goes inactive on any of them. A first-order test sees six
+identical successes; the activity column sees two distinct behaviours. That is the
+experiment's whole point, and it lands.
+
+The controls behave as designed. \jl{RGradCapped($\mu = 0.05$)} sits at mean tail
+activity $1.000$ with $3/3$ never inactive. \jl{RDFO($\zeta = 0.01$)} is partly
+trapped at $0.600$ with $1/3$ never inactive. The cost of being trapped is visible
+in the second table: on BEALE, \jl{RDFO($\zeta$=0.01)} takes \textbf{2835}
+iterations against \jl{RDFO($\zeta$=1)}'s \textbf{7}, and \jl{RGradCapped} takes
+566. Same problem, same tolerance, same first-order status.
+
+The $\sum\Delta_k^2/M_k$ column is populated and spans eight orders of magnitude,
+from $6.6\times10^{-5}$ (\jl{RStep} on AKIVA) to $7.4\times10^{3}$ (\jl{RGrad} on
+BOXBODLS), which is the shape the section is meant to display.
+
+\subsection{The selection effect in the \jl{measured} column}
+\label{sec:exp5-selection}
+
+\finding{Four of the six rules have exactly one measured run.} The mean tail
+activity for \jl{RDelta}, \jl{RStep}, \jl{RDFO($\zeta$=1)} and \jl{RGrad} is
+computed from a single number, because their other two runs finished in fewer than
+\jl{MIN\_ITERS\_FOR\_TAIL = 30} iterations and were excluded.
+
+The exclusion is individually correct -- a one-iteration tail carries no
+information -- but the runs it removes are not a random sample. Run length is
+\emph{anti-correlated} with the property being measured: a rule that goes inactive
+converges quickly and falls below the floor, while a trapped rule grinds on and is
+always measured. So the untrapped group is assessed on its slowest, least
+representative runs, and the trapped group on all of its.
+
+Two consequences, and they pull in opposite directions.
+
+\begin{itemize}[leftmargin=6mm,itemsep=3pt]
+  \item \textbf{The bias is conservative for the headline claim.} A slow untrapped
+        run is the one most likely to still be binding late, so measuring only
+        those should \emph{inflate} the untrapped group's tail activity. Observing
+        \jl{RDelta} and \jl{RDFO($\zeta$=1)} at $0.000$ anyway is therefore stronger
+        evidence than it looks, not weaker.
+  \item \textbf{It is not conservative for the intermediate values.}
+        \jl{RStep} at $0.800$ and \jl{RGrad} at $0.400$ are each one run.
+        \jl{active\_fraction}'s own docstring notes that Part~II predicts no
+        intermediate value in the limit, so an intermediate value is a finding --
+        but on a single run of a few dozen iterations the likelier reading is
+        simply that the limit has not been reached. As printed, the table does not
+        distinguish those two readings.
+\end{itemize}
+
+The \jl{measured} column is what makes the effect visible at all, so the
+instrumentation is doing its job. What is missing is that the mean is presented
+beside it without qualification. Reporting the count alongside each mean in the
+manuscript, or raising the problem set until the floor stops binding, would settle
+it. As with experiment 7, the archived run used only three two-variable problems
+(AKIVA, BEALE, BOXBODLS), which is the root cause here too: on a larger problem set
+most runs would clear 30 iterations honestly.
+
+\section{Experiment 7: observed local convergence order}
+
+\subsection{The claim under test}
+
+Part~II's inactivity theorem says that beyond some iteration $k_\star$ the
+constraint $\lVert s_k\rVert \le \Delta_k$ never binds again. Beyond $k_\star$ the
+step solves the unconstrained model problem, so the iteration is the underlying
+(quasi-)Newton iteration and its rate is whatever that iteration gives. The radius
+rule has dropped out.
+
+The experiment turns this into two measurable columns:
+
+\begin{itemize}[leftmargin=6mm,itemsep=2pt]
+  \item \textbf{median order} should be roughly \emph{equal} across mechanisms;
+  \item \textbf{median $k_\star$} should \emph{differ} substantially, because that
+        is the quantity the mechanism decides.
+\end{itemize}
+
+A single table showing both is the whole experiment. Note that the claim is a
+negative one, which is why the design matters more than usual: an artefact of
+estimation would show up as a spurious difference in the first column.
+
+\subsection{Why the estimate must be conditioned on inactivity}
+
+This is the methodological core of the file, and the header says so explicitly.
+The order is estimated as the least-squares slope of $\log\lVert g_{k+1}\rVert$ on
+$\log\gk$: slope~1 is linear convergence, slope~2 quadratic.
+
+If the fit includes iterations where the constraint was \emph{active}, it mixes a
+linear phase (radius-limited steps) with the asymptotic phase (full Newton steps)
+and returns a slope between the two. That intermediate number looks like a
+convergence order and is not one. It is an artefact of pooling two regimes.
+
+So the script trims every trajectory to its inactive tail before fitting. The
+helper is small and worth reading in full:
+
+\begin{lstlisting}
+function inactive_tail(r::RunRecord)
+    (isempty(r.active_traj) || isempty(r.grad_traj)) && return Float64[]
+    k = length(r.active_traj)
+    while k >= 1 && !r.active_traj[k]
+        k -= 1
+    end
+    start = k + 1
+    start > length(r.active_traj) && return Float64[]
+    lo = min(start, length(r.grad_traj))
+    return r.grad_traj[lo:end]
+end
+\end{lstlisting}
+
+It walks backwards from the end of the activity flags over the run of trailing
+\jl{false} entries and returns the gradient trajectory from the first of them. If
+the constraint was still binding on the final iteration, the loop exits at
+\jl{k == length(...)} and the function returns an empty vector, which the caller
+treats as the finding for that configuration rather than as missing data.
+
+\subsection{What the script does, in order}
+
+\begin{enumerate}[leftmargin=7mm,itemsep=3pt]
+  \item Opens an archive tagged \jl{convergence\_rate} and writes the config,
+        recording the rule list, solver parameters and problem selection.
+  \item Builds the problem set from \jl{default\_problems()} (CUTEst when
+        available, the analytic set otherwise) and the configuration list from
+        \jl{rule\_configs()}, which pairs every rule in \jl{RULES} with the default
+        model (\jl{ExactHessian}) and default subsolver (\jl{SteihaugCG}).
+  \item \textbf{Overrides the tolerance to} $10^{-10}$. This is deliberate and is
+        the one parameter the experiment does not inherit: the asymptotic regime is
+        precisely what is being measured, so the run must be allowed deep into it.
+        The other four parameters are taken from \jl{SOLVER\_PARAMS} unchanged.
+  \item Runs everything through \jl{run\_experiment} with \jl{trace = true}, so each
+        result is a \jl{RunRecord} carrying the full trajectories.
+  \item For each record, computes three quantities and prints a row.
+  \item Aggregates per rule into a second table, and draws two figures.
+\end{enumerate}
+
+\subsection{The three quantities per run}
+
+\begin{longtable}{@{}p{34mm}p{112mm}@{}}
+\toprule
+\textbf{quantity} & \textbf{meaning} \\
+\midrule
+\endhead
+\jl{ki} $=k_\star$ &
+\jl{inactivity\_index(RecordView(r))}: the first iteration after which the
+constraint \emph{never} binds again. \jl{nothing} if it bound to the end. This is
+the quantity the mechanism controls. \\[3pt]
+\jl{fi} &
+\jl{findfirst(!, r.active\_traj)}: the first inactive iteration \emph{of any kind}.
+Printed as \jl{fi - 1} to count from zero. It differs from $k_\star$ whenever the
+region releases and then binds again, and printing both makes that visible. \\[3pt]
+\jl{ord} &
+\jl{estimate\_convergence\_order(tail)}, the least-squares slope described above,
+computed only when the tail has at least \jl{MIN\_TAIL = 6} points. \\
+\bottomrule
+\end{longtable}
+
+Each run is then classified into exactly one of three buckets, and this
+classification is the part that keeps the summary honest:
+
+\begin{itemize}[leftmargin=6mm,itemsep=2pt]
+  \item \jl{never} -- the constraint bound to the end, so there is no asymptotic
+        phase to fit;
+  \item \jl{short} -- fewer than six inactive iterations, too few for a regression
+        that means anything;
+  \item \emph{fitted} -- contributes its order and its $k_\star$ to the medians.
+\end{itemize}
+
+Only the third bucket enters the medians, and the counts of the other two are
+printed beside them. The file states the reason directly: a median taken over the
+runs that reached inactivity early is biased towards the mechanisms that get there
+early. Without those two counts the summary would flatter exactly the rules the
+experiment is trying to distinguish.
+
+There is also a deliberate omission. The loop applies \textbf{no} \jl{solved}
+filter. A run that never goes inactive is not dropped; it is counted in
+\jl{n\_never} and reported. As the comment puts it, that is the result for the
+configuration rather than a gap in the table.
+
+\subsection{Outputs}
+
+\begin{longtable}{@{}p{52mm}p{94mm}@{}}
+\toprule
+\textbf{artefact} & \textbf{content} \\
+\midrule
+\endhead
+\file{exp7\_conv\_order\_summary.txt} &
+One row per (problem, rule): status, iterations, $k_\star$, first inactive, tail
+length, fitted order. \\[3pt]
+\file{exp7\_order\_by\_rule.txt} &
+One row per rule: how many runs were fitted, short and never; median order; median
+$k_\star$. \textbf{This is the table the claim lives in.} \\[3pt]
+\file{exp7\_conv\_order\_boxplot.pdf} &
+Order per rule as a boxplot, with dashed lines at 1 and 2 so linear and quadratic
+are readable at a glance. \\[3pt]
+\file{exp7\_conv\_order\_scatter.pdf} &
+Order against $k_\star$. If the claim holds this is a horizontal band: the vertical
+position (rate) is common, the horizontal spread (when inactivity arrives) is not. \\
+\bottomrule
+\end{longtable}
+
+\subsection{What the archived run actually shows}
+
+From \file{exp\_2026-08-19\_16-28-37\_convergence\_rate}:
+
+\begin{lstlisting}
+rule               fitted    short    never   median order      median k*
+RDelta                  3        0        0          1.462              2
+RStep                   1        2        0          1.445              1
+RDFO                    3        0        0          1.444              1
+RGrad                   1        2        0          1.415              0
+RGradCapped             1        2        0          1.415              0
+RAdaptiveStep           1        2        0          1.445              1
+RAdaptiveGrad           3        0        0          1.611              6
+\end{lstlisting}
+
+Read as intended: the median order sits in a narrow band, $1.415$ to $1.611$,
+while median $k_\star$ ranges from $0$ to $6$. That is the predicted pattern --
+common rate, different onset.
+
+\finding{But the table must not be reported as it stands.} Three observations,
+in increasing order of seriousness.
+
+\begin{enumerate}[leftmargin=7mm,itemsep=3pt]
+  \item \textbf{The problem set is three problems} -- AKIVA, BEALE, BOXBODLS --
+        because the archived config records \jl{min\_var = 2} and \jl{max\_var = 2}.
+        \file{config.jl} anticipates exactly this and forbids it in a comment on
+        \jl{PROBLEM\_LIMIT}: \emph{``Three two-variable problems cannot resolve an
+        asymptotic claim \dots\ Drop to 3 deliberately when debugging a script, and
+        never report a table produced at that setting.''} The committed default is
+        \jl{MAX\_VAR = 200}; the archive was produced with it narrowed to 2.
+  \item \textbf{Four of the seven rules have a single fitted run.} A ``median'' over
+        one observation is that observation. The \jl{short} column shows it plainly
+        (2 of 3 runs discarded for four rules), which is the column doing its job,
+        but it means the narrow band in column four is not yet evidence.
+  \item \textbf{The archived config misstates the tolerance.} \jl{save\_config}
+        records \jl{SOLVER\_PARAMS}, whose \jl{tol} is $10^{-5}$, but the script
+        constructs and uses a local \jl{TRParams} with \jl{tol = 1e-10}. The
+        archive therefore documents a run that did not happen. This matters more
+        here than elsewhere, because the tolerance override is the one thing that
+        makes the asymptotic measurement possible.
+\end{enumerate}
+
+\section{Experiment 9: first- versus second-order anchoring}
+
+\subsection{The four claims}
+
+The header states four, and the script is organised around them.
+
+\begin{longtable}{@{}p{12mm}p{134mm}@{}}
+\toprule
+\endhead
+\textbf{(a)} &
+\textbf{The anchor collapse.} Started so the trajectory runs into a saddle, a
+$\gnorm$-anchored rule reports the radius it would use at a solution. \jl{RGrad}
+sets $\Delta = \mu\gnorm \to 0$ and halts. \jl{RDFO} finds $\Delta > \zeta\gnorm = 0$
+at every iteration and contracts geometrically. Under
+$\tau = \max\{\gnorm, -\lambda_{\min}\}$ both hold the radius at the scale of the
+available curvature and escape. \\[3pt]
+\textbf{(b)} &
+\textbf{The measure gap.} The ratio $\tau_k/\gk$ is $1$ wherever the model is
+convex and blows up near a saddle, which is exactly where a first-order diagnostic
+reports success. \\[3pt]
+\textbf{(c)} &
+\textbf{The subsolver is half the story.} $\tau$ keeps the radius positive; it does
+not make the step go anywhere. \\[3pt]
+\textbf{(d)} &
+\textbf{The model is the other half.} Over a positive semidefinite model
+$\lambda_{\min}\ge 0$ identically, so $\tau \equiv \gnorm$ and the apparatus is an
+expensive no-op that will still report \jl{:second\_order} at a saddle. \\
+\bottomrule
+\end{longtable}
+
+\subsection{The test problems}
+
+The primary problem is chosen so the failure needs no tuning to provoke:
+\[
+  f(x,y) \;=\; \tfrac{1}{4}x^4 - \tfrac{1}{2}x^2 + \tfrac{1}{2}y^2 ,
+  \qquad x_0 = (0,\,0.7).
+\]
+There is a saddle at the origin with $\lambda_{\min} = -1$ and minimisers at
+$(\pm 1, 0)$ with $f = -0.25$. The decisive property is that
+$\partial f/\partial x = x^3 - x$ vanishes when $x = 0$, so the $x$-axis is
+invariant under the gradient flow: a start on the $y$-axis runs \emph{exactly} into
+the saddle. No parameter has to be tuned to make the pathology appear, which is
+what makes it a fair test rather than a constructed one.
+
+A second problem, the monkey saddle $x^3 - 3xy^2 + z^2/2$ from $(0.05, 0, 0.6)$,
+guards against the finding being an artefact of one hand-built quartic. Its origin
+is a degenerate critical point with a cubic escape direction.
+
+The helper \jl{limit\_point(x)} classifies where a run stopped into
+\jl{"saddle"}, \jl{"minimiser"} or \jl{"other"} by distance, which is what turns a
+trajectory into a table entry.
+
+\subsection{Parts (a) and (c): the measure $\times$ subsolver grid}
+
+\jl{CONFIGS} is a $2\times2\times2$ grid: two rule families (\jl{RGrad},
+\jl{RDFO}) $\times$ two measures ($\gnorm$, $\tau$) $\times$ two subsolvers
+(\jl{SteihaugCG}, \jl{EigenPoint(SteihaugCG())}). Each entry also carries the
+\jl{tol\_H} it should run with: $-1$ disables the second-order stopping test for
+the $\gnorm$ rows, and $10^{-6}$ enables it for the $\tau$ rows. That coupling is
+correct -- a second-order stopping test over a first-order measure would be
+incoherent -- but it does mean measure and stopping test vary together, so the grid
+isolates the \emph{pair}, not the measure alone.
+
+\jl{anchor\_grid()} runs all eight through \jl{tr\_solve} directly rather than
+through the harness. The file explains why: each is a statement about a single
+trajectory on one hand-built problem, and routing it through the record layer would
+add machinery without adding information.
+
+\subsection{Part (b): the measure gap}
+
+Three figures carry it, and the separation between them is deliberate:
+
+\begin{itemize}[leftmargin=6mm,itemsep=2pt]
+  \item \jl{plot\_radius} -- $\Delta_k$ per configuration on a log scale: the
+        collapse under $\gnorm$, the plateau under $\tau$.
+  \item \jl{plot\_measure\_gap} -- $\tau_k$ and $\gk$ on the same axes.
+  \item \jl{plot\_gap\_ratio} -- the ratio $\tau_k/\gk$ on its own axis, with a
+        dotted line at $1$. The docstring justifies the duplication: the ratio is
+        the quantity with the interpretation, since where it exceeds $1$ the
+        gradient alone calls the point critical and the curvature does not.
+  \item \jl{plot\_curvature} -- $\lambda_{\min}(B_k)$, negative exactly where the
+        first-order measure misleads.
+\end{itemize}
+
+\subsection{Part (d): the blind spot}
+
+\jl{blind\_table()} holds the rule fixed at \jl{RGradTau} and the subsolver at
+\jl{EigenPoint}, and varies only the model over \jl{ExactHessian}, \jl{SR1Model}
+and \jl{LBFGSModel}. Because L-BFGS enforces $B \succ 0$ by construction,
+$\lambda_{\min} > 0$ always, so $\tau \equiv \gnorm$ and the second-order variant
+is identical to its first-order twin -- while still able to report
+\jl{:second\_order}, because that status is a claim about $B$ and not about
+$\nabla^2 f$. The file calls this the cheapest demonstration in the suite that a
+status is only as strong as the model behind it.
+
+\subsection{Part (e): the paired sweep}
+
+\jl{paired\_sweep} runs every $\gnorm$-anchored rule immediately beside its
+$\tau$-twin through the shared \jl{run\_experiment}, so these runs are archived and
+resumable like every other experiment. The table to read is
+\jl{success\_table(...; second\_order = true)}, whose last column counts
+\emph{certified} \jl{:second\_order} stops. The reading rule is stated crisply: a
+configuration solving every problem while certifying none has been running a
+first-order method under a second-order name.
+
+Two harness changes were needed for this part, and the file records both because
+each would have inverted the conclusion:
+
+\begin{itemize}[leftmargin=6mm,itemsep=2pt]
+  \item \jl{solved} now counts \jl{:second\_order}. It previously tested
+        \jl{=== :first\_order}, so a $\tau$-run that certified a minimiser scored as
+        a \emph{failure}. The columns doing best would have shown zero reliability.
+  \item \jl{RunRecord} now carries \jl{tau\_traj} and \jl{lambda\_traj}. They were
+        dropped, so claim (b) could not be plotted from an archived run at all.
+\end{itemize}
+
+\subsection{What the archived run actually shows}
+
+From \file{exp\_2026-08-19\_16-28-45\_second\_order}:
+
+\begin{lstlisting}
+configuration                      status   iters       limit        f(x*)      Delta_end
+RGrad  |g|  Steihaug          first_order       1      saddle     0.000000     0.000e+00
+RGrad  |g|  EigenPoint        first_order       1      saddle     0.000000     0.000e+00
+RGrad  tau  Steihaug              stalled       2      saddle     0.000000     2.000e+00
+RGrad  tau  EigenPoint       second_order       3   minimiser    -0.250000     0.000e+00
+RDFO   |g|  Steihaug          first_order       1      saddle     0.000000     5.000e-01
+RDFO   |g|  EigenPoint        first_order       3   minimiser    -0.250000     5.000e-01
+RDFO   tau  Steihaug              stalled       2      saddle     0.000000     2.000e+00
+RDFO   tau  EigenPoint       second_order       2   minimiser    -0.250000     1.000e+00
+\end{lstlisting}
+
+Claim (a) is confirmed sharply: both $\gnorm$-anchored \jl{RGrad} rows stop after
+\emph{one} iteration at the saddle with $\Delta_{\text{end}} = 0$, reporting
+\jl{:first\_order}. The table's own footnote makes the right point -- the run has
+not failed by its own test, since $\gnorm$ really is zero there. It is the test
+that is wrong.
+
+Both $\tau$ + Steihaug rows end \jl{:stalled} at the saddle with the radius held at
+$2.0$: $\tau$ kept the radius alive, and Steihaug had no reliable negative-curvature
+step to spend it on. That is claim (c)'s first half, cleanly.
+
+\finding{Claim (c) is contradicted by one row.} The header says only $\tau$
+\emph{and} \jl{EigenPoint} together reach a minimiser. But
+\jl{RDFO \ \textbar g\textbar \ EigenPoint} reaches the minimiser at $f = -0.25$
+with the first-order measure. For \jl{RDFO}, \jl{EigenPoint} alone was sufficient
+on this problem. The claim holds for \jl{RGrad} -- whose radius collapses to
+exactly zero, leaving nothing for any subsolver to work with -- but not as a
+general statement about both families. Either the claim should be narrowed to
+\jl{RGrad}, or the difference between the two families should be explained.
+
+\subsection{The blind-spot table is sharper than advertised}
+
+\begin{lstlisting}
+model                      status   iters       limit   min lambda_min   certified?
+ExactHessian         second_order       3   minimiser         -1.0000          yes
+SR1Model             second_order       1      saddle          1.0000          yes
+LBFGSModel           second_order       1      saddle          1.0000          yes
+\end{lstlisting}
+
+The intended finding is the \jl{LBFGSModel} row: a certified \jl{:second\_order}
+status at the saddle, from a model structurally incapable of seeing negative
+curvature.
+
+\finding{But \jl{SR1Model} behaves identically here}, and \file{config.jl} lists
+SR1 among the models that \emph{can} report $\lambda_{\min} < 0$. The reason is
+visible in the iteration count: the run stops after one iteration, and an SR1 model
+initialised at the identity has not yet absorbed a single secant pair, so it
+reports $\lambda_{\min} = 1$. The blind spot is therefore not only structural but
+also transient -- a model that could see the curvature has not yet had the chance.
+That is arguably a stronger result than the one claimed, and it is currently
+unremarked.
+
+\subsection{The paired sweep is thin}
+
+\begin{lstlisting}
+configuration              solved     median       mean  tail active  2nd order
+RGrad                      1/2          20.0       20.0        1.000     1/2
+RGradTau                   1/2           3.0        3.0        1.000     1/2
+RGradCapped                0/2            --         --           --     0/2
+RGradCappedTau             1/2           3.0        3.0        1.000     1/2
+RDFO                       1/2           2.0        2.0        0.500     1/2
+RDFOTau                    1/2           2.0        2.0        0.500     1/2
+RAdaptiveGrad              0/2            --         --           --     0/2
+RAdaptiveGradTau           1/2           2.0        2.0        0.500     1/2
+\end{lstlisting}
+
+With only two problems every cell is $0/2$, $1/2$ or $2/2$, and no configuration
+exceeds $1/2$. The within-pair comparison is still legible -- \jl{RGrad} takes 20
+iterations against \jl{RGradTau}'s 3, and \jl{RGradCapped} solves nothing while its
+$\tau$-twin solves one -- but the counts cannot support a reliability statement.
+More saddle problems are needed before this table carries weight in the manuscript.
+
+\section{Shared machinery both files rely on}
+
+\begin{longtable}{@{}p{40mm}p{106mm}@{}}
+\toprule
+\textbf{component} & \textbf{role} \\
+\midrule
+\endhead
+\jl{RunRecord} &
+One archived run: status, counts, and every trajectory, including
+\jl{tau\_traj} and \jl{lambda\_traj} for second-order runs. \\[3pt]
+\jl{RecordView} &
+Dresses a \jl{RunRecord} as a solver result so the package's diagnostics
+(\jl{inactivity\_index}, \jl{active\_fraction}, \jl{observed\_order}, \dots) apply
+unchanged to an archived run. Its docstring gives the reason: without it every
+experiment re-implements the same tail arithmetic, which is how a run and a table
+come to disagree. \\[3pt]
+\jl{run\_experiment} &
+Runs the (problem $\times$ config) grid, archiving and skipping work already
+present so a campaign can resume. \\[3pt]
+\jl{solved} &
+\jl{:first\_order} \emph{or} \jl{:second\_order}. \\[3pt]
+\jl{active\_fraction} &
+Share of the last \jl{tail} of a run on which the constraint bound. Used by
+experiment 5 through \jl{RecordView}. Its docstring records the prediction that no
+intermediate value survives in the limit, so one is a finding. \\[3pt]
+\jl{inactivity\_index} &
+$k_\star$, the first permanently inactive iteration, or \jl{nothing}. Used by
+experiments 5 and 7. \\[3pt]
+\jl{radius\_sums} &
+$\sum\Delta_k$, $\sum\Delta_k^2$ and $\sum\Delta_k^2/M_k$, the last being \jl{NaN}
+unless the run was traced with \jl{hessian\_norm = true}. \\[3pt]
+\jl{ExperimentArchive} &
+Timestamped directory with \file{experiment\_config.toml}, \file{tables/},
+\file{figures/} and \file{data/}, closed by \jl{finalize\_archive}. \\
+\bottomrule
+\end{longtable}
+
+\subsection*{A note on the two order estimators}
+
+There are two, and they are not interchangeable:
+
+\begin{itemize}[leftmargin=6mm,itemsep=2pt]
+  \item \jl{estimate\_convergence\_order(grad\_traj; tail)} in
+        \file{benchmark/harness.jl} takes a \emph{bare vector} and assumes the
+        caller has already trimmed it. Its docstring warns about this in a boxed
+        note. Experiment~7 uses this one, and does the trimming itself.
+  \item \jl{observed\_order(stats; after\_inactivity, last, use)} in
+        \file{src/Diagnostics/diagnostics.jl} takes a full result and does the
+        trimming internally, and additionally skips rejected steps.
+\end{itemize}
+
+Experiment 7's hand-rolled \jl{inactive\_tail} predates \jl{RecordView} being
+available to it, and duplicates logic \jl{observed\_order} already has. The two
+also differ in a detail that could move a reported number: \jl{observed\_order}
+filters out rejected steps before fitting, and \jl{estimate\_convergence\_order}
+does not. Consolidating on the former, called through a \jl{RecordView}, would
+remove the duplication and the discrepancy at once. Experiment 5 already takes
+that route for \jl{active\_fraction} and \jl{radius\_sums}.
+
+\section{Findings, collected}
+
+\begin{longtable}{@{}p{8mm}p{60mm}p{74mm}@{}}
+\toprule
+& \textbf{observation} & \textbf{consequence} \\
+\midrule
+\endhead
+1 & \textbf{exp5 and exp7} both ran on 3 two-variable problems &
+\file{config.jl} explicitly forbids reporting a table at that setting. Re-run at
+\jl{MAX\_VAR = 200} before either set of numbers is used. This is also the root
+cause of finding 8. \\[3pt]
+2 & exp7 records \jl{tol = 1e-5} in the archive but runs at \jl{1e-10} &
+The archive documents a run that did not happen. \jl{save\_config} should receive
+the local \jl{params}, not \jl{SOLVER\_PARAMS}. \\[3pt]
+3 & exp9 claim (c) contradicted by the \jl{RDFO \textbar g\textbar\ EigenPoint} row &
+That row reaches the minimiser without $\tau$. Narrow the claim to \jl{RGrad} or
+explain the difference between the families. \\[3pt]
+4 & exp9's SR1 row is blind for a different reason than L-BFGS &
+Structural blindness versus a model that has not yet learned. Worth stating; it
+strengthens the section. \\[3pt]
+5 & exp9's paired sweep has two problems &
+Every cell is $0/2$ or $1/2$. Add saddle problems before quoting reliability. \\[3pt]
+6 & All three files end with a \jl{PROGRAM\_FILE} guard &
+None can run standalone: \jl{RULES}, \jl{SOLVER\_PARAMS} and the harness come
+from \file{initialisation.jl}. The guard, and the usage line in each header, promise
+an entry point that does not work. This is the same defect that kept experiment 8
+out of the suite. \\[3pt]
+7 & exp7 duplicates \jl{observed\_order}'s trimming &
+And differs from it by not skipping rejected steps. \\[3pt]
+8 & exp5's \jl{measured} column hides a selection effect &
+Run length is anti-correlated with the property measured, so four of six rules are
+scored on a single, atypically slow run. The bias is conservative for the headline
+claim but not for the intermediate values (\jl{RStep} $0.800$, \jl{RGrad} $0.400$).
+Report $n$ beside each mean, or enlarge the problem set. \\[3pt]
+9 & exp5 is the only script populating $\sum\Delta_k^2/M_k$ &
+It passes \jl{solver\_kwargs = (hessian\_norm = true,)}. This is the column
+\jl{tab: sums} in the manuscript leaves provisional on every row, so the machinery
+to fill it already exists and is already exercised here. \\
+\bottomrule
+\end{longtable}
+
+\vspace{4mm}
+\noindent\textcolor{Muted}{\small Findings 1, 2 and 6 are defects in the
+instrumentation rather than in the science. Findings 3 and 4 concern what the
+manuscript may claim from experiment 9, and 5 and 8 concern how much weight the
+corresponding tables can carry. Finding 9 is an opportunity rather than a defect.}
+
+\end{document}
