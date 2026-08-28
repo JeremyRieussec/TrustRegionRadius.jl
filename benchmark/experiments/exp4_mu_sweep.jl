@@ -21,7 +21,7 @@
 #   julia --project=benchmark benchmark/experiments/exp4_mu_sweep.jl
 # =============================================================================
 
-const MUS = [0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 8.0, 64.0, 128.0]
+const MUS = [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
 
 function mu_sweep()
     arch = ExperimentArchive(tag = "mu_sweep")
