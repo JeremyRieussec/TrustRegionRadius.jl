@@ -208,7 +208,11 @@ function _steihaug!(sub::SteihaugCG, B, g::V, Δ::T, s::V, Hs::V,
         _apply_op!(Hd, B, d)
         dBd = dot(d, Hd)
 
-        if dBd <= 0                                   # negative curvature
+        # `!(dBd > 0)` rather than `dBd <= 0`: the latter is `false` for `NaN`,
+        # so a non-finite B·d fell through to `α = rs/dBd`, produced a NaN step
+        # and reported it INTERIOR. Written this way NaN takes the boundary
+        # branch, which `_to_boundary` resolves against the finite `s` and `Δ`.
+        if !(dBd > 0)                                 # negative or non-finite curvature
             τ = _to_boundary(s, d, Δ)
             @. s += τ * d
             @. Hs += τ * Hd
@@ -217,7 +221,9 @@ function _steihaug!(sub::SteihaugCG, B, g::V, Δ::T, s::V, Hs::V,
 
         α = rs / dBd
         @. cand = s + α * d
-        if norm(cand) >= Δ                            # boundary
+        # `!(norm(cand) < Δ)`, not `>= Δ`: NaN is not `>= Δ`, so a non-finite
+        # candidate used to be accepted as interior and carried forward.
+        if !(norm(cand) < Δ)                          # boundary, or non-finite
             τ = _to_boundary(s, d, Δ)
             @. s += τ * d
             @. Hs += τ * Hd
@@ -228,6 +234,10 @@ function _steihaug!(sub::SteihaugCG, B, g::V, Δ::T, s::V, Hs::V,
         @. Hs += α * Hd
         @. r -= α * Hd
         rs_new = dot(r, r)
+        # Stop on a non-finite residual as well as on a small one. `NaN < t` is
+        # false, so the recurrence used to run out its whole budget on a model
+        # that had already gone non-finite.
+        isfinite(rs_new) || return (true, j)
         sqrt(rs_new) < threshold && return (false, j)
         @. d = r + (rs_new / rs) * d
         rs = rs_new

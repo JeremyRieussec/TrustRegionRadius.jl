@@ -75,8 +75,14 @@ end
 # ------------------------------------------------------------------ D6
 sep("D6. Threshold on sin(x)/x")
 try
-    m = ADNLPModel(p -> (abs(p[1]) < 1e-12 ? 1.0 : sin(p[1])/p[1]), [10.954122], name="SINC1D")
-    println("  sinc_1d as written builds")
+    m = ADNLPModel(p -> sin(p[1])/p[1], [10.954122], name="SINC1D")   # fix 2 applied
+    st6 = tr_solve(m; rule = RDFO(γ1=G1, γ2=G2, γ3=G3, ζ=1.0, Δmin=0.0),
+                   model = ExactHessian(), subsolver = SteihaugCG(),
+                   params = TRParams(η=0.1, η1=0.1, η2=0.9, Δ0=1.0, Δmin=0.0,
+                                     tol=1e-10, max_iterations=5000), trace = true)
+    @printf("  builds and solves: %s  x = %.8f  tail active = %.3f
+",
+            st6.status, st6.solution[1], active_fraction(st6; tail = 0.1))
 catch e
     @printf("  BLOCKED at problem construction: %s\n", cut(e))
 end

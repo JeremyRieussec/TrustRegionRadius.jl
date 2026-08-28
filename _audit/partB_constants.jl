@@ -30,7 +30,7 @@ for T in (RDelta, RStep, RDFO, RGrad, RGradCapped, RAdaptiveStep,
           RAdaptiveGrad, RRTR, RRTRGrad)
     m = first(methods(update_radius!, (T, Float64, Float64, Bool, Float64, Float64,
                                        Float64, Float64, Float64)))
-    # argument names: #self#, r, Δ, ρ, accepted, η1, η2, s_norm, crit_old, crit_new
+    # argument names: #self#, r, Δ, ρ, accepted, η1, η2, s_norm, crit_old, crit_new  
     nms = Base.method_argnames(m)[2:end]
     lbl = ["Δ", "ρ", "accepted", "η1", "η2", "s_norm", "crit_old", "crit_new"]
     used = [lbl[i] for i in 1:8 if string(nms[i+1]) != "#unused#"]

@@ -718,8 +718,20 @@ expected 185; difference = +0
 
 ## Fix list, ordered by experiments unblocked
 
+ $$
+  \Delta_{k+1} = 
+  \begin{cases}
+      \gamma_1 \|s_k\| & \text{if } \rho_k < \eta_1, \\
+      \gamma_2 \Delta_k, \Delta_k) & \text{if } \rho_k \in [\eta_1, \eta_2), \\
+      \max(\Delta_k, \gamma_3 \|s_k\|) & \text{if } \rho_k \geq \eta_2,
+  \end{cases}
+$$
+where $0 < \gamma_1 \leq \gamma_2 \leq 1 < \gamma_3.$
+
+
 | # | file:line | change | unblocks |
 |--:|:--|:--|:--|
+| 0 | implement `Rdeltastep` | use definition presented before table  | **D1, D3, A1, A2, A4, A6** |
 | 1 | `src/Radius_updates/rules.jl:569` | relax `μ_max >= μ` to allow $\overline\mu<\mu_0$, clamping $\mu_0\leftarrow\min(\mu_0,\overline\mu)$ at construction, or let the plan set $\mu_0=\overline\mu$ | **D4b, A5** (and D3's grid at small $\overline\mu$) |
 | 2 | `PartIII-run-configs-v1.jl:120` | remove the traced branch from `sinc_1d`; `sin(x)/x` builds and solves without it, and the guard is unreachable from $x_0=10.95$ | **D6, A9** |
 | 3 | `src/Radius_updates/rules.jl:870-911` | add `γ2` and `μ_max` to `RRTRGrad` and the two missing branches | the §2.3 decision on whether $\Rgrtr$ joins the roster |

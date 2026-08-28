@@ -10,6 +10,8 @@
 #   RGradCapped       gradient-scaled with μ ≤ μ_max
 #   RAdaptiveStep     step-anchored, exponential factor      (Hei 2003)
 #   RAdaptiveGrad     μ *= R(ρ), Δ = μ‖g‖                    (Hei + Fan-Yuan)
+#   RAdaptiveGradCapped  the same with μ ≤ μ_max
+#   RDeltaStep        Δ on success, γ1‖s‖ on failure         (Part I)
 #   RRTR              retrospective                          (Bastin et al. 2010)
 #   RRTRGrad          retrospective gradient-scaled          (Fan-Pan-Song 2016)
 #
@@ -566,8 +568,13 @@ mutable struct RGradCapped <: RadiusRule
         check_factors(:RGradCapped; γ1 = γ1, γ2 = γ2, γ3 = γ3)
         check_bounds(:RGradCapped; Δmin = Δmin, Δmax = Δmax)
         μ > 0 || throw(ArgumentError("RGradCapped: need μ > 0, got $μ"))
-        μ_max >= μ || throw(ArgumentError("RGradCapped: need μ_max ≥ μ"))
-        new(float(γ1), float(γ2), float(γ3), float(μ), float(μ), float(μ_max),
+        μ_max > 0 || throw(ArgumentError("RGradCapped: need μ_max > 0, got $μ_max"))
+        # The appendix requires μ0 ≤ μ̄, and a sweep over μ̄ at fixed μ0 is the
+        # natural experiment: it varies the cap and nothing else. Rejecting
+        # μ̄ < μ0 made that sweep unconstructible below μ0. Clamp instead, so
+        # μ0 ≤ μ̄ still holds and the caller's cap is the one that binds.
+        μ0 = min(float(μ), float(μ_max))
+        new(float(γ1), float(γ2), float(γ3), μ0, μ0, float(μ_max),
             half_test, float(Δmin), float(Δmax), :none)
     end
 end
@@ -603,24 +610,24 @@ end
 # =============================================================================
 
 """
-    _r_exp(t, η1, γ1, γ2, γ3, λ1, λ2) -> Float64
+    _r_exp(t, η1, γ1, γ2, γ3, M, λ1, λ2) -> Float64
 
 The R-function of Hei (2003), in the normalisation of Part I: a non-decreasing
 `R_{η1} : ℝ → ℝ₊` with
 
     lim_{t→-∞} R = γ1,     R(t) ≤ γ2 for t < η1,
-    R(η1) = 1 + γ2,        lim_{t→+∞} R = γ3,
+    R(η1) = γ3,        lim_{t→+∞} R = M, with M > γ3
 
 realised as
 
     t < η1  →  γ1 + (γ2 − γ1) exp(λ1(t − η1))
-    t ≥ η1  →  (1 + γ2) + (γ3 − 1 − γ2)(1 − exp(−λ2(t − η1)))
+    t ≥ η1  →  γ3 + (M − γ3)(1 − exp(−λ2(t − η1)))
 
 Both pieces are increasing and the jump at `η1` is upward, so `R` is
 non-decreasing on ℝ. Since `R ≤ γ2 < 1` below `η1` and `η ≤ η1`, any rule that
 multiplies by `R(ρ_k)` contracts on unsuccessful iterations automatically.
 
-Requires `γ3 > 1 + γ2`, which is stronger than the standing `γ3 > 1`: the value
+Requires `M > γ3`: the value
 at the threshold must itself be exceeded by the asymptote.
 
 `t = -Inf` (the solver's convention for a non-positive predicted reduction, and
@@ -628,28 +635,32 @@ for a non-finite trial objective) gives `exp(-Inf) = 0` and hence `R = γ1`, the
 most aggressive contraction — which is the intended branch.
 """
 @inline function _r_exp(t::Float64, η1::Float64,
-                        γ1::Float64, γ2::Float64, γ3::Float64,
+                        γ1::Float64, γ2::Float64, γ3::Float64, M::Float64,
                         λ1::Float64, λ2::Float64)
     if t < η1
         return γ1 + (γ2 - γ1) * exp(λ1 * (t - η1))
     else
-        return (1.0 + γ2) + (γ3 - 1.0 - γ2) * (1.0 - exp(-λ2 * (t - η1)))
+        return γ3 + (M - γ3) * (1.0 - exp(-λ2 * (t - η1)))
     end
 end
 
 "Default Hei constants, shared by the adaptive rules."
-const HEI_DEFAULTS = (γ1 = 0.0625, γ2 = 0.5, γ3 = 4.0, λ1 = 5.0, λ2 = 5.0)
+const HEI_DEFAULTS = (γ1 = 0.01, γ2 = 0.9, γ3 = 1.5, M = 5.0, λ1 = 5.0, λ2 = 5.0)
 
 """
-    check_hei_factors(name, γ1, γ2, γ3, λ1, λ2) -> nothing
+    check_hei_factors(name, γ1, γ2, γ3, M, λ1, λ2) -> nothing
 
-`check_factors` plus the two requirements specific to the R-function:
-`γ3 > 1 + γ2` and positive rates.
+`check_factors` plus the requirements specific to the R-function:
+`0 < γ1 ≤ γ2 < 1 < γ3 < M` and positive rates.
+
+`M` is the asymptote of `R` and `γ3` its value at the threshold, so the
+condition is `M > γ3`. It replaces the earlier `γ3 > 1 + γ2`, which belonged to
+the previous normalisation in which `R(η1) = 1 + γ2` and `γ3` was the asymptote.
 """
-function check_hei_factors(name::Symbol, γ1, γ2, γ3, λ1, λ2)
+function check_hei_factors(name::Symbol, γ1, γ2, γ3, M, λ1, λ2)
     check_factors(name; γ1 = γ1, γ2 = γ2, γ3 = γ3)
-    γ3 > 1 + γ2 || throw(ArgumentError(
-        "$name: the R-function needs γ3 > 1 + γ2, got γ3 = $γ3, γ2 = $γ2"))
+    M > γ3 || throw(ArgumentError(
+        "$name: the R-function needs M > γ3, got M = $M, γ3 = $γ3"))
     (λ1 > 0 && λ2 > 0) || throw(ArgumentError("$name: need λ1 > 0 and λ2 > 0"))
     return nothing
 end
@@ -672,18 +683,19 @@ mutable struct RAdaptiveStep <: RadiusRule
     γ1::Float64
     γ2::Float64
     γ3::Float64
+    M::Float64
     λ1::Float64
     λ2::Float64
     Δmin::Float64
     Δmax::Float64
     branch::Symbol
     function RAdaptiveStep(; γ1::Real = HEI_DEFAULTS.γ1, γ2::Real = HEI_DEFAULTS.γ2,
-                             γ3::Real = HEI_DEFAULTS.γ3, λ1::Real = HEI_DEFAULTS.λ1,
-                             λ2::Real = HEI_DEFAULTS.λ2,
+                             γ3::Real = HEI_DEFAULTS.γ3, M::Real = HEI_DEFAULTS.M,
+                             λ1::Real = HEI_DEFAULTS.λ1, λ2::Real = HEI_DEFAULTS.λ2,
                              Δmin::Real = 1e-14, Δmax::Real = Inf)
-        check_hei_factors(:RAdaptiveStep, γ1, γ2, γ3, λ1, λ2)
+        check_hei_factors(:RAdaptiveStep, γ1, γ2, γ3, M, λ1, λ2)
         check_bounds(:RAdaptiveStep; Δmin = Δmin, Δmax = Δmax)
-        new(float(γ1), float(γ2), float(γ3), float(λ1), float(λ2),
+        new(float(γ1), float(γ2), float(γ3), float(M), float(λ1), float(λ2),
             float(Δmin), float(Δmax), :none)
     end
 end
@@ -691,7 +703,7 @@ end
 function update_radius!(r::RAdaptiveStep, ::Float64, ρ::Float64, ::Bool,
                         η1::Float64, ::Float64,
                         s_norm::Float64, ::Float64, ::Float64)
-    f = _r_exp(ρ, η1, r.γ1, r.γ2, r.γ3, r.λ1, r.λ2)
+    f = _r_exp(ρ, η1, r.γ1, r.γ2, r.γ3, r.M, r.λ1, r.λ2)
     # The Hei factor is continuous, so the branch is read off the factor itself.
     r.branch = f > 1 ? :expand : f < 1 ? :contract : :hold
     return _clamp_radius(f * s_norm, r.Δmin, r.Δmax)
@@ -726,6 +738,7 @@ mutable struct RAdaptiveGrad <: RadiusRule
     γ1::Float64
     γ2::Float64
     γ3::Float64
+    M::Float64
     λ1::Float64
     λ2::Float64
     Δmin::Float64
@@ -733,13 +746,13 @@ mutable struct RAdaptiveGrad <: RadiusRule
     branch::Symbol
     function RAdaptiveGrad(; μ::Real = 1.0,
                              γ1::Real = HEI_DEFAULTS.γ1, γ2::Real = HEI_DEFAULTS.γ2,
-                             γ3::Real = HEI_DEFAULTS.γ3, λ1::Real = HEI_DEFAULTS.λ1,
-                             λ2::Real = HEI_DEFAULTS.λ2,
+                             γ3::Real = HEI_DEFAULTS.γ3, M::Real = HEI_DEFAULTS.M,
+                             λ1::Real = HEI_DEFAULTS.λ1, λ2::Real = HEI_DEFAULTS.λ2,
                              Δmin::Real = 0.0, Δmax::Real = Inf)
-        check_hei_factors(:RAdaptiveGrad, γ1, γ2, γ3, λ1, λ2)
+        check_hei_factors(:RAdaptiveGrad, γ1, γ2, γ3, M, λ1, λ2)
         check_bounds(:RAdaptiveGrad; Δmin = Δmin, Δmax = Δmax)
         μ > 0 || throw(ArgumentError("RAdaptiveGrad: need μ > 0, got $μ"))
-        new(float(μ), float(μ), float(γ1), float(γ2), float(γ3),
+        new(float(μ), float(μ), float(γ1), float(γ2), float(γ3), float(M),
             float(λ1), float(λ2), float(Δmin), float(Δmax), :none)
     end
 end
@@ -750,10 +763,160 @@ reset_rule!(r::RAdaptiveGrad) = (r.μ = r.μ0; r.branch = :none; nothing)
 is_criticality_anchored(::RAdaptiveGrad) = true
 asymptotic_regime(::RAdaptiveGrad) = :vanishing
 
-function update_radius!(r::RAdaptiveGrad, ::Float64, ρ::Float64, ::Bool,
-                        η1::Float64, ::Float64,
-                        ::Float64, ::Float64, crit_new::Float64)
-    R = _r_exp(ρ, η1, r.γ1, r.γ2, r.γ3, r.λ1, r.λ2)
+# =============================================================================
+# RDeltaStep — Δ on the successful branches, ‖s‖ on failure
+# =============================================================================
+
+"""
+    RDeltaStep(; γ1 = 0.25, γ2 = 0.5, γ3 = 2.0, Δmin = 0.0, Δmax = Inf)
+
+`R-delta-step` of Part I: the classical rule with an aggressive decrease taken
+from the *step* rather than from the radius.
+
+    ρ_k < η1        →  Δ ← γ1 ‖s_k‖
+    η1 ≤ ρ_k < η2   →  Δ ← γ2 Δ_k
+    ρ_k ≥ η2        →  Δ ← γ3 Δ_k
+
+It is the mirror image of [`RStep`](@ref), which rebuilds the radius from the
+step on *every* branch. Here only the unsuccessful branch does, so the radius
+keeps its own history while a rejected step is punished by how short it was.
+That matters when the model is poor but the region is not: `‖s_k‖` can be far
+below `Δ_k`, and contracting from `Δ_k` would leave the region far larger than
+anything the model has been trusted to do.
+
+Unlike every other rule in the package this one admits `γ2 = 1`, which the
+appendix states explicitly: the middle branch then holds the radius rather than
+shrinking it, and admissibility still follows from the first branch because
+`γ1 < 1` and `η ≤ η1`.
+"""
+mutable struct RDeltaStep <: RadiusRule
+    γ1::Float64
+    γ2::Float64
+    γ3::Float64
+    Δmin::Float64
+    Δmax::Float64
+    branch::Symbol
+    function RDeltaStep(; γ1::Real = 0.25, γ2::Real = 0.5, γ3::Real = 2.0,
+                          Δmin::Real = 0.0, Δmax::Real = Inf)
+        # γ2 ≤ 1 here, not γ2 < 1, so `check_factors` cannot be used for it.
+        0 < γ1 || throw(ArgumentError("RDeltaStep: need γ1 > 0, got γ1 = $γ1"))
+        γ1 <= γ2 <= 1 || throw(ArgumentError(
+            "RDeltaStep: need γ1 ≤ γ2 ≤ 1, got γ1 = $γ1, γ2 = $γ2"))
+        γ3 > 1 || throw(ArgumentError("RDeltaStep: need γ3 > 1, got γ3 = $γ3"))
+        check_bounds(:RDeltaStep; Δmin = Δmin, Δmax = Δmax)
+        new(float(γ1), float(γ2), float(γ3), float(Δmin), float(Δmax), :none)
+    end
+end
+
+RDeltaStep(γ1::Real, γ2::Real, γ3::Real) = RDeltaStep(; γ1 = γ1, γ2 = γ2, γ3 = γ3)
+
+function update_radius!(r::RDeltaStep, Δ::Float64, ρ::Float64, ::Bool,
+                        η1::Float64, η2::Float64,
+                        s_norm::Float64, ::Float64, ::Float64)
+    Δnew, b = ρ < η1  ? (r.γ1 * s_norm, :contract) :
+              ρ < η2  ? (r.γ2 * Δ,      :shrink)   :
+                        (r.γ3 * Δ,      :expand)
+    r.branch = b
+    return _clamp_radius(Δnew, r.Δmin, r.Δmax)
+end
+
+asymptotic_regime(::RDeltaStep) = :bounded_below
+
+# =============================================================================
+# RAdaptiveGradCapped — RAdaptiveGrad with μ ≤ μ_max
+# =============================================================================
+
+"""
+    RAdaptiveGradCapped(; μ = 1.0, μ_max = 1.0, γ1, γ2, γ3, M, λ1, λ2,
+                          Δmin = 0.0, Δmax = Inf)
+
+[`RAdaptiveGrad`](@ref) with the cap `μ_k ≤ μ_max`, i.e.
+`RAdaptiveGrad(ω, μ̄)` of the appendix:
+
+    ρ_k ≥ η2 and ‖s_k‖ ≤ ½Δ_k  →  μ unchanged
+    otherwise                   →  μ ← min(R_{η1}(ρ_k) μ_k, μ_max)
+
+The cap is what the asymptotic results needing `Δ_k → 0` assume, and it carries
+the same cost as it does for [`RGradCapped`](@ref): eventual inactivity now
+requires `μ_max > κ̄`, and below that the region binds at every iteration while
+ρ stays healthy and `‖g‖` keeps falling.
+
+`μ0` is clamped to `μ_max` when the caller asks for more, so a sweep over the
+cap at fixed `μ0` stays constructible below `μ0`.
+"""
+mutable struct RAdaptiveGradCapped <: RadiusRule
+    μ::Float64
+    μ0::Float64
+    μ_max::Float64
+    γ1::Float64
+    γ2::Float64
+    γ3::Float64
+    M::Float64
+    λ1::Float64
+    λ2::Float64
+    Δmin::Float64
+    Δmax::Float64
+    branch::Symbol
+    function RAdaptiveGradCapped(; μ::Real = 1.0, μ_max::Real = 1.0,
+                                   γ1::Real = HEI_DEFAULTS.γ1, γ2::Real = HEI_DEFAULTS.γ2,
+                                   γ3::Real = HEI_DEFAULTS.γ3, M::Real = HEI_DEFAULTS.M,
+                                   λ1::Real = HEI_DEFAULTS.λ1, λ2::Real = HEI_DEFAULTS.λ2,
+                                   Δmin::Real = 0.0, Δmax::Real = Inf)
+        check_hei_factors(:RAdaptiveGradCapped, γ1, γ2, γ3, M, λ1, λ2)
+        check_bounds(:RAdaptiveGradCapped; Δmin = Δmin, Δmax = Δmax)
+        μ > 0 || throw(ArgumentError("RAdaptiveGradCapped: need μ > 0, got $μ"))
+        μ_max > 0 || throw(ArgumentError(
+            "RAdaptiveGradCapped: need μ_max > 0, got $μ_max"))
+        μ0 = min(float(μ), float(μ_max))
+        new(μ0, μ0, float(μ_max), float(γ1), float(γ2), float(γ3), float(M),
+            float(λ1), float(λ2), float(Δmin), float(Δmax), :none)
+    end
+end
+
+initial_radius(r::RAdaptiveGradCapped, ::Float64, g_norm::Float64) =
+    _clamp_radius(r.μ * g_norm, r.Δmin, r.Δmax)
+reset_rule!(r::RAdaptiveGradCapped) = (r.μ = r.μ0; r.branch = :none; nothing)
+is_criticality_anchored(::RAdaptiveGradCapped) = true
+asymptotic_regime(::RAdaptiveGradCapped) = :vanishing
+
+function update_radius!(r::RAdaptiveGradCapped, Δ::Float64, ρ::Float64, ::Bool,
+                        η1::Float64, η2::Float64,
+                        s_norm::Float64, ::Float64, crit_new::Float64)
+    if ρ >= η2 && s_norm <= 0.5 * Δ
+        r.branch = :hold
+        return _clamp_radius(r.μ * crit_new, r.Δmin, r.Δmax)
+    end
+    R = _r_exp(ρ, η1, r.γ1, r.γ2, r.γ3, r.M, r.λ1, r.λ2)
+    if !isfinite(R)
+        r.branch = :hold
+        return _clamp_radius(r.μ * crit_new, r.Δmin, r.Δmax)
+    end
+    wanted = max(r.μ * R, 1e-300)
+    r.μ = min(wanted, r.μ_max)
+    r.branch = wanted > r.μ_max ? :expand_capped :
+               R > 1            ? :expand        :
+               R < 1            ? :contract      : :hold
+    return _clamp_radius(r.μ * crit_new, r.Δmin, r.Δmax)
+end
+
+function update_radius!(r::RAdaptiveGrad, Δ::Float64, ρ::Float64, ::Bool,
+                        η1::Float64, η2::Float64,
+                        s_norm::Float64, ::Float64, crit_new::Float64)
+    # The hold branch of the appendix: a very successful iteration whose step
+    # stayed inside half the region leaves μ alone. Without it the rule grows μ
+    # on every very successful iteration regardless of the step, which is a
+    # different rule from the one Part III states.
+    if ρ >= η2 && s_norm <= 0.5 * Δ
+        r.branch = :hold
+        return _clamp_radius(r.μ * crit_new, r.Δmin, r.Δmax)
+    end
+    R = _r_exp(ρ, η1, r.γ1, r.γ2, r.γ3, r.M, r.λ1, r.λ2)
+    # A non-finite ratio must not reach μ: `max(NaN, x)` is NaN, and μ is
+    # carried across iterations, so one NaN would poison the rule for good.
+    if !isfinite(R)
+        r.branch = :hold
+        return _clamp_radius(r.μ * crit_new, r.Δmin, r.Δmax)
+    end
     r.μ = max(r.μ * R, 1e-300)
     r.branch = R > 1 ? :expand : R < 1 ? :contract : :hold
     return _clamp_radius(r.μ * crit_new, r.Δmin, r.Δmax)
@@ -869,25 +1032,32 @@ on a rejected step `crit_{k+1} = crit_k`, so leaving μ untouched returns exactl
 """
 mutable struct RRTRGrad <: RadiusRule
     γ1::Float64
+    γ2::Float64
     γ3::Float64
     μ::Float64
     μ0::Float64
+    μ_max::Float64
     η̃₁::Float64
     η̃₂::Float64
     half_test::Bool
     Δmin::Float64
     Δmax::Float64
     branch::Symbol
-    function RRTRGrad(; γ1::Real = 0.25, γ3::Real = 2.0, μ::Real = 1.0,
+    function RRTRGrad(; γ1::Real = 0.25, γ2::Real = 0.5, γ3::Real = 2.0,
+                        μ::Real = 1.0, μ_max::Real = Inf,
                         η̃₁::Real = 0.05, η̃₂::Real = 0.9,
                         half_test::Bool = true,
                         Δmin::Real = 0.0, Δmax::Real = Inf)
-        check_factors(:RRTRGrad; γ1 = γ1, γ3 = γ3)
+        check_factors(:RRTRGrad; γ1 = γ1, γ2 = γ2, γ3 = γ3)
         check_bounds(:RRTRGrad; Δmin = Δmin, Δmax = Δmax)
         μ > 0 || throw(ArgumentError("RRTRGrad: need μ > 0, got $μ"))
+        μ_max > 0 || throw(ArgumentError("RRTRGrad: need μ_max > 0, got $μ_max"))
         0 < η̃₁ <= η̃₂ < 1 || throw(ArgumentError("RRTRGrad: need 0 < η̃₁ ≤ η̃₂ < 1"))
-        new(float(γ1), float(γ3), float(μ), float(μ), float(η̃₁), float(η̃₂),
-            half_test, float(Δmin), float(Δmax), :none)
+        # As for RGradCapped: μ0 ≤ μ̄ is the appendix's requirement, so clamp
+        # rather than reject, and a sweep over μ̄ at fixed μ0 stays constructible.
+        μ0 = min(float(μ), float(μ_max))
+        new(float(γ1), float(γ2), float(γ3), μ0, μ0, float(μ_max),
+            float(η̃₁), float(η̃₂), half_test, float(Δmin), float(Δmax), :none)
     end
 end
 
@@ -903,8 +1073,15 @@ function update_radius!(r::RRTRGrad, Δ::Float64, ρ̃::Float64, accepted::Bool,
                         s_norm::Float64, ::Float64, crit_new::Float64)
     if !accepted || ρ̃ < r.η̃₁
         r.μ = _shrink_mu(r.μ, r.γ1); r.branch = :contract
-    elseif ρ̃ >= r.η̃₂ && (!r.half_test || s_norm > 0.5 * Δ)
-        r.μ *= r.γ3;                 r.branch = :expand
+    elseif ρ̃ < r.η̃₂
+        # The intermediate branch of the appendix: a mildly successful
+        # retrospective ratio SHRINKS the multiplier. It used to hold μ fixed
+        # here, which is a branch the rule does not have.
+        r.μ = _shrink_mu(r.μ, r.γ2); r.branch = :shrink
+    elseif !r.half_test || s_norm > 0.5 * Δ
+        wanted = r.γ3 * r.μ
+        r.μ = min(wanted, r.μ_max)
+        r.branch = wanted > r.μ_max ? :expand_capped : :expand
     else
         r.branch = :hold
     end

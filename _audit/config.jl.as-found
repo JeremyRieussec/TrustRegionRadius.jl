@@ -25,38 +25,17 @@ const SOLVER_PARAMS = TRParams(
 # -----------------------------------------------------------------------------
 # The mechanisms under comparison
 # -----------------------------------------------------------------------------
-# ONE set of constants for every rule. A comparison at mixed constants measures
-# the constants as much as the mechanism, and the roster previously ran RStep at
-# γ2 = 0.80, the Hei pair at γ1 = 0.0625, γ3 = 4.0, RDFO at ζ = 100, and a radius
-# floor of 1e-14 on three rules and 0 on the rest.
-#
-# γ3 = 2.0 satisfies the Hei requirement γ3 > 1 + γ2 = 1.5, so the adaptive pair
-# runs at the same factors as everything else. Δmin = 0 everywhere: the
-# asymptotic claims of Part II are about the unguarded rules, and a floor on some
-# rules and not others is the confound rather than a fix for it.
-const G1, G2, G3 = 0.25, 0.50, 2.0
+println("=== B1. Constants each rule in benchmark/config.jl RULES actually runs with")
 
-const RULES = [
-    ("RDelta",        () -> RDelta(       γ1 = G1, γ2 = G2, γ3 = G3, Δmin = 0.0)),
-    ("RStep",         () -> RStep(        γ1 = G1, γ2 = G2, γ3 = G3, Δmin = 0.0)),
-    ("RDFO",          () -> RDFO(         γ1 = G1, γ2 = G2, γ3 = G3, ζ = 1.0,
-                                          Δmin = 0.0)),
-    ("RGrad",         () -> RGrad(        γ1 = G1, γ2 = G2, γ3 = G3, μ = 1.0,
-                                          Δmin = 0.0)),
-    ("RGradCapped",   () -> RGradCapped(  γ1 = G1, γ2 = G2, γ3 = G3, μ = 1.0,
-                                          μ_max = 128.0, Δmin = 0.0)),
-    ("RRTR",          () -> RRTR(         γ1 = G1, γ2 = G2, γ3 = G3, Δmin = 0.0)),
-    ("RAdaptiveStep", () -> RAdaptiveStep(γ1 = G1, γ2 = G2, γ3 = G3,
-                                          λ1 = 5.0, λ2 = 5.0, Δmin = 0.0)),
-    ("RAdaptiveGrad", () -> RAdaptiveGrad(γ1 = G1, γ2 = G2, γ3 = G3, μ = 1.0,
-                                          λ1 = 5.0, λ2 = 5.0, Δmin = 0.0)),
-]
-
-# RRTRGrad is implemented and is deliberately not in the roster above: it is the
-# ninth mechanism and the paper's Table of the roster names eight. Add it here to
-# close the anchor-by-ratio cell, at the cost of one more column everywhere.
-const RRTRGRAD_CONFIG =
-    ("RRTRGrad", () -> RRTRGrad(γ1 = G1, γ2 = G2, γ3 = G3, μ = 1.0, Δmin = 0.0))
+const RULES =  [("RDelta",        RDelta(γ1 = 0.25, γ2 = 0.50, γ3 = 2.0)),
+         ("RStep",         RStep( γ1 = 0.25, γ2 = 0.50, γ3 = 2.0)),
+         ("RDFO",          RDFO(  γ1 = 0.25, γ2 = 0.50, γ3 = 2.0, ζ = 100.0)),
+         ("RGrad",         RGrad( γ1 = 0.25, γ2 = 0.50, γ3 = 2.0, μ = 1.0)),
+         ("RGradCapped",   RGradCapped(γ1 = 0.25, γ2 = 0.50, γ3 = 2.0, μ = 1.0, μ_max = 128.0)),
+         ("RAdaptiveStep", RAdaptiveStep()),
+         ("RAdaptiveGrad", RAdaptiveGrad()),
+         ("RRTR",          RRTR()),            # commented out of RULES
+         ("RRTRGrad",      RRTRGrad(μ = 1.0))] # commented out of RULES
 
 # -----------------------------------------------------------------------------
 # Second-order anchoring
@@ -109,7 +88,7 @@ const SECOND_ORDER_PARAMS = TRParams(
 
 # Full configurations (rule + model + subsolver) for the interaction study.
 const DEFAULT_MODEL     = () -> ExactHessian()
-const DEFAULT_SUBSOLVER = () -> SteihaugCG(max_iters = 1_000)
+const DEFAULT_SUBSOLVER = () -> SteihaugCG()
 
 "Wrap the RULES list into the (name, factory-of-NamedTuple) form run_experiment wants."
 rule_configs(rules = RULES; model = DEFAULT_MODEL, subsolver = DEFAULT_SUBSOLVER) =
@@ -160,7 +139,7 @@ end
 # CUTEst problem selection
 # -----------------------------------------------------------------------------
 const MIN_VAR = 2
-const MAX_VAR = 200      # SteihaugCG is the default subsolver, so n is not
+const MAX_VAR = Inf      # SteihaugCG is the default subsolver, so n is not
                          # capped by ExactMS's dense limit; keep it under that
                          # (200) so an exact-solver arm stays runnable.
 const MAX_CON = 0        # 0 = unconstrained only

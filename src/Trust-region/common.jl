@@ -99,6 +99,8 @@ struct TRParams{T}
     max_time::Float64
     true_stop::Symbol
     stop_z::T
+    curv_nmax::Int
+    curv_lanczos_k::Int
 end
 
 """
@@ -149,7 +151,9 @@ function TRParams{T}(; η::Union{Real, Nothing} = nothing,
                        tol::Real = sqrt(eps(T)), tol_H::Real = T(-1),
                        max_time::Real = Inf,
                        true_stop::Union{Bool, Symbol} = :none,
-                       stop_z::Real = 2) where {T}
+                       stop_z::Real = 2,
+                       curv_nmax::Int = 200,
+                       curv_lanczos_k::Int = 40) where {T}
     e1 = _pick("η1", η1, η₁, T(0.1))
     e2 = _pick("η2", η2, η₂, T(0.9))
     d0 = _pick("Δ0", Δ0, Δ₀, T(1))
@@ -167,9 +171,13 @@ function TRParams{T}(; η::Union{Real, Nothing} = nothing,
         "tol_H = -1 to disable it; got $tol_H"))
     mode = _stop_mode(true_stop)
     stop_z > 0 || throw(ArgumentError("TRParams: need stop_z > 0, got $stop_z"))
+    curv_nmax > 0 || throw(ArgumentError(
+        "TRParams: need curv_nmax > 0, got $curv_nmax"))
+    curv_lanczos_k > 0 || throw(ArgumentError(
+        "TRParams: need curv_lanczos_k > 0, got $curv_lanczos_k"))
     return TRParams{T}(T(ea), T(e1), T(e2), T(d0), T(Δmin), T(Δmax),
                        max_iterations, T(tol), T(tol_H), Float64(max_time),
-                       mode, T(stop_z))
+                       mode, T(stop_z), curv_nmax, curv_lanczos_k)
 end
 
 TRParams(; kwargs...) = TRParams{Float64}(; kwargs...)
@@ -183,7 +191,8 @@ end
 
 Base.propertynames(::TRParams) =
     (:η, :η1, :η2, :Δ0, :Δmin, :Δmax, :max_iterations, :tol, :tol_H,
-     :max_time, :true_stop, :stop_z, :η₁, :η₂, :Δ₀)
+     :max_time, :true_stop, :stop_z, :curv_nmax, :curv_lanczos_k,
+     :η₁, :η₂, :Δ₀)
 
 function Base.show(io::IO, p::TRParams{T}) where {T}
     println(io, "TRParams{$T}:")
@@ -378,7 +387,9 @@ a Hessian: a diagnostic must not be able to fail a run.
 function _true_lambda_min(c::TRCore, nlp, x)
     c.want_true_curv || return NaN
     try
-        return Float64(lambda_min_estimate(ExactHessian(), nlp, x))
+        return Float64(lambda_min_estimate(ExactHessian(), nlp, x;
+                                           nmax = c.params.curv_nmax,
+                                           lanczos_k = c.params.curv_lanczos_k))
     catch
         return NaN
     end
@@ -411,7 +422,9 @@ function _init_state!(c::TRCore{T}, nlp) where {T}
     g_norm = norm(c.g)
     λmin = NaN
     if c.want_curv
-        λmin, v = curvature_estimate(c.model, nlp, c.x, c.want_vec)
+        λmin, v = curvature_estimate(c.model, nlp, c.x, c.want_vec;
+                                    nmax = c.params.curv_nmax,
+                                         lanczos_k = c.params.curv_lanczos_k)
         c.vmin = v
     end
     crit = T(criticality(c.rule, Float64(g_norm), c.want_curv ? λmin : 0.0))
@@ -441,7 +454,9 @@ function _refresh_state!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
     grad!(nlp, c.x, c.g)
     st.g_norm = norm(c.g)
     if c.want_curv
-        st.λmin, c.vmin = curvature_estimate(c.model, nlp, c.x, c.want_vec)
+        st.λmin, c.vmin = curvature_estimate(c.model, nlp, c.x, c.want_vec;
+                                         nmax = c.params.curv_nmax,
+                                         lanczos_k = c.params.curv_lanczos_k)
     end
     st.crit = T(criticality(c.rule, Float64(st.g_norm), c.want_curv ? st.λmin : 0.0))
     st.λtrue = _true_lambda_min(c, nlp, c.x)
@@ -470,7 +485,16 @@ function _tr_step!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
                                       c.s, c.Hs, c.ws;
                                       curv = c.want_curv ? (st.λmin, c.vmin) : nothing)
     catch err
-        err isa DomainError || rethrow()
+        # A subproblem solver can fail in more ways than `DomainError`. `ExactMS`
+        # throws `ErrorException` when its bracket does not close, and the dense
+        # eigendecomposition it does first throws `ArgumentError` on a non-finite
+        # model Hessian. Catching only `DomainError` let those escape `solve!`
+        # entirely, so a benchmark cell aborted instead of recording a failed run.
+        # `InterruptException` and `StackOverflowError` must still propagate.
+        err isa Union{InterruptException, StackOverflowError} && rethrow()
+        err isa Union{DomainError, ArgumentError, ErrorException,
+                      LinearAlgebra.SingularException,
+                      LinearAlgebra.LAPACKException} || rethrow()
         st.failed = true; return nothing
     end
     st.s_norm = norm(c.s)
@@ -563,7 +587,9 @@ function _tr_step!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
     # The curvature belongs to the model at the *new* iterate; on a rejected step
     # neither has moved and the previous value still stands.
     if c.want_curv && st.accepted
-        st.λmin, c.vmin = curvature_estimate(c.model, nlp, c.x, c.want_vec)
+        st.λmin, c.vmin = curvature_estimate(c.model, nlp, c.x, c.want_vec;
+                                         nmax = c.params.curv_nmax,
+                                         lanczos_k = c.params.curv_lanczos_k)
     end
     if st.accepted
         st.λtrue = _true_lambda_min(c, nlp, c.x)

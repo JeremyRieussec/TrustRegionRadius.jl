@@ -89,11 +89,51 @@
         @test last_branch(r) === :contract
 
         # The Hei family has a continuous factor, so the branch is its position
-        # relative to one.
-        for r in (RAdaptiveStep(), RAdaptiveGrad(), RRTRGrad())
-            update_radius!(r, 1.0, 0.95, true, η1, η2, 0.9, 1.0, 1.0)
-            @test last_branch(r) in (:expand, :hold, :contract)
-        end
+        # relative to one. A membership test over the whole vocabulary passes
+        # whichever branch fires, so pin the branch each input must produce.
+        #
+        # RAdaptiveStep: R(ρ) rises with ρ, so a very successful ratio expands
+        # and a failed one contracts.
+        ras = RAdaptiveStep()
+        update_radius!(ras, 1.0, 0.95, true, η1, η2, 0.9, 1.0, 1.0)
+        @test last_branch(ras) === :expand
+        update_radius!(ras, 1.0, -1.0, false, η1, η2, 0.9, 1.0, 1.0)
+        @test last_branch(ras) === :contract
+
+        # RAdaptiveGrad has the hold branch of the appendix: very successful and
+        # a step inside half the region leaves μ alone.
+        rag = RAdaptiveGrad(μ = 1.0)
+        μ_before = rag.μ
+        update_radius!(rag, 1.0, 0.95, true, η1, η2, 0.1, 1.0, 1.0)   # ‖s‖ ≤ Δ/2
+        @test last_branch(rag) === :hold
+        @test rag.μ == μ_before                       # and μ really did not move
+        update_radius!(rag, 1.0, 0.95, true, η1, η2, 0.9, 1.0, 1.0)   # ‖s‖ > Δ/2
+        @test last_branch(rag) === :expand
+        @test rag.μ > μ_before
+        update_radius!(rag, 1.0, -1.0, false, η1, η2, 0.9, 1.0, 1.0)
+        @test last_branch(rag) === :contract
+
+        # A non-finite ratio must not reach μ: max(NaN, x) is NaN and μ persists.
+        rn = RAdaptiveGrad(μ = 1.0)
+        update_radius!(rn, 1.0, NaN, true, η1, η2, 0.9, 1.0, 1.0)
+        @test isfinite(rn.μ)
+
+        # RRTRGrad has all four: contract, shrink, expand and hold.
+        rrg = RRTRGrad(μ = 1.0, μ_max = Inf)
+        update_radius!(rrg, 1.0, 0.95, true, η1, η2, 0.9, 1.0, 1.0)
+        @test last_branch(rrg) === :expand
+        update_radius!(rrg, 1.0, 0.5, true, η1, η2, 0.9, 1.0, 1.0)    # η̃₁ ≤ ρ̃ < η̃₂
+        @test last_branch(rrg) === :shrink
+        update_radius!(rrg, 1.0, 0.01, true, η1, η2, 0.9, 1.0, 1.0)   # ρ̃ < η̃₁
+        @test last_branch(rrg) === :contract
+        update_radius!(rrg, 1.0, 0.95, true, η1, η2, 0.1, 1.0, 1.0)   # ‖s‖ ≤ Δ/2
+        @test last_branch(rrg) === :hold
+
+        # and the cap is applied, with its own branch symbol
+        rcap = RRTRGrad(μ = 1.0, μ_max = 1.0)
+        update_radius!(rcap, 1.0, 0.95, true, η1, η2, 0.9, 1.0, 1.0)
+        @test last_branch(rcap) === :expand_capped
+        @test rcap.μ == 1.0
 
         # reset clears it, along with the multiplier.
         r = RGrad(μ = 1.0)

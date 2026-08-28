@@ -64,9 +64,14 @@
         @test_throws ArgumentError RDelta(γ3 = 0.9)
         @test_throws ArgumentError RGrad(γ3 = 1.0)
 
-        # The Hei family needs the stronger γ3 > 1 + γ2.
-        @test_throws ArgumentError RAdaptiveStep(γ2 = 0.5, γ3 = 1.4)
-        @test RAdaptiveStep(γ2 = 0.5, γ3 = 1.6) isa RAdaptiveStep
+        # The Hei family needs M > γ3: γ3 is the value of R at the threshold and
+        # M its asymptote. This replaced the earlier γ3 > 1 + γ2, which belonged
+        # to the normalisation in which R(η1) = 1 + γ2 and γ3 was the asymptote.
+        @test_throws ArgumentError RAdaptiveStep(γ3 = 2.0, M = 1.5)
+        @test_throws ArgumentError RAdaptiveGrad(γ3 = 2.0, M = 1.5)
+        @test_throws ArgumentError RAdaptiveGradCapped(γ3 = 2.0, M = 1.5)
+        @test RAdaptiveStep(γ2 = 0.5, γ3 = 1.4, M = 5.0) isa RAdaptiveStep
+        @test RAdaptiveStep(γ2 = 0.5, γ3 = 1.6, M = 5.0) isa RAdaptiveStep
 
         # And the defaults of every rule satisfy the chain they advertise.
         for (name, r) in RULES

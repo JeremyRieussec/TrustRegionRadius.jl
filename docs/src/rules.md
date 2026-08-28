@@ -233,6 +233,8 @@ RGrad
 RGradCapped
 RAdaptiveStep
 RAdaptiveGrad
+RAdaptiveGradCapped
+RDeltaStep
 RRTR
 RRTRGrad
 initial_radius

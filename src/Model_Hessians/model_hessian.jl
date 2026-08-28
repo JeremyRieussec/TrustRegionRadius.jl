@@ -326,16 +326,22 @@ repair.
     cost measure, subtract `model_grad_evals(solver)` before reporting, or run
     this model only in the diagnostic experiments it exists for.
 """
-struct SPDTarget <: ModelHessian
+mutable struct SPDTarget <: ModelHessian
     target::Vector{Float64}
     λ⊥::Float64
+    # Gradients this model evaluated on its own account. The iteration did not
+    # ask for them, so `neval_grad` overstates the algorithm's cost by exactly
+    # this much; `model_grad_evals` reports it so the difference can be taken.
+    grad_calls::Int
     function SPDTarget(; target::AbstractVector, λ⊥::Real = 1.0)
         length(target) == 2 || throw(ArgumentError(
             "SPDTarget is a two-dimensional construction, got length $(length(target))"))
         λ⊥ > 0 || throw(ArgumentError("SPDTarget: need λ⊥ > 0, got $λ⊥"))
-        new(Vector{Float64}(target), float(λ⊥))
+        new(Vector{Float64}(target), float(λ⊥), 0)
     end
 end
+
+reset_model!(m::SPDTarget, ::Int) = (m.grad_calls = 0; nothing)
 
 """
     phi_target(model, nlp, x) -> Float64
@@ -343,7 +349,8 @@ end
 The descent functional `φ(x) = ∇f(x)ᵀ(target − x)`. The `SPDTarget`
 construction exists at `x` if and only if `φ(x) < 0`.
 """
-phi_target(m::SPDTarget, nlp, x) = dot(grad(nlp, x), m.target .- x)
+phi_target(m::SPDTarget, nlp, x) =
+    (m.grad_calls += 1; dot(grad(nlp, x), m.target .- x))
 
 function dense_hessian(m::SPDTarget, nlp, x)
     d  = m.target .- x
@@ -351,6 +358,7 @@ function dense_hessian(m::SPDTarget, nlp, x)
     nd < 1e-14 && return Matrix{Float64}(I, 2, 2)
     u = d ./ nd
     v = [-u[2], u[1]]
+    m.grad_calls += 1
     g = grad(nlp, x)
     a = -dot(g, u) / nd
     b = -dot(g, v) / nd

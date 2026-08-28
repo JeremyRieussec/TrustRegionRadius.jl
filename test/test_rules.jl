@@ -13,8 +13,8 @@
     η, η1, η2 = 0.1, 0.2, 0.9
 
     @testset "every rule implements the contract" begin
-        rules = [RDelta(), RStep(), RDFO(), RGrad(), RGradCapped(),
-                 RAdaptiveStep(), RAdaptiveGrad(), 
+        rules = [RDelta(), RStep(), RDeltaStep(), RDFO(), RGrad(), RGradCapped(),
+                 RAdaptiveStep(), RAdaptiveGrad(), RAdaptiveGradCapped(),
                  RRTR(), RRTRGrad()]
         for r in rules
             @test r isa RadiusRule
@@ -27,10 +27,78 @@
         end
     end
 
+
+    @testset "RDeltaStep: step on failure, radius on success" begin
+        # The appendix's R-delta-step. Distinct from RStep, which rebuilds the
+        # radius from the step on EVERY branch: here only the failure branch does.
+        r = RDeltaStep(γ1 = 0.25, γ2 = 0.5, γ3 = 2.0)
+        Δ, sn = 2.0, 0.4
+        @test update_radius!(r, Δ, 0.05, false, η1, η2, sn, 1.0, 1.0) == 0.25 * sn
+        @test last_branch(r) === :contract
+        @test update_radius!(r, Δ, 0.5, true, η1, η2, sn, 1.0, 1.0) == 0.5 * Δ
+        @test last_branch(r) === :shrink
+        @test update_radius!(r, Δ, 0.95, true, η1, η2, sn, 1.0, 1.0) == 2.0 * Δ
+        @test last_branch(r) === :expand
+
+        # and it is NOT RStep: RStep contracts on γ1‖s‖ too but shrinks and
+        # expands on ‖s‖, where this rule uses Δ.
+        rs = RStep(γ1 = 0.25, γ2 = 0.5, γ3 = 2.0)
+        @test update_radius!(rs, Δ, 0.5, true, η1, η2, sn, 1.0, 1.0) == 0.5 * sn
+        @test update_radius!(r,  Δ, 0.5, true, η1, η2, sn, 1.0, 1.0) == 0.5 * Δ
+
+        # γ2 = 1 is admissible here and nowhere else.
+        @test RDeltaStep(γ2 = 1.0) isa RDeltaStep
+        @test_throws ArgumentError RDeltaStep(γ2 = 1.5)
+        @test_throws ArgumentError RDeltaStep(γ1 = 0.8, γ2 = 0.3)
+        @test_throws ArgumentError RDeltaStep(γ3 = 0.9)
+        @test asymptotic_regime(RDeltaStep()) === :bounded_below
+        @test !is_criticality_anchored(RDeltaStep())
+    end
+
+    @testset "RAdaptiveGradCapped: the capped adaptive multiplier" begin
+        # RAdaptiveGrad(ω, μ̄): the hold branch of the uncapped rule, plus the cap.
+        r = RAdaptiveGradCapped(μ = 1.0, μ_max = 1.0)
+        update_radius!(r, 1.0, 0.95, true, η1, η2, 0.9, 1.0, 1.0)   # wants to grow
+        @test last_branch(r) === :expand_capped
+        @test r.μ == 1.0                                            # the cap held it
+
+        r2 = RAdaptiveGradCapped(μ = 1.0, μ_max = 100.0)
+        before = r2.μ
+        update_radius!(r2, 1.0, 0.95, true, η1, η2, 0.1, 1.0, 1.0)  # ‖s‖ ≤ Δ/2
+        @test last_branch(r2) === :hold
+        @test r2.μ == before
+        update_radius!(r2, 1.0, 0.95, true, η1, η2, 0.9, 1.0, 1.0)  # ‖s‖ > Δ/2
+        @test last_branch(r2) === :expand
+        @test r2.μ > before
+
+        # μ0 is clamped to the cap rather than rejected, so a sweep over μ̄ at
+        # fixed μ0 stays constructible below μ0.
+        @test RAdaptiveGradCapped(μ = 1.0, μ_max = 1e-3).μ == 1e-3
+        @test is_criticality_anchored(RAdaptiveGradCapped())
+        @test asymptotic_regime(RAdaptiveGradCapped()) === :vanishing
+    end
+
+    @testset "the R-function is normalised to R(η1) = γ3 and R(∞) = M" begin
+        γ1, γ2, γ3, M, λ1, λ2 = 0.01, 0.9, 1.5, 5.0, 5.0, 5.0
+        R(t) = TrustRegionRadius._r_exp(t, η1, γ1, γ2, γ3, M, λ1, λ2)
+        @test R(η1) ≈ γ3                       # value at the threshold
+        @test R(1e6) ≈ M rtol = 1e-8           # asymptote
+        @test R(-1e6) ≈ γ1 rtol = 1e-8         # the other asymptote
+        @test R(-Inf) == γ1                    # the solver's failure convention
+        @test R(prevfloat(η1)) <= γ2           # below the threshold R ≤ γ2 < 1
+        # non-decreasing across the join
+        ts = range(-2.0, 2.0; length = 400)
+        @test issorted(R.(ts))
+        # M > γ3 is the constraint, and it is enforced
+        @test_throws ArgumentError RAdaptiveStep(γ3 = 2.0, M = 1.5)
+        @test_throws ArgumentError RAdaptiveGrad(γ3 = 2.0, M = 1.5)
+        @test_throws ArgumentError RAdaptiveGradCapped(γ3 = 2.0, M = 1.5)
+    end
+
     @testset "the two-way and three-way classifications agree" begin
         # A criticality-anchored rule drives Δ → 0, so it must report :vanishing.
-        for r in (RDelta(), RStep(), RDFO(), RGrad(), RGradCapped(),
-                  RAdaptiveStep(), RAdaptiveGrad(), 
+        for r in (RDelta(), RStep(), RDeltaStep(), RDFO(), RGrad(), RGradCapped(),
+                  RAdaptiveStep(), RAdaptiveGrad(), RAdaptiveGradCapped(),
                   RRTR(), RRTRGrad())
             is_criticality_anchored(r) && @test asymptotic_regime(r) === :vanishing
         end
@@ -136,25 +204,33 @@
     end
 
     @testset "Hei factor: the limits and the jump at η1" begin
-        γ1, γ2, γ3, λ₁, λ₂ = 0.0625, 0.5, 4.0, 5.0, 5.0
-        R(t) = TrustRegionRadius._r_exp(t, η1, γ1, γ2, γ3, λ₁, λ₂)
+        # The normalisation of Part III: R(η1) = γ3 and lim_{t→+∞} R = M, with
+        # 0 < γ1 ≤ γ2 < 1 < γ3 < M. It replaces the earlier one, in which
+        # R(η1) = 1 + γ2 and γ3 was the asymptote.
+        γ1, γ2, γ3, M, λ₁, λ₂ = 0.0625, 0.5, 1.5, 4.0, 5.0, 5.0
+        R(t) = TrustRegionRadius._r_exp(t, η1, γ1, γ2, γ3, M, λ₁, λ₂)
 
         @test R(-1e3) ≈ γ1 atol = 1e-9          # lim_{t→−∞} R = γ1
-        @test R(η1)   ≈ 1 + γ2                  # R(η1) = 1 + γ2
-        @test R(1e3)  ≈ γ3 atol = 1e-9          # lim_{t→+∞} R = γ3
+        @test R(η1)   ≈ γ3                      # R(η1) = γ3
+        @test R(1e3)  ≈ M  atol = 1e-9          # lim_{t→+∞} R = M
 
         # Below the threshold the factor is a contraction, above it an expansion.
         # The discontinuity at η1 is required by those two conditions, not a
         # defect: no continuous function satisfies both.
         left  = R(η1 - 1e-9)
         right = R(η1 + 1e-9)
-        @test γ1 <= left < 1 <= right <= γ3
+        @test γ1 <= left < 1 < γ3 <= right <= M
         @test left ≈ γ2 atol = 1e-6
         @test right > left
 
-        # Non-decreasing on each side.
+        # Non-decreasing on each side, and across the join.
         @test issorted([R(t) for t in range(-2.0, η1 - 1e-6; length = 50)])
         @test issorted([R(t) for t in range(η1, 2.0; length = 50)])
+        @test issorted([R(t) for t in range(-2.0, 2.0; length = 400)])
+
+        # -Inf is the solver's convention for a non-positive predicted reduction
+        # and for a non-finite trial objective: the most aggressive contraction.
+        @test R(-Inf) == γ1
     end
 
     @testset "retrospective rules are flagged" begin

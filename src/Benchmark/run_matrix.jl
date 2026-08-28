@@ -161,9 +161,14 @@ function run_matrix(problems, configs; cost::Symbol = :iter, verbose::Bool = tru
         println("-"^(22 + 12ns))
     end
 
-    for (i, mk) in enumerate(problems)
+    for (i, entry) in enumerate(problems)
+        # Accept both shapes. `analytic_problems()` and `cutest_problems()` return
+        # `(name, thunk)` pairs, while the docstring above and the tests pass bare
+        # thunks; passing the pair form straight in used to raise
+        # `MethodError: objects of type Tuple{String, ...} are not callable`.
+        mk = entry isa Tuple ? last(entry) : entry
         nlp = mk()
-        pname = nlp.meta.name
+        pname = entry isa Tuple ? first(entry) : nlp.meta.name
         for (j, cfg) in enumerate(configs)
             # Fresh state per run: both the rule and the model are mutable.
             rule  = deepcopy(cfg.rule)

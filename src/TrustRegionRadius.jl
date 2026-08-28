@@ -48,7 +48,7 @@ export check_rule_problem, check_population_cap, user_cap
 # ---- Axis 1: radius mechanisms ----------------------------------------------
 export RadiusRule
 export RDelta, RStep, RDFO, RGrad, RGradCapped
-export RAdaptiveStep, RAdaptiveGrad
+export RAdaptiveStep, RAdaptiveGrad, RAdaptiveGradCapped, RDeltaStep
 export RRTR, RRTRGrad
 export initial_radius, update_radius!, reset_rule!
 export needs_retrospective, is_criticality_anchored, retrospective_ratio
@@ -57,7 +57,7 @@ export last_branch
 
 # second order
 export SecondOrder, RGradTau, RGradCappedTau, RDFOTau
-export RAdaptiveGradTau, RRTRGradTau
+export RAdaptiveGradTau, RAdaptiveGradCappedTau, RRTRGradTau
 export criticality, needs_curvature, tau_criticality
 export lambda_min_estimate, curvature_estimate, EigenPoint, second_order_status
 export model_hessian_norm

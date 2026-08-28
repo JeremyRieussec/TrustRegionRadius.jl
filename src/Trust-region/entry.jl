@@ -98,7 +98,17 @@ end
     model_grad_evals(solver) -> Int
 
 Gradient evaluations made from inside the *model*, which the algorithm did not
-request. Non-zero only for [`SPDTarget`](@ref). Subtract before reporting
-`neval_grad` as a cost.
+request. Non-zero only for [`SPDTarget`](@ref), which calls `grad` inside
+`dense_hessian` and `phi_target`. Subtract before reporting `neval_grad` as a
+cost:
+
+```julia
+algorithm_grads = neval_grad(nlp) - model_grad_evals(solver)
+```
+
+The fallback returns `0` because no other model evaluates the gradient itself.
 """
-model_grad_evals(::AbstractTRSolver) = 0
+model_grad_evals(s::AbstractTRSolver) = _model_grad_evals(s.core.model)
+
+_model_grad_evals(::ModelHessian) = 0
+_model_grad_evals(m::SPDTarget) = m.grad_calls

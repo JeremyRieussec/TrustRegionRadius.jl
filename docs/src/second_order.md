@@ -136,6 +136,7 @@ RGradTau
 RGradCappedTau
 RDFOTau
 RAdaptiveGradTau
+RAdaptiveGradCappedTau
 RRTRGradTau
 criticality
 needs_curvature

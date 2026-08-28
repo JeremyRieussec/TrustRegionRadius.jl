@@ -228,6 +228,14 @@ and inherits `RGrad`'s unconditional eventual inactivity.
 """
 RAdaptiveGradTau(; kwargs...) = SecondOrder(RAdaptiveGrad(; kwargs...))
 
+"""
+    RAdaptiveGradCappedTau(; kwargs...)
+
+[`RAdaptiveGradCapped`](@ref) with `ω = τ`. The capped adaptive-multiplier rule
+of the appendix, `RAdaptiveGrad(ω, μ̄)`, measured by `τ` rather than by `‖g‖`.
+"""
+RAdaptiveGradCappedTau(; kwargs...) = SecondOrder(RAdaptiveGradCapped(; kwargs...))
+
 
 """
     RRTRGradTau(; kwargs...)
