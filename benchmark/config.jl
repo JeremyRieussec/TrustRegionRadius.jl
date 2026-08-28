@@ -158,7 +158,7 @@ end
 # CUTEst problem selection
 # -----------------------------------------------------------------------------
 const MIN_VAR = 2
-const MAX_VAR = Inf      # SteihaugCG is the default subsolver, so n is not
+const MAX_VAR = typemax(Int)      # SteihaugCG is the default subsolver, so n is not
                          # capped by ExactMS's dense limit; keep it under that
                          # (200) so an exact-solver arm stays runnable.
 const MAX_CON = 0        # 0 = unconstrained only
