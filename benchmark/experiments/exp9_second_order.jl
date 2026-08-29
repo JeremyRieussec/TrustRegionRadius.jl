@@ -270,6 +270,14 @@ end
 function second_order()
     arch = ExperimentArchive(tag = "second_order")
     save_config(arch; rules = [nm for (nm, _) in TAU_RULES],
+                # Both axes are varied deliberately here: anchor_grid crosses the
+                # rules with the two subsolvers, and blind_table crosses the model
+                # with the measure. Recording one fixed pair would misdescribe it.
+                models = [("ExactHessian", () -> ExactHessian()),
+                          ("SR1Model",     () -> SR1Model(mem = 5)),
+                          ("LBFGSModel",   () -> LBFGSModel(mem = 5))],
+                subsolvers = [("Steihaug",   () -> SteihaugCG()),
+                              ("EigenPoint", () -> EigenPoint(SteihaugCG()))],
                 params = "tol=$TOL, tol_H=$TOL_H",
                 extra = Dict("experiment" => "exp9_second_order",
                              "problem" => "x⁴/4 − x²/2 + y²/2 from (0, 0.7)"))

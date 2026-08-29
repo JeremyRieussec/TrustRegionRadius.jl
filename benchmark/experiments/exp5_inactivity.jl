@@ -42,7 +42,7 @@ function inactivity()
     ]
     configs = rule_configs(rules)
 
-    save_config(arch; rules = rules, params = SOLVER_PARAMS,
+    save_config(arch; rules = rules, configs = configs, params = SOLVER_PARAMS,
                 problem_selection = PROBLEM_SELECTION,
                 extra = Dict("experiment" => "exp5_inactivity"))
 

@@ -34,7 +34,7 @@ using Printf, Dates
 const CAMPAIGN = [
     ("comparison",  "exp1  like-for-like comparison",              comparison),
     ("zeta",        "exp3  the ζ sweep of RDFO",                   zeta_sweep),
-    ("mu",          "exp4  the μ_max sweep of RGradCapped",        mu_sweep),
+    # ("mu",          "exp4  the μ_max sweep of RGradCapped",        mu_sweep),
     ("inactivity",  "exp5  tail activity, eventual inactivity",    inactivity),
     ("interaction", "exp6  rule × model grid",                     interaction),
     ("cvrate",      "exp7  local convergence order",               CVRate),

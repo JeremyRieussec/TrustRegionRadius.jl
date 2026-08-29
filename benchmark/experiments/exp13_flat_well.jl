@@ -288,6 +288,8 @@ function flat_well_experiment(; save::Bool = true)
 
     if save
         save_config(arch; rules = ["RDFO", "RGradCapped", "RGrad"],
+                    models = [("ExactHessian", () -> ExactHessian())],
+                    subsolvers = [("SteihaugCG", () -> SteihaugCG())],
                     params = TRParams(η = FW_ETA.η, η1 = FW_ETA.η1, η2 = FW_ETA.η2,
                                       tol = FW_TOL, max_iterations = FW_KMAX),
                     extra = Dict(

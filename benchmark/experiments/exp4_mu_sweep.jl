@@ -42,7 +42,8 @@ function mu_sweep()
                     () -> (rule = RGrad(μ = 0.1), model = DEFAULT_MODEL(),
                            subsolver = DEFAULT_SUBSOLVER())))
 
-    save_config(arch; params = SOLVER_PARAMS, problem_selection = PROBLEM_SELECTION,
+    save_config(arch; configs = configs,
+                params = SOLVER_PARAMS, problem_selection = PROBLEM_SELECTION,
                 rules = vcat([(@sprintf("mu_max=%g", μ), () -> RGradCapped(μ = μ, μ_max = μ))
                               for μ in MUS], [("uncapped", () -> RGrad(μ = 0.1))]),
                 extra = Dict("experiment" => "exp4_mu_sweep", "mu_values" => MUS))

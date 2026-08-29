@@ -27,17 +27,17 @@ const GRID_MODELS = [
 
 function interaction()
     arch = ExperimentArchive(tag = "interaction")
-    save_config(arch; rules = GRID_RULES, params = SOLVER_PARAMS,
-                problem_selection = PROBLEM_SELECTION,
-                extra = Dict("experiment" => "exp6_interaction",
-                             "models" => [m[1] for m in GRID_MODELS]))
-
-    problems = default_problems()
-
     configs = [("$(rn)/$(mn)",
                 () -> (rule = rf(), model = mf(), subsolver = DEFAULT_SUBSOLVER()))
                for (rn, rf) in GRID_RULES, (mn, mf) in GRID_MODELS]
     configs = vec(configs)
+
+    save_config(arch; rules = GRID_RULES, models = GRID_MODELS,
+                subsolvers = [DEFAULT_SUBSOLVER], configs = configs,
+                params = SOLVER_PARAMS, problem_selection = PROBLEM_SELECTION,
+                extra = Dict("experiment" => "exp6_interaction"))
+
+    problems = default_problems()
 
     records = run_experiment(problems, configs; params = SOLVER_PARAMS, archive = arch)
 

@@ -45,12 +45,12 @@ end
 
 function CVRate()
     arch = ExperimentArchive(tag = "convergence_rate")
-    save_config(arch; rules = RULES, params = SOLVER_PARAMS,
+    configs  = rule_configs()
+    save_config(arch; rules = RULES, configs = configs, params = SOLVER_PARAMS,
                 problem_selection = PROBLEM_SELECTION,
                 extra = Dict("experiment" => "exp7_convergence_rate"))
 
     problems = default_problems()
-    configs  = rule_configs()
     # A tight tolerance is essential: the asymptotic regime is what is measured.
     params = TRParams(η1 = SOLVER_PARAMS.η1, η2 = SOLVER_PARAMS.η2,
                       Δ0 = SOLVER_PARAMS.Δ0,

@@ -288,11 +288,10 @@ function single_problem_experiment(args = String[])
     problems = [problem]
 
     arch = ExperimentArchive(tag = "single_$(problem[1])")
-    save_config(arch; rules = RULES, params = SOLVER_PARAMS,
+    configs = rule_configs()
+    save_config(arch; rules = RULES, configs = configs, params = SOLVER_PARAMS,
                 extra = Dict("experiment" => "exp8_single_problem",
                              "problem" => problem[1]))
-
-    configs = rule_configs()
     records = run_experiment(problems, configs;
                              params = SOLVER_PARAMS, trace = true, archive = arch)
 

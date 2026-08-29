@@ -11,12 +11,12 @@
 
 function comparison()
     arch = ExperimentArchive(tag = "comparison")
-    save_config(arch; rules = RULES, params = SOLVER_PARAMS,
+    configs  = rule_configs()
+    save_config(arch; rules = RULES, configs = configs, params = SOLVER_PARAMS,
                 problem_selection = PROBLEM_SELECTION,
                 extra = Dict("experiment" => "exp1_comparison"))
 
     problems = default_problems()
-    configs  = rule_configs()
 
     @info "Experiment 1: $(length(problems)) problems × $(length(configs)) mechanisms"
     records = run_experiment(problems, configs;

@@ -182,6 +182,14 @@ benchmark/results/exp_2026-04-16_02-08-34_zeta_sweep/
 └── data/                      raw JLD2, one file per (problem, rule)
 ```
 
+`experiment_config.toml` records all three axes of a run, not just the radius rule:
+`[[rules]]`, `[[models]]` and `[[subsolvers]]` list each axis with its parameters, and
+`[[configurations]]` lists the `(rule, model, subsolver)` triples actually solved. The
+last is the one to read for a grid: experiment 6 crosses four rules with four model
+Hessians, and three independent axis lists cannot say which sixteen cells were run.
+`experiment_summary.md` renders the same four sections in Markdown. An experiment that
+passes `configs` to `save_config` gets the axis lists derived from the cross for free.
+
 Recover a past configuration with `load_config(dir)`, or the most recent with
 `latest_archive()`. An interrupted campaign resumes in place:
 

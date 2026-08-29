@@ -39,7 +39,7 @@ const G1, G2, G3 = 0.25, 0.50, 2.0
 const RULES = [
     ("RDelta",        () -> RDelta(       γ1 = G1, γ2 = G2, γ3 = G3, Δmin = 0.0)),
     ("RStep",         () -> RStep(        γ1 = G1, γ2 = G2, γ3 = G3, Δmin = 0.0)),
-    ("RDFO",          () -> RDFO(         γ1 = G1, γ2 = G2, γ3 = G3, ζ = 1.0,
+    ("RDFO",          () -> RDFO(         γ1 = G1, γ2 = G2, γ3 = G3, ζ = 100.0,
                                           Δmin = 0.0)),
     ("RGrad",         () -> RGrad(        γ1 = G1, γ2 = G2, γ3 = G3, μ = 1.0,
                                           Δmin = 0.0)),

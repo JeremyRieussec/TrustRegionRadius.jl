@@ -257,6 +257,7 @@ _fmt(v) = isfinite(v) ? @sprintf("%.4f", v) : "n/a (exact Hessian out of reach)"
 function bhhh_study(args = String[])
     arch = ExperimentArchive(tag = "bhhh")
     save_config(arch; rules = [r[1] for r in RULES_MINIMAL()],
+                models = MODELS, subsolvers = [("SteihaugCG", () -> SteihaugCG())],
                 params = "tol=1e-7", extra = Dict("experiment" => "exp11_bhhh"))
 
     tbl, rows = identity_table()

@@ -17,14 +17,14 @@ const TRACE_PROBLEMS = ["ROSENBR", "WOOD", "EXTROSEN3"]
 
 function trajectories()
     arch = ExperimentArchive(tag = "trajectories")
-    save_config(arch; rules = RULES, params = SOLVER_PARAMS,
+    configs = rule_configs()
+    save_config(arch; rules = RULES, configs = configs, params = SOLVER_PARAMS,
                 extra = Dict("experiment" => "exp2_trajectories",
                              "traced_problems" => TRACE_PROBLEMS))
 
     all_problems = default_problems()
     problems = filter(p -> p[1] in TRACE_PROBLEMS, all_problems)
     isempty(problems) && (problems = analytic_problems()[1:min(3, end)])
-    configs = rule_configs()
     labels  = [c[1] for c in configs]
 
     records = run_experiment(problems, configs;

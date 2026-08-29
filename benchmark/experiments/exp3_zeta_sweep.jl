@@ -28,6 +28,7 @@ function zeta_sweep()
                for ζ in ZETAS]
 
     save_config(arch; rules = [(c[1], () -> RDFO(ζ = ζ)) for (c, ζ) in zip(configs, ZETAS)],
+                configs = configs,
                 params = SOLVER_PARAMS, problem_selection = PROBLEM_SELECTION,
                 extra = Dict("experiment" => "exp3_zeta_sweep",
                              "zeta_values" => ZETAS))

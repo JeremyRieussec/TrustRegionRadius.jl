@@ -284,6 +284,12 @@ function sampling_examples()
     # records its parameters, which is what makes the archive a description of
     # the run. Passing strings recorded only that they were strings.
     save_config(arch; rules = TR_RULES, seed = collect(SEEDS),
+                # Named by the example that selects them: the model is not free
+                # here, it is the one legal over that example's problem class.
+                models = [("LS-linear", () -> GaussNewtonModel(ridge = 1e-10)),
+                          ("Logistic",  () -> BHHHModel(ridge = 1e-10)),
+                          ("MLP",       () -> BHHHModel(ridge = 1e-6))],
+                subsolvers = [("SteihaugCG", () -> SteihaugCG())],
                 params = TRParams(tol = 1e-7, max_iterations = MAXIT),
                 extra = Dict("experiment" => "exp12_sampling_examples",
                              "examples" => join([e[1] for e in EXAMPLES], ", "),
