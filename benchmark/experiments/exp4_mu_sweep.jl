@@ -21,7 +21,8 @@
 #   julia --project=benchmark benchmark/experiments/exp4_mu_sweep.jl
 # =============================================================================
 
-const MUS = [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
+const MU_MAX = [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
+const MU0 = 0.1
 
 function mu_sweep()
     arch = ExperimentArchive(tag = "mu_sweep")
@@ -31,22 +32,22 @@ function mu_sweep()
     # vector fails to convert. That is why the arm was commented out.
     configs = Tuple{String, Function}[
         (@sprintf("mu_max=%g", μ),
-         () -> (rule = RGradCapped(μ = μ, μ_max = μ),
+         () -> (rule = RGradCapped(μ = MU0, μ_max = μ),
                 model = DEFAULT_MODEL(), subsolver = DEFAULT_SUBSOLVER()))
-        for μ in MUS]
+        for μ in MU_MAX]
     # The uncapped arm is the point of the experiment, not an extra: it is the
     # only configuration testing the one unconditional inactivity result in the
     # survey, that μ_k climbs past any threshold on its own. It starts far below
     # κ̄ on purpose, so that the climb is what is being measured.
     push!(configs, ("uncapped",
-                    () -> (rule = RGrad(μ = 0.1), model = DEFAULT_MODEL(),
+                    () -> (rule = RGrad(μ = MU0), model = DEFAULT_MODEL(),
                            subsolver = DEFAULT_SUBSOLVER())))
 
     save_config(arch; configs = configs,
                 params = SOLVER_PARAMS, problem_selection = PROBLEM_SELECTION,
-                rules = vcat([(@sprintf("mu_max=%g", μ), () -> RGradCapped(μ = μ, μ_max = μ))
-                              for μ in MUS], [("uncapped", () -> RGrad(μ = 0.1))]),
-                extra = Dict("experiment" => "exp4_mu_sweep", "mu_values" => MUS))
+                rules = vcat([(@sprintf("mu_max=%g", μ), () -> RGradCapped(μ = MU0, μ_max = μ))
+                              for μ in MU_MAX], [("uncapped", () -> RGrad(μ = MU0))]),
+                extra = Dict("experiment" => "exp4_mu_sweep", "mu_values" => MU_MAX))
 
     problems = default_problems()
     records  = run_experiment(problems, configs; params = SOLVER_PARAMS, archive = arch)
@@ -97,7 +98,7 @@ function mu_sweep()
     probe = first(problems)
     nlp = probe[2]()
     x = copy(nlp.meta.x0); g = grad(nlp, x); gn = norm(g)
-    for μ in MUS
+    for μ in MU_MAX
         info = cg_step_info(SteihaugCG(), ExactHessian(), nlp, x, g, μ * gn)
         @printf(io, "%12g %10d %12s %14.12f\n", μ, info.cg_iters,
                 string(info.active), info.cos_cauchy)
@@ -106,7 +107,7 @@ function mu_sweep()
     save_table(arch, "exp4_cauchy_diagnostic.txt", String(take!(io)))
 
     finalize_archive(arch; notes = """
-        μ_max sweep for RGradCapped over $(MUS), plus uncapped RGrad.
+        μ_max sweep for RGradCapped over $(MU_MAX), plus uncapped RGrad.
 
         exp4_cauchy_diagnostic.txt is the mechanism behind any threshold seen in
         the profile: where CG iters = 1 and cos(s,-g) = 1 to machine precision,

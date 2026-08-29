@@ -45,8 +45,8 @@ const RULES = [
                                           Δmin = 0.0)),
     ("RGradCapped",   () -> RGradCapped(  γ1 = G1, γ2 = G2, γ3 = G3, μ = 1.0,
                                           μ_max = 128.0, Δmin = 0.0)),
-    ("RRTR",          () -> RRTR(         γ1 = G1, γ2 = G2, γ3 = G3, Δmin = 0.0)),
-    ("RAdaptiveStep", () -> RAdaptiveStep(λ1 = 5.0, λ2 = 5.0, Δmin = 0.0)),
+    #("RRTR",          () -> RRTR(         γ1 = G1, γ2 = G2, γ3 = G3, Δmin = 0.0)),
+    #("RAdaptiveStep", () -> RAdaptiveStep(λ1 = 5.0, λ2 = 5.0, Δmin = 0.0)),
     ("RAdaptiveGrad", () -> RAdaptiveGrad(μ = 1.0, λ1 = 5.0, λ2 = 5.0, Δmin = 0.0)),
 ]
 
