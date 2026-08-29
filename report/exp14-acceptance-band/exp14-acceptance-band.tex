@@ -1,0 +1,305 @@
+% =============================================================================
+% Decoupling acceptance from scaling: an eta sweep at fixed eta1.
+%
+% Standalone. Own preamble, no bibliography, no \cite. The macro block below
+% mirrors the one near the top of _Thesis_FINAL/Article3/Survey-part3-v1.tex,
+% through \providecommand so that this file can later be folded into that
+% document without a clash.
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\geometry{margin=2.6cm}
+
+% ---- macros mirrored from Survey-part3-v1.tex -------------------------------
+\providecommand{\defeq}{\mathrel{:=}}
+\providecommand{\kbar}{\overline{\kappa}}
+\providecommand{\calO}{{\mathcal{O}}}
+\providecommand{\calS}{{\mathcal{S}}}
+\providecommand{\calU}{{\mathcal{U}}}
+\providecommand{\NN}{{\mathbb{N}}}
+\providecommand{\abs}[1]{\left \vert #1 \right \vert}
+\providecommand{\norm}[1]{\left \lVert #1 \right \rVert}
+\providecommand*\mykappa[1]{ \kappa_{\scriptscriptstyle \text{#1}} }
+\providecommand*\myeta[1]{ \eta_{\scriptscriptstyle \text{#1}} }
+
+\providecommand{\Rdelta}{\textsf{R-delta}}
+\providecommand{\Rstep}{\textsf{R-step}}
+\providecommand{\Rdfo}{\textsf{R-DFO}}
+\providecommand{\Rgrad}{\textsf{R-grad}}
+\providecommand{\Rrtr}{\textsf{R-RTR}}
+\providecommand{\Rgrtr}{\textsf{R-gRTR}}
+\providecommand{\RAdaptiveGrad}{\textsf{R-adaptive-grad}}
+\providecommand{\RAdaptstep}{\textsf{R-adaptive-step}}
+\providecommand{\Rdeltastep}{\textsf{R-delta-step}}
+\providecommand{\Rtruncgrad}{\textsf{R-trunc-grad}}
+
+\providecommand{\gone}{\gamma_1}
+\providecommand{\gtwo}{\gamma_2}
+\providecommand{\gthree}{\gamma_3}
+
+\newtheorem{remark}{Remark}
+
+% The conditions of Part~I carry names rather than numbers. \label inside an
+% enumitem \item[] would pick up an unrelated counter, so the reference target
+% is written explicitly.
+\makeatletter
+\newcommand{\namedlabel}[2]{%
+  \protected@write\@auxout{}{\string\newlabel{#1}{{#2}{\thepage}{#2}{#1}{}}}%
+}
+\makeatother
+
+\title{Decoupling acceptance from scaling\\
+       {\large what it costs to accept a step the radius does not trust}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The three thresholds of a trust-region method answer different questions. The
+acceptance threshold $\eta$ decides whether a step is taken. The scaling
+thresholds $\eta_1$ and $\eta_2$ decide whether the region shrinks or grows.
+Setting $\eta < \eta_1$ opens a band on which a step is accepted and the radius
+still contracts. We sweep $\eta$ from $0$ to $\eta_1$ for eight radius rules on
+185 unconstrained CUTEst problems, at two values of $\eta_1$, and measure the
+occupancy of that band before measuring anything else. PLACEHOLDER-ABSTRACT
+\end{abstract}
+
+% =============================================================================
+\section{What Part~I says about \texorpdfstring{$\eta = 0$}{eta = 0}}
+\label{sec: part I}
+% =============================================================================
+
+The question decides what the rest of this report means. Either the structural
+conditions on $\{\Delta_k\}$ supply the quantified decrease that the classical
+complexity argument takes from $\eta$, or the $\calO(\varepsilon^{-2})$ bound
+does not survive $\eta = 0$. We read Part~I to settle it. Every label below is
+quoted from that source.
+
+Part~I fixes $0 \leq \eta \leq \eta_1 \leq \eta_2 < 1$ and defines
+$\calS = \{k \geq 0 : \rho_k \geq \eta\}$ and
+$\calU = \{k \geq 0 : \rho_k < \eta\}$. The abstract states the extension
+directly. Part~I revisits the framework of Curtis and Scheinberg and of Wang and
+Yuan, and extends it to three distinct scaling factors with decoupled step
+acceptance, covering $\eta = 0$. The body attributes the Lyapunov framework to
+the survey of Curtis and Scheinberg as developed by Cartis and Scheinberg and by
+Blanchet, Cartis, Menickelly and Scheinberg, and records that the extension
+allows $\eta = 0$, which is not treated there.
+
+Part~I also states the classical position plainly. Several authors have used
+$\eta = 0$, accepting any step that decreases the objective. That choice ensures
+only that at least one accumulation point is first-order critical, which is
+$\liminf_{k \to \infty}\norm{g_k} = 0$. Part~I cites Yuan's one-dimensional
+example, which cycles among three points, two of them non-stationary.
+
+\paragraph{The decrease is quantified by a different threshold.}
+Three conditions carry the analysis. Condition~\ref{cond: LbR} bounds the radius
+from below. Condition~\ref{cond: DecR} forces contraction after a poor step.
+Condition~\ref{cond: ExpDecR} caps expansion after a good one.
+
+\begin{description}[leftmargin=2.2em]
+  \item[\textnormal{Condition C.LbR}]\namedlabel{cond: LbR}{C.LbR}
+        \texttt{cond: delta\_k lower bound}. There is
+        $0 < \mykappa{lbd} \leq 1$ with
+        $\Delta_k \geq \frac{\mykappa{lbd}}{M_k}\min_{0 \leq i \leq k}\norm{g_i}$
+        for all $k$, where $\{M_k\}$ is non-decreasing and bounds the model
+        Hessian norm.
+  \item[\textnormal{Condition C.DecR}]\namedlabel{cond: DecR}{C.DecR}
+        \texttt{cond: decrease of the trust-region radius}. There are
+        $\underline{\gtwo} \in (0,1)$ and $\myeta{dec} > 0$ such that
+        $\rho_k < \myeta{dec}$ implies
+        $\Delta_{k+1} \leq \underline{\gtwo}\,\Delta_k$.
+  \item[\textnormal{Condition C.Exp/DecR}]\namedlabel{cond: ExpDecR}{C.Exp/DecR}
+        \texttt{cond: increase of the trust-region radius}. There are
+        $\underline{\gtwo} \in (0,1)$, $\overline{\gthree} > 1$ and
+        $\myeta{inc} > 0$ such that $\rho_k < \myeta{inc}$ implies
+        $\Delta_{k+1} \leq \underline{\gtwo}\,\Delta_k$, and
+        $\rho_k \geq \myeta{inc}$ implies
+        $\Delta_{k+1} \leq \overline{\gthree}\,\Delta_k$.
+\end{description}
+
+The thresholds $\myeta{dec}$ and $\myeta{inc}$ belong to the radius rule. They
+are required to be strictly positive by the conditions themselves. They are not
+$\eta$.
+
+This is the whole answer. Part~I's liminf result,
+\texttt{thm: Liminf of the gradient norm under strong assumption}, assumes
+Condition~\ref{cond: LbR} and Condition~\ref{cond: DecR} with
+$\myeta{dec} \geq \eta$ and $\myeta{dec} \neq 0$, and concludes
+$\liminf_{k \to \infty} \norm{g_k} = 0$. At $\eta = 0$ the requirement
+$\myeta{dec} \geq \eta$ is satisfied by every admissible rule, and
+$\myeta{dec} \neq 0$ is a property of the rule rather than of the acceptance
+test. The liminf result therefore holds at $\eta = 0$. The companion result
+under the weaker Hessian assumption,
+\texttt{thm: Liminf of the gradient norm under weaker assumption}, is stated the
+same way with $\myeta{inc} \geq \eta$ and $\myeta{inc} \neq 0$.
+
+The complexity bound is stated in $\myeta{dec}$ as well. Part~I's
+\texttt{thm: Upper bound successful iter BTR} gives
+\begin{equation}
+  \abs{\{k < T_\varepsilon \, : \, \rho_k \geq \myeta{dec}\}}
+  \;\leq\;
+  \frac{2\big(f(x_0) - \mykappa{lbf}\big)\big(L + \mykappa{umh}\big)}
+       {\myeta{dec}\,\mykappa{mdc}\,\mykappa{lbd}}\,\varepsilon^{-2} .
+  \label{eqn: complexity}
+\end{equation}
+The denominator carries $\myeta{dec}$, not $\eta$. The classical argument turns
+a successful iteration into a decrease of at least $\eta$ times the predicted
+reduction and is vacuous at $\eta = 0$. Part~I's argument turns an iteration
+with $\rho_k \geq \myeta{dec}$ into a decrease of at least $\myeta{dec}$ times
+the predicted reduction. Such an iteration is accepted whenever
+$\myeta{dec} \geq \eta$, so the decrease is realised. The route is the
+structural conditions, and \eqref{eqn: complexity} is not vacuous at $\eta = 0$.
+
+\paragraph{One discrepancy, which we report rather than resolve.}
+The hypotheses of \texttt{thm: Upper bound successful iter BTR} open with
+Algorithm~1 applied with $\eta > 0$. The bound it proves and the proof it gives
+use $\eta$ only through $\myeta{dec} \geq \eta$, which is vacuous at $\eta = 0$.
+Two readings are available. Under the first, the theorem is stated for
+$\eta > 0$ and says nothing at $\eta = 0$. Under the second, the hypothesis
+$\eta > 0$ is redundant and the conclusion holds whenever
+$\myeta{dec} > 0$. Choosing between them changes what Part~I claims, so we
+choose neither. The author should settle it.
+
+\paragraph{What $\eta = 0$ does cost.}
+The upgrade from $\liminf$ to $\lim$ is lost, and Part~I says so. Its
+\texttt{th: firt-order TR CV} assumes $\eta > 0$ and concludes that
+$\liminf_{k \to \infty}\norm{g_k} = 0$ implies
+$\lim_{k \to \infty}\norm{g_k} = 0$. That theorem holds independently of the
+radius rule, so no condition on $\{\Delta_k\}$ recovers it. The remark that
+follows records the failure at $\eta = 0$. For iterations with
+$\rho_k \in (\eta, \eta_1)$ the algorithm can accept steps with arbitrarily
+small decrease, which admits accumulation points with non-zero gradient norm.
+
+\paragraph{Consequence for this report.}
+The band is a design freedom Part~I permits and the framework of Curtis and
+Scheinberg forbids. It is not a practical gain bought against a lost complexity
+bound. It is a practical question asked inside a theory that already covers it,
+and the one guarantee at stake is the convergence of the whole sequence rather
+than of a subsequence. Every measurement below should be read against that.
+
+% =============================================================================
+\section{What the solver does}
+\label{sec: solver}
+% =============================================================================
+
+A rejected step leaves the iterate in place. The next iteration reuses the
+gradient and pays one objective evaluation. An accepted step moves the iterate
+and pays a gradient as well. Lowering $\eta$ converts rejected iterations into
+accepted ones, so it converts cheap iterations into expensive ones.
+
+We confirmed this from the source rather than assuming it. In
+\texttt{src/Trust-region/common.jl} the acceptance test is
+\texttt{st.accepted = st.$\rho$ >= p.$\eta$}, and the call
+\texttt{grad!(nlp, c.x, c.g)} sits inside the branch \texttt{if st.accepted}.
+The model update \texttt{update\_model!} and the curvature estimate are inside
+the same branch. Outside the iteration the gradient is evaluated once, in
+\texttt{\_init\_state!}. The only other gradient call is in
+\texttt{\_refresh\_state!}, which the two sampled solvers use after a resample
+and which no run in this report reaches.
+
+The gradient is therefore evaluated once per accepted iteration and never on a
+rejected one. An iteration count is not a work count here, and the two can move
+in opposite directions. We report function, gradient and Hessian-vector
+evaluations separately for that reason, and label iteration counts secondary
+wherever they appear.
+
+% =============================================================================
+\section{Design}
+\label{sec: design}
+% =============================================================================
+
+\paragraph{The sweep.}
+For each rule we hold everything else fixed and sweep $\eta$ over
+$\{0,\ \tfrac14\eta_1,\ \tfrac12\eta_1,\ \tfrac34\eta_1,\ \eta_1\}$. The last
+is the classical coupling and is the baseline of every comparison.
+
+Two strata. The first takes $\eta_1 = 0.1$, the value the campaign of Part~III
+uses. The second takes $\eta_1 = 0.4$, because a band of width $0.1$ in $\rho$
+may be too narrow to separate anything. Changing $\eta_1$ changes the rule's own
+behaviour, so the second stratum is a separate axis. We report the two
+separately and never pool them.
+
+\paragraph{The rules.}
+Part~III carries two rosters. Its appendix table lists eleven radius rules by
+what the radius is tied to, which ratio selects the branch, whether the factor
+is fixed or adaptive, and where each is first stated. Its body table lists
+eleven and marks eight of them tested. The eight are $\Rdelta$, $\Rstep$,
+$\Rdfo(\omega)$, $\Rgrad(\omega, \overline{\mu})$, $\Rgrad(\omega)$, $\Rrtr$,
+$\RAdaptstep$ and $\RAdaptiveGrad(\omega)$. Those eight carry the primary
+tables. They are the package's \texttt{RULES}, held at one set of constants,
+$\gone = 0.25$, $\gtwo = 0.5$, $\gthree = 2.0$.
+
+The two rosters disagree on their eleventh entry, and the disagreement bears on
+the count, so we record it. The body table names $\Rdeltastep$,
+$\Rgrtr(\omega,\overline{\mu})$ and $\Rtruncgrad$ as the three untested rules.
+The appendix table names $\Rdeltastep$, $\Rgrtr(\omega,\overline{\mu})$ and
+$\RAdaptiveGrad(\omega,\overline{\mu})$, and carries no entry for
+$\Rtruncgrad$. Searching the source, $\Rtruncgrad$ has a macro in the preamble
+and one appearance in the body table, and no environment defines it anywhere.
+The author's own note in the source flags the same gap. We follow the appendix
+table, which defines every rule it names.
+
+Three rules are therefore surveyed and untested, and all three are implemented.
+They are $\Rdeltastep$, $\RAdaptiveGrad(\omega,\overline{\mu})$ and
+$\Rgrtr(\omega,\overline{\mu})$, carried by the package types
+\texttt{RDeltaStep}, \texttt{RAdaptiveGradCapped} and \texttt{RRTRGrad}. We
+report them in Section~\ref{sec: untested} and never inside the primary tables.
+
+No package rule sits outside the surveyed taxonomy. Eleven rules are surveyed
+by the appendix table and eleven package types implement them. The second-order
+wrapper and its five aliases are not separate rules. They supply the criticality
+measure $\omega$ and forward the update unchanged.
+
+\paragraph{Constructor refusals.}
+\texttt{validate\_thresholds} refuses $\eta_1 = 0$ for the step-driven rules
+$\Rstep$, $\RAdaptstep$ and $\Rdeltastep$. This sweep varies $\eta$ and holds
+$\eta_1$ at $0.1$ or $0.4$, so $\eta_1 = 0$ never arises and no refusal was
+expected. None occurred, and the archive records the empty list.
+
+\paragraph{Counting the band.}
+Occupancy is counted on accepted iterations as $\rho_k < \eta_1$, from the
+solver's own trace,
+\begin{verbatim}
+    count(i -> accepted[i] && rho[i] < eta1, eachindex(accepted))
+\end{verbatim}
+We do not count radius decreases. $\Rdelta$ contracts by $\gtwo$ on every mildly
+successful iteration, so a shrinking radius does not isolate the band. The count
+is zero by construction whenever $\eta = \eta_1$, and we report that column as
+the check that the instrument works.
+
+\paragraph{The problem set.}
+CUTEst, unconstrained, $2 \leq n \leq 200$, which realises 185 problems. This is
+the set Section~5 of Part~III reports. The package's \texttt{default\_problems()}
+falls back to eight analytic problems when the CUTEst query returns empty, which
+would produce a table that reads as a CUTEst benchmark without being one. The
+experiment file checks \texttt{HAS\_CUTEST} and the realised count and stops
+rather than falling back. The realised list of names and dimensions is written
+to \texttt{tables/exp14\_problem\_set.txt} beside the results.
+
+The model Hessian is exact and the subproblem solver is truncated conjugate
+gradient throughout. \texttt{ExactMS} is admissible on all 185 problems at
+$n \leq 200$, and we do not use it, so that no subsolver switch is confounded
+with the swept threshold.
+
+\paragraph{Pairing.}
+The comparison is $\eta$ against $\eta_1$ within a rule on the same problem, so
+it is paired. A pair enters the log ratio only when both settings solve the
+problem. Problems solved by exactly one setting are named individually instead,
+because a log ratio over survivors would drop exactly the cases that matter.
+The tie band is $\abs{\log(w_\eta / w_{\eta_1})} \leq 0.05$.
+
+PLACEHOLDER-RESULTS
+
+\end{document}

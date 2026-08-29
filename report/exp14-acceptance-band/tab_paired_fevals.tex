@@ -1,0 +1,25 @@
+\begin{tabular}{@{}llrrrrrrrrrrrr@{}}
+\toprule
+& & \multicolumn{3}{c}{$\eta/\eta_1 = 0$} & \multicolumn{3}{c}{$0.25$} & \multicolumn{3}{c}{$0.50$} & \multicolumn{3}{c@{}}{$0.75$} \
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}\cmidrule(l){12-14}
+$\eta_1$ & Rule & W & L & T & W & L & T & W & L & T & W & L & T \
+\midrule
+$0.1$ & RDelta & 4 & 0 & 33 & 3 & 0 & 34 & 2 & 0 & 35 & 1 & 0 & 36 \
+ & RStep & 2 & 0 & 31 & 2 & 0 & 31 & 1 & 0 & 32 & 1 & 0 & 32 \
+ & RDFO & 4 & 0 & 33 & 3 & 0 & 34 & 2 & 0 & 35 & 1 & 0 & 36 \
+ & RGrad & 1 & 0 & 34 & 1 & 0 & 34 & 0 & 0 & 35 & 0 & 0 & 35 \
+ & RGradCapped & 1 & 0 & 33 & 1 & 0 & 33 & 0 & 0 & 34 & 0 & 0 & 34 \
+ & RRTR & 1 & 1 & 34 & 1 & 1 & 34 & 0 & 0 & 36 & 0 & 0 & 36 \
+ & RAdaptiveStep & 2 & 3 & 29 & 2 & 3 & 29 & 1 & 2 & 31 & 1 & 0 & 33 \
+ & RAdaptiveGrad & 2 & 0 & 33 & 1 & 0 & 34 & 1 & 0 & 34 & 0 & 0 & 35 \
+\midrule
+$0.4$ & RDelta & 9 & 2 & 25 & 7 & 1 & 27 & 3 & 1 & 31 & 4 & 1 & 30 \
+ & RStep & 4 & 1 & 28 & 3 & 1 & 29 & 3 & 1 & 29 & 2 & 0 & 31 \
+ & RDFO & 10 & 0 & 26 & 10 & 0 & 26 & 7 & 0 & 29 & 3 & 0 & 33 \
+ & RGrad & 3 & 2 & 28 & 4 & 1 & 29 & 3 & 0 & 31 & 2 & 0 & 33 \
+ & RGradCapped & 5 & 1 & 27 & 5 & 0 & 28 & 3 & 0 & 30 & 1 & 0 & 32 \
+ & RRTR & 10 & 1 & 25 & 9 & 0 & 27 & 5 & 0 & 30 & 3 & 0 & 32 \
+ & RAdaptiveStep & 8 & 1 & 24 & 6 & 1 & 26 & 4 & 1 & 28 & 2 & 1 & 30 \
+ & RAdaptiveGrad & 8 & 0 & 26 & 6 & 0 & 28 & 5 & 0 & 29 & 3 & 0 & 31 \
+\bottomrule
+\end{tabular}
