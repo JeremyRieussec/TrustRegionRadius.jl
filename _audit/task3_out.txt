@@ -1,0 +1,255 @@
+[ Info: running the grid: 96 configurations
+┌ Info: grid done
+│   seconds = 36.5
+└   rows = 96
+┌ Info: figures written
+└   OUTDIR = "C:\\Users\\jerem\\OneDrive\\Desktop\\GitHub\\TrustRegionRadius.jl\\_audit\\..\\report\\task3-mu-cap\\figs"
+┌ Info: latex fragments written
+└   REPDIR = "C:\\Users\\jerem\\OneDrive\\Desktop\\GitHub\\TrustRegionRadius.jl\\_audit\\..\\report\\task3-mu-cap"
+
+======================================================================================================
+TABLE 1. RGradCapped, the cap sweep. Three step classes, Steihaug CG.
+======================================================================================================
+model            mu_max      status    iter    trunc   inside   krylov    cauchy       cg1    cos_min
+------------------------------------------------------------------------------------------------------
+ExactHessian       0.01    max_iter    2000    1.000    0.000    0.000    1.0000    1.0000   1.000000
+ExactHessian       0.05    max_iter    2000    1.000    0.000    0.000    1.0000    1.0000   1.000000
+ExactHessian       0.10    max_iter    2000    1.000    0.000    0.000    1.0000    1.0000   1.000000
+ExactHessian       0.30    max_iter    2000    1.000    0.000    0.001    0.9995    0.9995   0.877285
+ExactHessian       0.50    max_iter    2000    0.999    0.000    0.001    0.9990    0.9990   0.877285
+ExactHessian       1.00    max_iter    2000    0.999    0.000    0.002    0.9985    0.9985   0.877285
+ExactHessian       2.00    max_iter    2000    0.998    0.001    0.002    0.9985    0.9985   0.877285
+ExactHessian       4.00    max_iter    2000    0.334    0.001    0.665    0.4885    0.3345   0.877285
+ExactHessian       8.00 first_order    1678    0.331    0.001    0.668    0.4815    0.3319   0.675664
+ExactHessian     128.00 first_order      85    0.047    0.035    0.918    0.0824    0.0824   0.246457
+SR1                0.01    max_iter    2000    1.000    0.000    0.000    1.0000    1.0000   1.000000
+SR1                0.05    max_iter    2000    1.000    0.000    0.000    1.0000    1.0000   1.000000
+SR1                0.10    max_iter    2000    1.000    0.000    0.000    1.0000    1.0000   1.000000
+SR1                0.30    max_iter    2000    1.000    0.000    0.000    1.0000    1.0000   1.000000
+SR1                0.50     stalled      83    1.000    0.000    0.000    1.0000    1.0000   1.000000
+SR1                1.00 first_order      23    0.739    0.000    0.261    0.7391    0.7391   0.671198
+SR1                2.00 first_order      24    0.625    0.042    0.333    0.6667    0.6667   0.692186
+SR1                4.00 first_order      19    0.632    0.105    0.263    0.7368    0.7368   0.761860
+SR1                8.00 first_order      19    0.632    0.105    0.263    0.7368    0.7368   0.761860
+SR1              128.00 first_order      19    0.632    0.105    0.263    0.7368    0.7368   0.761860
+LBFGS              0.01    max_iter    2000    1.000    0.000    0.000    1.0000    1.0000   1.000000
+LBFGS              0.05    max_iter    2000    1.000    0.000    0.000    1.0000    1.0000   1.000000
+LBFGS              0.10    max_iter    2000    1.000    0.000    0.000    1.0000    1.0000   1.000000
+LBFGS              0.30    max_iter    2000    1.000    0.000    0.000    1.0000    1.0000   1.000000
+LBFGS              0.50     stalled      85    1.000    0.000    0.000    1.0000    1.0000   1.000000
+LBFGS              1.00 first_order      30    0.333    0.100    0.567    0.4333    0.4333   0.661424
+LBFGS              2.00     stalled      28    0.464    0.143    0.393    0.6071    0.6071   0.599361
+LBFGS              4.00 first_order      21    0.333    0.238    0.429    0.5714    0.5714   0.426056
+LBFGS              8.00 first_order      21    0.333    0.238    0.429    0.5714    0.5714   0.426056
+LBFGS            128.00 first_order      21    0.333    0.238    0.429    0.5714    0.5714   0.426056
+
+======================================================================================================
+TABLE 2. RDFO, the zeta sweep. Three step classes, Steihaug CG.
+======================================================================================================
+model              zeta      status    iter    trunc   inside   krylov    cauchy       cg1    cos_min
+------------------------------------------------------------------------------------------------------
+ExactHessian       0.10 first_order      16    0.000    0.375    0.625    0.3750    0.3750   0.877285
+ExactHessian       0.50 first_order      16    0.000    0.375    0.625    0.3750    0.3750   0.877285
+ExactHessian       1.00 first_order      16    0.000    0.375    0.625    0.3750    0.3750   0.877285
+ExactHessian       2.00 first_order      16    0.000    0.375    0.625    0.3750    0.3750   0.877285
+ExactHessian       5.00 first_order      16    0.000    0.375    0.625    0.3750    0.3750   0.877285
+ExactHessian      20.00 first_order      16    0.000    0.375    0.625    0.3750    0.3750   0.877285
+SR1                0.10     stalled     254    0.992    0.000    0.008    0.9921    0.9921   0.753888
+SR1                0.50 first_order      11    0.364    0.000    0.636    0.3636    0.3636   0.702331
+SR1                1.00 first_order      12    0.333    0.000    0.667    0.3333    0.3333   0.561479
+SR1                2.00 first_order      12    0.250    0.000    0.750    0.2500    0.2500   0.561479
+SR1                5.00 first_order      13    0.231    0.000    0.769    0.2308    0.2308   0.561479
+SR1               20.00 first_order      13    0.231    0.000    0.769    0.2308    0.2308   0.561479
+LBFGS              0.10     stalled     347    0.991    0.009    0.000    1.0000    1.0000   1.000000
+LBFGS              0.50 first_order      33    0.727    0.091    0.182    0.8182    0.8182   0.748948
+LBFGS              1.00 first_order      24    0.167    0.167    0.667    0.3333    0.3333   0.668425
+LBFGS              2.00 first_order      25    0.080    0.240    0.680    0.3200    0.3200   0.462881
+LBFGS              5.00 first_order      27    0.074    0.259    0.667    0.3333    0.3333   0.462881
+LBFGS             20.00 first_order      30    0.067    0.267    0.667    0.3333    0.3333   0.462881
+
+============================================================================================================
+TABLE 3. The two Cauchy statistics reconciled. Exact Hessian only, since
+H_k is known in closed form there. A disagreeing iteration is one the
+cosine test counts and the Krylov count does not.
+============================================================================================================
+rule      param    cauchy       cg1      gap   n_dis     sin@dis   sin@agree      z1/D@dis    z1/D@agree
+------------------------------------------------------------------------------------------------------------
+cap        0.01    1.0000    1.0000   0.0000       0         NaN         NaN           NaN           NaN
+cap        0.05    1.0000    1.0000   0.0000       0         NaN         NaN           NaN           NaN
+cap        0.10    1.0000    1.0000   0.0000       0         NaN         NaN           NaN           NaN
+cap        0.30    0.9995    0.9995   0.0000       0         NaN   2.415e-01           NaN   0.600204020
+cap        0.50    0.9990    0.9990   0.0000       0         NaN   2.423e-01           NaN   0.565806998
+cap        1.00    0.9985    0.9985   0.0000       0         NaN   2.415e-01           NaN   0.758057987
+cap        2.00    0.9985    0.9985   0.0000       0         NaN   2.415e-01           NaN   0.758057987
+cap        4.00    0.4885    0.3345   0.1540     308   7.068e-01   7.060e-01   0.999999996   0.997744927
+cap        8.00    0.4815    0.3319   0.1496     251   8.659e-01   4.995e-01   0.999999989   0.333132068
+cap      128.00    0.0824    0.0824   0.0000       0         NaN   4.000e-01           NaN   0.097114558
+dfo        0.10    0.3750    0.3750   0.0000       0         NaN   1.966e-01           NaN   0.411361410
+dfo        0.50    0.3750    0.3750   0.0000       0         NaN   1.966e-01           NaN   0.411361410
+dfo        1.00    0.3750    0.3750   0.0000       0         NaN   1.966e-01           NaN   0.104780005
+dfo        2.00    0.3750    0.3750   0.0000       0         NaN   1.966e-01           NaN   0.104780005
+dfo        5.00    0.3750    0.3750   0.0000       0         NaN   1.966e-01           NaN   0.026534921
+dfo       20.00    0.3750    0.3750   0.0000       0         NaN   1.966e-01           NaN   0.026534921
+
+================================================================================================
+TABLE 4. ExactMS: the exponent of 1 - cos(s,-g), fitted three ways.
+================================================================================================
+(a) 1 - cos against Delta, per configuration
+model          rule      param      slope       R2        n
+------------------------------------------------------------
+ExactHessian   cap        0.01     0.7271   0.2715     2000
+ExactHessian   cap        0.05     3.7386   0.6042      873
+ExactHessian   cap        0.10     3.9295   0.6164      444
+ExactHessian   cap        0.30     4.5335   0.6889      152
+ExactHessian   cap        0.50     4.5363   0.7174       92
+ExactHessian   cap        1.00     4.4059   0.7528       50
+SR1            cap        0.01     0.7187   0.2651     1999
+SR1            cap        0.05     3.7017   0.5959      864
+SR1            cap        0.10     4.0480   0.6228      454
+SR1            cap        0.30     3.5510   0.4548      166
+SR1            cap        0.50     1.1305   0.8223       77
+SR1            cap        1.00     1.1786   0.9332       43
+SR1            dfo        0.10     1.2084   0.8040      238
+LBFGS          cap        0.01     0.7236   0.2691     1999
+LBFGS          cap        0.05     3.7620   0.6034      875
+LBFGS          cap        0.10     3.9009   0.6019      445
+LBFGS          cap        0.30     2.7008   0.3332      167
+LBFGS          cap        0.50     0.3147   0.2808       84
+LBFGS          cap        1.00     0.2155   0.1226       39
+LBFGS          dfo        0.10     2.1765   0.8855      295
+LBFGS          dfo        0.50    -0.0142   0.0002       43
+LBFGS          dfo        2.00     0.2640   0.2678       35
+
+  22 fits with n >= 30: slope median 2.4386, range [-0.0142, 4.5363], R2 range [0.000, 0.933]
+
+(b) pooled over the cap sweep, exact Hessian, 3441 points, mu in [0.01, 32]
+    1 - cos            against Delta : slope +1.4539  R2 0.2960  n 3441
+    (1 - cos)/Var_w    against mu    : slope +1.8973  R2 0.9934  n 3441  intercept -0.4866
+    same, mu <= 0.5                  : slope +1.9609  R2 0.9990  n 3362  intercept -0.3765
+    predicted                        : slope +2.0000              intercept -0.3010
+
+(c) SteihaugCG, exact Hessian: iterations with 1 - cos exactly zero
+rule      param          n    n(zero)      share
+cap        0.01       2000       1107     0.5535
+cap        0.05       2000       1525     0.7625
+cap        0.10       2000       1765     0.8825
+cap        0.30       2000       1935     0.9675
+cap        0.50       2000       1965     0.9825
+cap        1.00       2000       1980     0.9900
+cap        2.00       2000       1994     0.9970
+cap        4.00       2000        529     0.2645
+cap        8.00       1678        419     0.2497
+cap      128.00         85          5     0.0588
+dfo        0.10         16          4     0.2500
+dfo        0.50         16          4     0.2500
+dfo        1.00         16          4     0.2500
+dfo        2.00         16          4     0.2500
+dfo        5.00         16          4     0.2500
+dfo       20.00         16          4     0.2500
+
+======================================================================================================================
+TABLE 5. Limit points, as distance rather than as a category. Nothing is dropped.
+======================================================================================================================
+subsolver   model          rule      param      status    iter        dist       gnorm     f_ev     g_ev   active
+----------------------------------------------------------------------------------------------------------------------
+SteihaugCG  ExactHessian   cap        0.01    max_iter    2000   1.421e-02   6.172e-04     2001     2001    1.000
+SteihaugCG  ExactHessian   cap        0.05    max_iter    2000   3.191e-03   3.068e-05     2001     2001    1.000
+SteihaugCG  ExactHessian   cap        0.10    max_iter    2000   1.624e-03   7.927e-06     2001     2001    1.000
+SteihaugCG  ExactHessian   cap        0.30    max_iter    2000   5.500e-04   9.082e-07     2001     2001    1.000
+SteihaugCG  ExactHessian   cap        0.50    max_iter    2000   3.310e-04   3.289e-07     2001     2001    1.000
+SteihaugCG  ExactHessian   cap        1.00    max_iter    2000   1.658e-04   8.253e-08     2001     2001    1.000
+SteihaugCG  ExactHessian   cap        2.00    max_iter    2000   8.303e-05   2.068e-08     2001     2001    1.000
+SteihaugCG  ExactHessian   cap        4.00    max_iter    2000   4.142e-05   7.280e-09     2001     2001    1.000
+SteihaugCG  ExactHessian   cap        8.00 first_order    1678   1.698e-05   9.992e-10     1679     1679    1.000
+SteihaugCG  ExactHessian   cap      128.00 first_order      85   1.754e-05   9.985e-10       86       86    1.000
+SteihaugCG  ExactHessian   dfo        0.10 first_order      16   1.299e-05   5.059e-10       17       17    0.000
+SteihaugCG  ExactHessian   dfo        0.50 first_order      16   1.299e-05   5.059e-10       17       17    0.000
+SteihaugCG  ExactHessian   dfo        1.00 first_order      16   1.299e-05   5.059e-10       17       17    0.000
+SteihaugCG  ExactHessian   dfo        2.00 first_order      16   1.299e-05   5.059e-10       17       17    0.000
+SteihaugCG  ExactHessian   dfo        5.00 first_order      16   1.299e-05   5.059e-10       17       17    0.000
+SteihaugCG  ExactHessian   dfo       20.00 first_order      16   1.299e-05   5.059e-10       17       17    0.000
+SteihaugCG  SR1            cap        0.01    max_iter    2000   1.421e-02   6.172e-04     2001     2001    1.000
+SteihaugCG  SR1            cap        0.05    max_iter    2000   3.191e-03   3.068e-05     2001     2001    1.000
+SteihaugCG  SR1            cap        0.10    max_iter    2000   1.624e-03   7.927e-06     2001     2001    1.000
+SteihaugCG  SR1            cap        0.30    max_iter    2000   5.048e-04   7.648e-07     2001     2001    1.000
+SteihaugCG  SR1            cap        0.50     stalled      83   3.860e-08   1.910e-08       84       76    1.000
+SteihaugCG  SR1            cap        1.00 first_order      23   1.915e-09   9.811e-10       24       23    0.667
+SteihaugCG  SR1            cap        2.00 first_order      24   3.768e-10   9.243e-10       25       21    1.000
+SteihaugCG  SR1            cap        4.00 first_order      19   5.381e-11   1.032e-10       20       19    0.000
+SteihaugCG  SR1            cap        8.00 first_order      19   5.381e-11   1.032e-10       20       19    0.000
+SteihaugCG  SR1            cap      128.00 first_order      19   5.381e-11   1.032e-10       20       19    0.000
+SteihaugCG  SR1            dfo        0.10     stalled     254   5.457e-08   2.700e-08      255      246    1.000
+SteihaugCG  SR1            dfo        0.50 first_order      11   3.949e-11   1.034e-10       12       11    0.000
+SteihaugCG  SR1            dfo        1.00 first_order      12   3.949e-11   1.034e-10       13       11    0.000
+SteihaugCG  SR1            dfo        2.00 first_order      12   4.702e-11   2.580e-11       13       11    0.000
+SteihaugCG  SR1            dfo        5.00 first_order      13   4.702e-11   2.580e-11       14       11    0.000
+SteihaugCG  SR1            dfo       20.00 first_order      13   4.702e-11   2.580e-11       14       11    0.000
+SteihaugCG  LBFGS          cap        0.01    max_iter    2000   1.421e-02   6.172e-04     2001     2001    1.000
+SteihaugCG  LBFGS          cap        0.05    max_iter    2000   3.191e-03   3.068e-05     2001     2001    1.000
+SteihaugCG  LBFGS          cap        0.10    max_iter    2000   1.624e-03   7.927e-06     2001     2001    1.000
+SteihaugCG  LBFGS          cap        0.30    max_iter    2000   5.048e-04   7.648e-07     2001     2001    1.000
+SteihaugCG  LBFGS          cap        0.50     stalled      85   2.147e-08   1.062e-08       86       79    1.000
+SteihaugCG  LBFGS          cap        1.00 first_order      30   3.527e-11   7.255e-11       31       30    0.333
+SteihaugCG  LBFGS          cap        2.00     stalled      28   2.066e-09   1.270e-09       29       21    1.000
+SteihaugCG  LBFGS          cap        4.00 first_order      21   2.551e-11   6.143e-11       22       21    0.000
+SteihaugCG  LBFGS          cap        8.00 first_order      21   2.551e-11   6.143e-11       22       21    0.000
+SteihaugCG  LBFGS          cap      128.00 first_order      21   2.551e-11   6.143e-11       22       21    0.000
+SteihaugCG  LBFGS          dfo        0.10     stalled     347   4.777e-08   2.363e-08      348      339    1.000
+SteihaugCG  LBFGS          dfo        0.50 first_order      33   1.577e-11   3.728e-11       34       33    0.250
+SteihaugCG  LBFGS          dfo        1.00 first_order      24   6.660e-12   3.667e-12       25       22    0.000
+SteihaugCG  LBFGS          dfo        2.00 first_order      25   6.870e-11   1.268e-10       26       21    0.000
+SteihaugCG  LBFGS          dfo        5.00 first_order      27   6.870e-11   1.268e-10       28       21    0.000
+SteihaugCG  LBFGS          dfo       20.00 first_order      30   6.870e-11   1.268e-10       31       21    0.000
+ExactMS     ExactHessian   cap        0.01    max_iter    2000   1.423e-02   6.195e-04     2001     2001    1.000
+ExactMS     ExactHessian   cap        0.05    max_iter    2000   3.199e-03   3.083e-05     2001     2001    1.000
+ExactMS     ExactHessian   cap        0.10    max_iter    2000   1.629e-03   7.976e-06     2001     2001    1.000
+ExactMS     ExactHessian   cap        0.30    max_iter    2000   5.503e-04   9.093e-07     2001     2001    1.000
+ExactMS     ExactHessian   cap        0.50    max_iter    2000   3.310e-04   3.289e-07     2001     2001    1.000
+ExactMS     ExactHessian   cap        1.00    max_iter    2000   1.658e-04   8.253e-08     2001     2001    1.000
+ExactMS     ExactHessian   cap        2.00    max_iter    2000   8.303e-05   2.068e-08     2001     2001    1.000
+ExactMS     ExactHessian   cap        4.00    max_iter    2000   4.155e-05   5.180e-09     2001     2001    1.000
+ExactMS     ExactHessian   cap        8.00    max_iter    2000   2.079e-05   1.297e-09     2001     2001    1.000
+ExactMS     ExactHessian   cap      128.00 first_order     146   1.819e-05   9.924e-10      147      147    1.000
+ExactMS     ExactHessian   dfo        0.10 first_order      16   1.295e-05   5.032e-10       17       17    0.000
+ExactMS     ExactHessian   dfo        0.50 first_order      16   1.295e-05   5.032e-10       17       17    0.000
+ExactMS     ExactHessian   dfo        1.00 first_order      16   1.295e-05   5.032e-10       17       17    0.000
+ExactMS     ExactHessian   dfo        2.00 first_order      16   1.295e-05   5.032e-10       17       17    0.000
+ExactMS     ExactHessian   dfo        5.00 first_order      16   1.295e-05   5.032e-10       17       17    0.000
+ExactMS     ExactHessian   dfo       20.00 first_order      16   1.295e-05   5.032e-10       17       17    0.000
+ExactMS     SR1            cap        0.01    max_iter    2000   1.423e-02   6.194e-04     2001     2001    1.000
+ExactMS     SR1            cap        0.05    max_iter    2000   3.197e-03   3.079e-05     2001     2001    1.000
+ExactMS     SR1            cap        0.10    max_iter    2000   1.628e-03   7.969e-06     2001     2001    1.000
+ExactMS     SR1            cap        0.30    max_iter    2000   5.398e-04   8.746e-07     2001     2001    1.000
+ExactMS     SR1            cap        0.50     stalled      79   2.706e-08   1.339e-08       80       73    1.000
+ExactMS     SR1            cap        1.00     stalled      44   4.752e-09   2.351e-09       45       38    1.000
+ExactMS     SR1            cap        2.00 first_order      17   4.232e-12   3.701e-12       18       17    0.000
+ExactMS     SR1            cap        4.00 first_order      18   1.969e-12   1.541e-12       19       18    0.000
+ExactMS     SR1            cap        8.00 first_order      18   1.969e-12   1.541e-12       19       18    0.000
+ExactMS     SR1            cap      128.00 first_order      18   1.969e-12   1.541e-12       19       18    0.000
+ExactMS     SR1            dfo        0.10     stalled     242   5.579e-08   2.760e-08      243      236    1.000
+ExactMS     SR1            dfo        0.50 first_order      11   5.750e-13   8.284e-13       12       11    0.000
+ExactMS     SR1            dfo        1.00 first_order      12   5.750e-13   8.284e-13       13       11    0.000
+ExactMS     SR1            dfo        2.00 first_order      12   5.750e-13   8.284e-13       13       11    0.000
+ExactMS     SR1            dfo        5.00 first_order      13   5.750e-13   8.284e-13       14       11    0.000
+ExactMS     SR1            dfo       20.00 first_order      13   5.750e-13   8.284e-13       14       11    0.000
+ExactMS     LBFGS          cap        0.01    max_iter    2000   1.423e-02   6.194e-04     2001     2001    1.000
+ExactMS     LBFGS          cap        0.05    max_iter    2000   3.197e-03   3.080e-05     2001     2001    1.000
+ExactMS     LBFGS          cap        0.10    max_iter    2000   1.627e-03   7.955e-06     2001     2001    1.000
+ExactMS     LBFGS          cap        0.30    max_iter    2000   5.296e-04   8.421e-07     2001     2001    1.000
+ExactMS     LBFGS          cap        0.50     stalled      85   1.470e-08   7.275e-09       86       79    1.000
+ExactMS     LBFGS          cap        1.00     stalled      40   1.605e-08   9.194e-09       41       33    1.000
+ExactMS     LBFGS          cap        2.00 first_order      22   2.884e-10   8.808e-10       23       21    0.000
+ExactMS     LBFGS          cap        4.00 first_order      21   2.761e-11   1.377e-11       22       20    0.333
+ExactMS     LBFGS          cap        8.00 first_order      21   2.755e-10   1.633e-10       22       19    0.000
+ExactMS     LBFGS          cap      128.00 first_order      21   2.755e-10   1.633e-10       22       19    0.000
+ExactMS     LBFGS          dfo        0.10     stalled     338   4.884e-08   2.416e-08      339      331    1.000
+ExactMS     LBFGS          dfo        0.50 first_order      44   4.688e-11   2.637e-11       45       44    0.800
+ExactMS     LBFGS          dfo        1.00 first_order      21   7.939e-11   3.955e-11       22       20    0.000
+ExactMS     LBFGS          dfo        2.00     stalled      36   4.408e-09   7.014e-09       37       18    1.000
+ExactMS     LBFGS          dfo        5.00 first_order      23   4.304e-11   3.030e-11       24       17    0.000
+ExactMS     LBFGS          dfo       20.00 first_order      24   4.304e-11   3.030e-11       25       17    0.000
+
+DRIVER OK
+GKS: glyph missing from current font: 178
+GKS: glyph missing from current font: 178
+GKS: glyph missing from current font: 178

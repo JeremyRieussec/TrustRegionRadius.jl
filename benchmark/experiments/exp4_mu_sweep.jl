@@ -18,7 +18,7 @@
 #    geometrically, so its inactivity is unconditional. It should recover from
 #    a starting μ far below the threshold at a cost of O(log(κ̄/μ0)) iterations.
 #
-#   julia --project=benchmark benchmark/experiments/exp4_mu_sweep.jl
+#   julia --project=benchmark -e 'include("benchmark/initialisation.jl"); mu_sweep()'
 # =============================================================================
 
 const MU_MAX = [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]

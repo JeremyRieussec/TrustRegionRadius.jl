@@ -6,18 +6,20 @@ to `η₁` at fixed `η₁`, for the eight radius rules Part III marks tested, o
 
 ## Reproducing
 
-From the repository root:
+From the repository root. The experiment runs through `initialisation.jl`, not
+as a script: the file carries no `using` and no `include`, so handing its path
+to `julia` directly fails with `UndefVarError: RULES`.
 
 ```bash
-julia --project=benchmark benchmark/experiments/exp14_acceptance_band.jl
+julia --project=benchmark -e 'include("benchmark/initialisation.jl"); acceptance_band()'
 ```
 
 That writes one timestamped archive under `benchmark/results/`. The run is
 resumable at problem granularity, one JLD2 per problem, so an interrupted
-campaign continues with
+campaign continues where it stopped with
 
 ```bash
-TRR_RESUME=benchmark/results/exp_YYYY-MM-DD_HH-MM-SS_acceptance_band julia --project=benchmark benchmark/experiments/exp14_acceptance_band.jl
+TRR_RESUME=benchmark/results/exp_YYYY-MM-DD_HH-MM-SS_acceptance_band julia --project=benchmark -e 'include("benchmark/initialisation.jl"); acceptance_band()'
 ```
 
 Then turn the archive into the LaTeX fragments the report inputs:

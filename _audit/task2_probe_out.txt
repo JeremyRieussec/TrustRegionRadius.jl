@@ -1,0 +1,37 @@
+
+============================================================================
+1. sinc_1d, branched as the prompt gives it, and unbranched
+============================================================================
+  branched   REJECT: TypeError: non-boolean (SparseConnectivityTracer.HessianTracer{Int64, BitSet, Dict{Int64, BitSet}, SparseConnectivityTracer.NotShared}) used in boolea
+  plain      builds. f=-0.0912114158  g=4.543586e-03  H=0.0903818494
+
+============================================================================
+2. API names of the prompt against the package
+============================================================================
+  theta_trajectory       exists
+  inactivity_index       exists
+  branch_counts          exists
+  kappa_bar              exists
+  kappa_bar_empirical    exists
+  observed_order         exists
+  active_fraction        exists
+  RDFO                   exists
+  RGradCapped            exists
+  RGrad                  exists
+  ExactMS                exists
+  ExactHessian           exists
+
+============================================================================
+3. Does the subsolver return the closed-form 1-D step?
+============================================================================
+  checked 159 iterations, 0 with a_k <= 0
+  largest relative discrepancy |s_k| against the closed form: 9.063e-13
+  AGREES
+
+============================================================================
+4. Is the solver generic over the element type?
+============================================================================
+  model eltype BigFloat
+  DOES NOT RUN: MethodError: no method matching TrustRegionRadius.TRCore(::ADNLPModel{BigFloat, Vector{BigFloat}, Vector{Int64}}, ::RGradCapped, ::ExactHessian, ::ExactMS, ::TRParams{Float64}; x_ref::Nothing, true_curvature::Bool, hessi
+
+PROBE OK

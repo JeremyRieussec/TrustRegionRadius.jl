@@ -43,12 +43,19 @@
 # `tr_solve` -- the package entry point, not a local solver -- against every
 # configuration in turn, and reads `solver_specific` directly.
 #
-#   julia --project=benchmark benchmark/experiments/exp14_acceptance_band.jl
+# HOW TO RUN IT
+#
+# Through `initialisation.jl`, never as a script. This file carries no `using`
+# and no `include`, so `RULES`, `TRParams` and the archive functions are not
+# defined until that file has run. Handing this path to `julia` directly fails
+# at the first line that names one of them.
+#
+#   julia --project=benchmark -e 'include("benchmark/initialisation.jl"); acceptance_band()'
 #
 # Resumable: one JLD2 per problem, so an interrupted campaign continues with
 #
 #   TRR_RESUME=benchmark/results/exp_..._acceptance_band \
-#     julia --project=benchmark benchmark/experiments/exp14_acceptance_band.jl
+#     julia --project=benchmark -e 'include("benchmark/initialisation.jl"); acceptance_band()'
 #
 # `TRR_AB_LIMIT=n` runs the first n problems only. That is a pilot, not the
 # experiment: the realised count is written into the archive so a pilot archive
@@ -89,6 +96,26 @@ const AB_TIE = 0.05
 # -----------------------------------------------------------------------------
 
 """
+    AB_MAX_TIME
+
+Wall-clock budget for one solve, defaulting to `SOLVER_PARAMS.max_time`.
+
+Set `TRR_AB_MAXTIME` to override. This exists because 80 configurations per
+problem multiply the budget: at the default 120 s a single hard problem can hold
+the campaign for 160 minutes, and the CUTEst set at n <= $MAX_VAR contains a run of
+them (DIAMON2DLS, DIAMON3DLS and the DMN15*LS family).
+
+Lowering it is not per-problem or per-rule tuning. The budget applies identically
+to all 80 configurations of every problem, so the paired comparison is unchanged:
+both settings of a pair get the same budget on the same problem. What it does
+change is the status breakdown, since a run that would have reached `:first_order`
+late reports `:max_time` instead. Any archive produced under an override records
+the realised value, and the report must quote it.
+"""
+const AB_MAX_TIME = something(tryparse(Float64, get(ENV, "TRR_AB_MAXTIME", "")),
+                              SOLVER_PARAMS.max_time)
+
+"""
     ab_params(η1, frac) -> TRParams
 
 `SOLVER_PARAMS` with η1 set to the stratum and η set to `frac * η1`. Everything
@@ -105,7 +132,7 @@ ab_params(η1::Float64, frac::Float64) =
              max_iterations = SOLVER_PARAMS.max_iterations,
              tol            = SOLVER_PARAMS.tol,
              tol_H          = SOLVER_PARAMS.tol_H,
-             max_time       = SOLVER_PARAMS.max_time)
+             max_time       = AB_MAX_TIME)
 
 "Every (stratum, rule, η) triple, as (label, stratum, rule name, factory, frac, η1)."
 function ab_configs(rules = AB_RULES)
@@ -206,13 +233,13 @@ ab_solved(r) = r.status in (:first_order, :second_order)
 """
     ab_problems() -> (problems, note)
 
-CUTEst, unconstrained, `n ≤ 200`. Never the analytic fallback.
+CUTEst, unconstrained, `n ≤ MAX_VAR`. Never the analytic fallback.
 
 `default_problems()` returns `analytic_problems()` when the CUTEst query comes
 back empty, so a run where CUTEst failed to load produces a table that reads as a
 CUTEst benchmark and is not one. This stops instead.
 
-`n ≤ 200` rather than config.jl's `MAX_VAR`, so that `SteihaugCG` is not the only
+`n ≤ MAX_VAR` rather than config.jl's `MAX_VAR`, so that `SteihaugCG` is not the only
 legal subsolver by default and the realised set is the 185 problems Section 5 of
 Part III reports. `ExactMS` is admissible on all of them; `SteihaugCG` is used
 throughout so that no subsolver switch is confounded with the swept threshold.
@@ -221,9 +248,9 @@ function ab_problems()
     HAS_CUTEST || error("exp14 needs CUTEst. `default_problems()` would fall back " *
                         "to the analytic set and the tables would read as a CUTEst " *
                         "benchmark without being one. Install CUTEst and rerun.")
-    ps = cutest_problems(min_var = 2, max_var = 200, max_con = 0, limit = nothing)
+    ps = cutest_problems(min_var = MIN_VAR, max_var = MAX_VAR, max_con = MAX_CON, limit = PROBLEM_LIMIT)
     isempty(ps) && error("CUTEst loaded but selected no problems at " *
-                         "min_var = 2, max_var = 200, max_con = 0.")
+                         "min_var = $MIN_VAR, max_var = $MAX_VAR, max_con = $MAX_CON.")
     lim = tryparse(Int, get(ENV, "TRR_AB_LIMIT", ""))
     note = ""
     if lim !== nothing && lim < length(ps)
@@ -305,12 +332,16 @@ function acceptance_band(; rules = AB_RULES, tag = "acceptance_band")
 
     @info "Experiment 14: $(length(problems)) problems × $(length(cfgs)) configurations"
     isempty(pilot_note) || @warn pilot_note
+    AB_MAX_TIME == SOLVER_PARAMS.max_time ||
+        @warn "max_time overridden to $AB_MAX_TIME s per solve " *
+              "(SOLVER_PARAMS says $(SOLVER_PARAMS.max_time)). The status " *
+              "breakdown is not comparable with a campaign at the default."
 
     save_config(arch; rules = rules,
                 models = [DEFAULT_MODEL], subsolvers = [DEFAULT_SUBSOLVER],
                 params = SOLVER_PARAMS,
-                problem_selection = Dict("min_var" => 2, "max_var" => 200,
-                                         "max_con" => 0, "source" => "CUTEst"),
+                problem_selection = Dict("min_var" => MIN_VAR, "max_var" => MAX_VAR,
+                                         "max_con" => MAX_CON, "source" => "CUTEst"),
                 extra = Dict("experiment"      => "exp14_acceptance_band",
                              "eta_fractions"   => AB_ETA_FRACTIONS,
                              "strata"          => [string(s) for (s, _) in AB_STRATA],
@@ -318,6 +349,7 @@ function acceptance_band(; rules = AB_RULES, tag = "acceptance_band")
                              "tie_band"        => AB_TIE,
                              "n_problems"      => length(problems),
                              "n_configurations"=> length(cfgs),
+                             "max_time"        => AB_MAX_TIME,
                              "pilot"           => pilot_note))
 
     # --- the realised problem set, written beside the results -----------------
@@ -549,7 +581,7 @@ function ab_report(arch, rows, refused, problems, rules, pilot_note)
     finalize_archive(arch; notes = """
         Acceptance decoupled from scaling. eta swept over
         $(AB_ETA_FRACTIONS) times eta1, at eta1 in $([e for (_, e) in AB_STRATA]).
-        $(length(problems)) CUTEst problems, unconstrained, n <= 200.
+        $(length(problems)) CUTEst problems, unconstrained, n <= $MAX_VAR.
         $(isempty(pilot_note) ? "Full problem set." : pilot_note)
 
         Read exp14_occupancy.txt FIRST. The band is what the experiment is about,

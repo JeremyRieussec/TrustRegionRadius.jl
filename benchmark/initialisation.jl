@@ -42,6 +42,12 @@ include("experiments/exp13_flat_well.jl")
 # Acceptance decoupled from scaling: the eta sweep at fixed eta1.
 include("experiments/exp14_acceptance_band.jl")
 
+# Slow saddles on the radius axis: the escape-time lower bound.
+include("experiments/exp15_slow_saddle.jl")
+
+# The activity dichotomy on sin(x)/x.
+include("experiments/exp16_sinc_dichotomy.jl")
+
 # -----------------------------------------------------------------------------
 # Two gaps, flagged rather than papered over
 # -----------------------------------------------------------------------------

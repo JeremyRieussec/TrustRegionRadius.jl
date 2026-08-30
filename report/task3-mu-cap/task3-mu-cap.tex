@@ -1,0 +1,319 @@
+% =============================================================================
+% A small cap shrinks the region until the method is gradient descent.
+%
+% Standalone. Own preamble, no bibliography, no \cite. The macro block mirrors
+% the one near the top of _Thesis_FINAL/Article3/Survey-part3-v1.tex, through
+% \providecommand, so this file can later be folded into that document.
+%
+% Every number comes from numbers.tex, which _audit/task3_driver.jl writes from
+% the runs. Nothing here is transcribed by hand.
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\geometry{margin=2.5cm}
+
+% ---- macros mirrored from Survey-part3-v1.tex -------------------------------
+\providecommand{\defeq}{\mathrel{:=}}
+\providecommand{\kbar}{\overline{\kappa}}
+\providecommand{\calO}{{\mathcal{O}}}
+\providecommand{\NN}{{\mathbb{N}}}
+\providecommand{\abs}[1]{\left \vert #1 \right \vert}
+\providecommand{\norm}[1]{\left \lVert #1 \right \rVert}
+\providecommand*\mykappa[1]{ \kappa_{\scriptscriptstyle \text{#1}} }
+\providecommand*\myeta[1]{ \eta_{\scriptscriptstyle \text{#1}} }
+\providecommand{\Rdelta}{\textsf{R-delta}}
+\providecommand{\Rstep}{\textsf{R-step}}
+\providecommand{\Rdfo}{\textsf{R-DFO}}
+\providecommand{\Rgrad}{\textsf{R-grad}}
+\providecommand{\Rrtr}{\textsf{R-RTR}}
+\providecommand{\Rgrtr}{\textsf{R-gRTR}}
+\providecommand{\RAdaptiveGrad}{\textsf{R-adaptive-grad}}
+\providecommand{\RAdaptstep}{\textsf{R-adaptive-step}}
+\providecommand{\gone}{\gamma_1}
+\providecommand{\gtwo}{\gamma_2}
+\providecommand{\gthree}{\gamma_3}
+
+\input{numbers}
+
+\title{A small cap shrinks the region until the method is gradient descent}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+$\Rgrad(\omega,\overline{\mu})$ bounds the multiplier by $\overline{\mu}$, which
+the asymptotic theory needs. The radius $\Delta_k = \mu_k\norm{g_k}$ is then
+small everywhere, and a small region makes the linear term of the model dominate
+its quadratic term. We measure the resulting degeneration on a quartic with four
+known critical points, over \NConfigs\ configurations. With truncated conjugate
+gradient the degeneration is exact and total below $\overline{\mu} = 0.1$, where
+every step is the Cauchy point. With the exact Mor\'e-Sorensen solver it is
+asymptotic, and we fit its rate. We also reconcile two Cauchy statistics that
+disagree, and the reconciliation refutes the explanation we set out to confirm.
+\end{abstract}
+
+% =============================================================================
+\section{The claim}\label{sec: claim}
+% =============================================================================
+
+A cap on the multiplier holds the radius down. The model is
+\begin{equation}
+  m_k(s) = f(x_k) + g_k^{\top}s + \tfrac12 s^{\top}H_k s ,
+  \label{eqn: model}
+\end{equation}
+and on a region of radius $\Delta$ the linear term is $\calO(\Delta)$ while the
+quadratic term is $\calO(\Delta^2)$. As $\Delta \to 0$ the linear term dominates
+and the minimiser of \eqref{eqn: model} turns towards $-g_k$. The model Hessian
+stops influencing the direction. The same happens to $\Rdfo(\omega)$ for small
+$\zeta$, which holds $\Delta_k$ below $\zeta\omega_k$.
+
+The two subsolvers degenerate differently, and the difference is the point of
+this report. Truncated conjugate gradient starts from $s = 0$ with first
+direction $-g_k$. If the region truncates it there, the returned step is
+$-\Delta_k g_k/\norm{g_k}$ and the cosine is one to machine precision. The exact
+Mor\'e-Sorensen solver returns $s^* = -(H_k + \sigma I)^{-1}g_k$ with $\sigma$
+set so that the step reaches the boundary. As $\Delta \to 0$ we have
+$\sigma \to \infty$ and $s^* \to -\Delta g_k/\norm{g_k}$, without ever equalling
+it.
+
+% =============================================================================
+\section{Setup}\label{sec: setup}
+% =============================================================================
+
+The test function is
+\begin{equation}
+  f(p) = p_1^4 - p_1^3 + \left(\tfrac14 - \tfrac{p_1}{2}\right)p_2^2
+         + \tfrac{p_2^4}{4} .
+  \label{eqn: f}
+\end{equation}
+It has four critical points of three kinds. The origin is degenerate, with
+$\nabla^2 f$ singular and positive semidefinite, eigenvalues $0$ and $1/2$. The
+point $(0.75, 0)$ is a non-degenerate saddle with $\lambda_{\min} = -0.25$. The
+two local minimisers sit at $((1+\sqrt5)/4, \pm\sqrt{(\sqrt5-1)/4})$.
+
+We sweep three axes. The cap $\overline{\mu}$ takes \NCaps\ values from $0.01$ to
+$128$, and $\zeta$ takes \NZetas\ values from $0.1$ to $20$. The subsolver is
+truncated conjugate gradient or exact Mor\'e-Sorensen. The model Hessian is
+exact, SR1 with memory ten, or L-BFGS with memory five. Every run starts from
+$x_0 = (-0.5, 0.6)$ and goes through \texttt{tr\_solve}.
+
+% =============================================================================
+\section{Three classes of step}\label{sec: classes}
+% =============================================================================
+
+A single Cauchy percentage merges two different events. We separate them.
+
+\begin{enumerate}[leftmargin=2em]
+  \item \emph{Truncated at the boundary}: $\norm{s_k} = \Delta_k$ with direction
+        $-g_k$. The Hessian has touched neither the direction nor the length.
+        This alone is gradient descent in disguise.
+  \item \emph{Stopped inside after one CG iteration}: the direction is $-g_k$
+        and the Hessian sets the length through the exact line search on the
+        model.
+  \item \emph{Two or more CG iterations}.
+\end{enumerate}
+
+Table~\ref{tab: classes} reports the three fractions. Figure~\ref{fig: classes}
+shows them stacked.
+
+The degeneration is total below $\overline{\mu} = 0.1$. With the exact Hessian
+at $\overline{\mu} \in \{0.01, 0.05, 0.1\}$ every iteration falls in class one,
+and the minimum cosine over the whole run is one. The method is exactly gradient
+descent for two thousand iterations. Class two is almost never occupied, which
+says the degeneration proceeds by truncation rather than by a short interior
+step.
+
+\begin{table}[H]\centering\small
+  \input{tab_classes}
+  \caption{The three classes of step under truncated conjugate gradient, as
+  fractions of the iterations that happened. The last column is the minimum of
+  $\cos(s_k, -g_k)$ over the run.}
+  \label{tab: classes}
+\end{table}
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth]{figs/fig2_step_classes.pdf}
+  \caption{The three classes against $\overline{\mu}$, one panel per model
+  Hessian, truncated conjugate gradient only.}
+  \label{fig: classes}
+\end{figure}
+
+\begin{figure}[H]\centering
+  \includegraphics[width=0.72\textwidth]{figs/fig1_radius_vs_k.pdf}
+  \caption{$\Delta_k$ against $k$ for four caps. The cap holds the region down
+  by orders of magnitude for the whole run.}
+  \label{fig: radius}
+\end{figure}
+
+% =============================================================================
+\section{Two Cauchy statistics, reconciled}\label{sec: cauchy}
+% =============================================================================
+
+The package reports \texttt{cauchy\_fraction}, the fraction of iterations with
+$\cos(s_k,-g_k)$ within $10^{-12}$ of one. Counting \texttt{cg\_iters == 1}
+tests the Krylov dimension instead. The two disagree at $\overline{\mu} = 4$,
+where they read \CauchyFour\ and \CgOneFour, and at $\overline{\mu} = 8$, where
+they read \CauchyEight\ and \CgOneEight. The cosine test counts more.
+
+The natural explanation is that $g_k$ is close to an eigenvector of $H_k$. The
+second CG direction would then add nothing to the direction while still being
+counted. On this function the iterates approach the axis $p_2 = 0$, where the
+Hessian is diagonal and the gradient is an eigenvector, so the explanation is
+plausible.
+
+\emph{We tested it and it is wrong.} We recorded
+$\sin\angle(H_kg_k, g_k)$ at every iteration, which vanishes exactly when $g_k$
+is an eigenvector of $H_k$, and compared the disagreeing iterations against the
+agreeing ones. At $\overline{\mu} = 4$ the medians are \SinDisFour\ and
+\SinAgreeFour, which is no difference at all, and both sit near $1/\sqrt2$,
+far from an eigenvector. At $\overline{\mu} = 8$ they are \SinDisEight\ and
+\SinAgreeEight, so the disagreeing iterations are \emph{further} from the
+eigenvector case, not closer.
+
+The mechanism is the boundary crossing. Let $z_1$ denote the first Steihaug
+iterate, the exact minimiser of \eqref{eqn: model} along $-g_k$. Truncated CG
+stops at the first iteration when $\norm{z_1} \geq \Delta_k$ and continues when
+it does not. On the disagreeing iterations $\norm{z_1}/\Delta_k$ has median
+\ZDisFour\ at $\overline{\mu} = 4$, so $z_1$ lands within a part in $10^{8}$ of
+the boundary. Conjugate gradient does not truncate, takes a second iteration,
+and immediately backtracks to the boundary by a negligible distance. The step is
+on the boundary and parallel to $-g_k$ to within $10^{-12}$, and
+\texttt{cg\_iters} records two. On the agreeing iterations the same ratio has
+median \ZAgreeFour. All \NDisFour\ disagreeing iterations exceed $0.999$, against
+a small minority of the agreeing ones.
+
+The two statistics answer different questions, and neither is wrong. The cosine
+test measures the direction that came back. The Krylov count measures the work
+that produced it. They separate exactly when the first Steihaug iterate lands on
+the boundary to within rounding, and that is a bookkeeping event rather than a
+property of the spectrum. Table~\ref{tab: reconcile} reports both alongside the
+two diagnostics.
+
+\begin{table}[H]\centering\small
+  \input{tab_reconcile}
+  \caption{The two Cauchy statistics, with the near-eigenvector measure
+  $\sin\angle(H_kg_k,g_k)$ and the boundary ratio $\norm{z_1}/\Delta_k$, medians
+  over the disagreeing and agreeing iterations. Rows with no disagreement are
+  omitted. Exact Hessian only, since $H_k$ is known in closed form there.}
+  \label{tab: reconcile}
+\end{table}
+
+% =============================================================================
+\section{The angle against the radius}\label{sec: angle}
+% =============================================================================
+
+For truncated conjugate gradient on the truncated branch, $1 - \cos(s_k,-g_k)$
+is identically zero. Not small, zero. That is the contrast this section is
+about.
+
+For the exact solver we fitted the exponent rather than assuming it. Fitting
+$\log(1-\cos)$ on $\log\Delta_k$ over the cap sweep gives slope
+\FitDeltaSlope\ with $R^2 = \FitDeltaRsq$. The fit is poor and the exponent is
+not two.
+
+The reason is that $\Delta_k$ is not the parameter the expansion is in. Write
+$s^* = -(H+\sigma I)^{-1}g$ in the eigenbasis of $H$ and expand for large
+$\sigma$, using $\sigma \sim \norm{g}/\Delta$. This gives
+\begin{equation}
+  1 - \cos(s^*, -g) \;\sim\; \tfrac12 \operatorname{Var}_w(\lambda)\,\mu^2 ,
+  \qquad \mu = \frac{\Delta}{\norm{g}} ,
+  \label{eqn: expansion}
+\end{equation}
+where $w_i$ are the weights of $g$ on the eigenvectors of $H$ and
+$\operatorname{Var}_w$ is the weighted variance of the spectrum. The expansion
+parameter is $\mu$, not $\Delta$.
+
+That distinction is exactly what a cap enforces. $\Rgrad(\omega,\overline{\mu})$
+sets $\Delta_k = \mu_k\norm{g_k}$ and pins $\mu_k$ at $\overline{\mu}$, so
+$\mu_k$ is constant along a run. The radius goes to zero only because
+$\norm{g_k}$ does. No exponent in $\mu$ can be fitted from one run, and the
+variation has to come from pooling runs at different caps.
+
+Fitting \eqref{eqn: expansion} that way, over \FitMuN\ iterations with
+$\mu \leq 0.5$, gives slope \FitMuSlope\ with $R^2 = \FitMuRsq$ and intercept
+\FitMuInter\ against the predicted $\log_{10}(1/2) = \FitMuPred$. The second
+order is confirmed. Figure~\ref{fig: angle} shows both fits.
+
+The residual decrease of $1-\cos$ along a run therefore comes from
+$\operatorname{Var}_w(\lambda)$ and not from $\Delta_k$. The iterates approach
+the degenerate origin along a direction on which the Hessian is nearly singular,
+the gradient aligns with an eigenvector, and the weighted variance collapses.
+The near-eigenvector effect is real. It drives the exact solver's angle to zero.
+It is not what separates the two Cauchy statistics of
+Section~\ref{sec: cauchy}.
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth]{figs/fig3_angle_vs_delta.pdf}
+  \caption{Left, $1-\cos(s_k,-g_k)$ against $\Delta_k$ as asked, with the
+  truncated Steihaug iterations at exactly zero placed on the floor of the axis.
+  Right, the same quantity divided by $\operatorname{Var}_w(\lambda)$ against
+  $\mu_k$, pooled over the cap sweep, with the fitted line and the predicted
+  $\tfrac12\mu^2$.}
+  \label{fig: angle}
+\end{figure}
+
+% =============================================================================
+\section{Limit points}\label{sec: limits}
+% =============================================================================
+
+A category column invites the reading that a trapped run converged somewhere
+else. We report the distance to the nearest critical point and $\norm{g_k}$ at
+the last iterate, with a work measure, so that the row survives a change of
+budget. Table~\ref{tab: limits} gives them. No configuration is dropped. The
+trapped ones are the evidence.
+
+\begin{table}[H]\centering\small
+  \input{tab_limits}
+  \caption{Limit points as distance rather than as a category, exact Hessian.
+  A run at \texttt{max\_iter} has not converged anywhere, and its distance says
+  how far from a critical point it stopped.}
+  \label{tab: limits}
+\end{table}
+
+\begin{figure}[H]\centering
+  \includegraphics[width=0.72\textwidth]{figs/fig4_paths.pdf}
+  \caption{Iterate paths for one small and one large cap over the contours of
+  $f$, with the four critical points marked.}
+  \label{fig: paths}
+\end{figure}
+
+% =============================================================================
+\section{Scope}\label{sec: scope}
+% =============================================================================
+
+With the exact Hessian these runs end at the degenerate origin, where
+$\nabla^2 f$ is singular. Part~II's inactivity theory assumes a positive
+definite Hessian at the limit. An activity statistic collected on such a run is
+therefore not evidence about inactivity. The constraint stays active there for a
+reason that has nothing to do with the cap. We report the activity column in
+Table~\ref{tab: limits} and draw no inactivity reading from it.
+
+Which critical point a run reaches, and why the exact Hessian is the model that
+lands on the degenerate one, is a separate question. We record what happens and
+do not investigate it here.
+
+% =============================================================================
+\section{Where this belongs}\label{sec: home}
+% =============================================================================
+
+This is a candidate for the section of Part~III on what the rules do, labelled
+\texttt{sec: designed} there, as the subsection that gives the cost of the cap. It sits
+naturally after the radius asymptotics and before the threshold material,
+because it establishes what a small region does to the step before any threshold
+in a curvature quantity is estimated. The reconciliation of
+Section~\ref{sec: cauchy} belongs with the diagnostics rather than in the main
+line, since it is about two package statistics rather than about a radius rule.
+
+\end{document}

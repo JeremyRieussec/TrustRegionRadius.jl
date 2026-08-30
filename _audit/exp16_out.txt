@@ -1,0 +1,68 @@
+[ Info: Experiment archive → C:\Users\jerem\OneDrive\Desktop\GitHub\TrustRegionRadius.jl\benchmark\results\exp_2026-08-30_03-14-53_sinc_dichotomy
+[ Info: exp16: minimisers [1, 3, 5, 7], y_j and lambda*_j read from task 1
+[ Info: Wrote config → C:\Users\jerem\OneDrive\Desktop\GitHub\TrustRegionRadius.jl\benchmark\results\exp_2026-08-30_03-14-53_sinc_dichotomy\experiment_config.toml
+[ Info: 5.1 RGradCapped, bisection on mu_bar
+[ Info: 5.2 RDFO, bisection on zeta and the Delta_0 sweep
+[ Info: 5.3 RGrad uncapped, mu_infinity and the half-radius test
+[ Info: 5.4 the second threshold, measured and not built upon
+[ Info: 6 precision, the below-threshold arm in both precisions
+[ Info: table → tables\exp16_tab1_per_minimiser.txt
+[ Info: table → tables\exp16_tab2_per_configuration.txt
+[ Info: table → tables\exp16_tab6_rdfo_scan.txt
+[ Info: table → tables\exp16_tab3_uncapped.txt
+[ Info: table → tables\exp16_tab4_second_threshold.txt
+[ Info: table → tables\exp16_tab5_precision.txt
+[ Info: table → tables\exp16_hazards.txt
+[ Info: figure → figures\exp16_fig1_dichotomy.pdf
+[ Info: figure → figures\exp16_fig2_thresholds.pdf
+[ Info: figure → figures\exp16_fig3_sawtooth.pdf
+[ Info: figure → figures\exp16_fig4_branches.pdf
+[ Info: figure → figures\exp16_fig5_precision.pdf
+[ Info: Wrote summary → C:\Users\jerem\OneDrive\Desktop\GitHub\TrustRegionRadius.jl\benchmark\results\exp_2026-08-30_03-14-53_sinc_dichotomy\experiment_summary.md
+  j=1  mu*=4.60347  mu*lambda=1.0000  monotone=true
+  j=3  mu*=10.9502  mu*lambda=1.0000  monotone=true
+  j=5  mu*=17.2502  mu*lambda=1.0000  monotone=true
+  j=7  mu*=23.5414  mu*lambda=1.0000  monotone=true
+  j=1 D0=0.01  transition zeta*l=0.5  above=active    monotone=false neither=0
+  j=1 D0=0.10  transition zeta*l=0.2  above=inactive  monotone=true  neither=0
+  j=1 D0=1.00  transition zeta*l=0.2  above=inactive  monotone=true  neither=0
+  j=3 D0=0.01  transition zeta*l=0.5  above=neither   monotone=true  neither=30
+  j=3 D0=0.10  transition zeta*l=NaN  above=none      monotone=true  neither=0
+  j=3 D0=1.00  transition zeta*l=NaN  above=none      monotone=true  neither=0
+  j=5 D0=0.01  transition zeta*l=0.5  above=neither   monotone=true  neither=30
+  j=5 D0=0.10  transition zeta*l=NaN  above=none      monotone=true  neither=0
+  j=5 D0=1.00  transition zeta*l=NaN  above=none      monotone=true  neither=0
+  j=7 D0=0.01  transition zeta*l=0.5  above=inactive  monotone=true  neither=0
+  j=7 D0=0.10  transition zeta*l=NaN  above=none      monotone=true  neither=0
+  j=7 D0=1.00  transition zeta*l=0.2  above=neither   monotone=true  neither=37
+  j=1 mu0=0.04603 -> mu_inf=11.78  scaled=2.5600  band=true  limit j=1
+  j=1 mu0=0.4603 -> mu_inf=14.73  scaled=3.2000  band=true  limit j=1
+  j=1 mu0=4.603 -> mu_inf=18.41  scaled=4.0000  band=true  limit j=1
+  j=1 mu0=46.03 -> mu_inf=46.03  scaled=10.0000  band=false  limit j=1
+  j=3 mu0=0.1095 -> mu_inf=28.03  scaled=2.5600  band=true  limit j=3
+  j=3 mu0=1.095 -> mu_inf=35.04  scaled=3.2000  band=true  limit j=3
+  j=3 mu0=10.95 -> mu_inf=0.002673  scaled=0.0002  band=false  limit j=3
+  j=3 mu0=109.5 -> mu_inf=0.001671  scaled=0.0002  band=false  limit j=3
+  j=5 mu0=0.1725 -> mu_inf=44.16  scaled=2.5600  band=true  limit j=5
+  j=5 mu0=1.725 -> mu_inf=55.2  scaled=3.2000  band=true  limit j=5
+  j=5 mu0=17.25 -> mu_inf=0.01685  scaled=0.0010  band=false  limit j=5
+  j=5 mu0=172.5 -> mu_inf=0.01053  scaled=0.0006  band=false  limit j=5
+  j=7 mu0=0.2354 -> mu_inf=60.26  scaled=2.5600  band=true  limit j=7
+  j=7 mu0=2.354 -> mu_inf=75.33  scaled=3.2000  band=true  limit j=7
+  j=7 mu0=23.54 -> mu_inf=0.02299  scaled=0.0010  band=false  limit j=7
+  j=7 mu0=235.4 -> mu_inf=0.01437  scaled=0.0006  band=false  limit j=7
+  j=1  largest binding mu_bar = 4.255   2/lambda = 9.207
+  j=3  largest binding mu_bar = 10.12   2/lambda = 21.9
+  j=5  largest binding mu_bar = 15.95   2/lambda = 34.5
+  j=7  largest binding mu_bar = 21.76   2/lambda = 47.08
+  j=1 Float64   iter=   31 stalled      |g|=1.754e-09 predicted rate 0.5000
+  j=1 BigFloat  iter=  118 stalled      |g|=2.972e-30 predicted rate 0.5000
+  j=3 Float64   iter=   32 stalled      |g|=7.760e-10 predicted rate 0.5000
+  j=3 BigFloat  iter=  118 stalled      |g|=8.764e-31 predicted rate 0.5000
+  j=5 Float64   iter=   32 stalled      |g|=7.149e-10 predicted rate 0.5000
+  j=5 BigFloat  iter=  120 stalled      |g|=3.028e-31 predicted rate 0.5000
+  j=7 Float64   iter=   33 stalled      |g|=3.661e-10 predicted rate 0.5000
+  j=7 BigFloat  iter=  120 stalled      |g|=6.202e-31 predicted rate 0.5000
+
+TOTAL 1.0 min
+ARCHDIR C:\Users\jerem\OneDrive\Desktop\GitHub\TrustRegionRadius.jl\benchmark\results\exp_2026-08-30_03-14-53_sinc_dichotomy

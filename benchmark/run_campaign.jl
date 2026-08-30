@@ -29,8 +29,6 @@
 
 include(joinpath(@__DIR__, "initialisation.jl"))
 
-using Printf, Dates
-
 const CAMPAIGN = [
     ("comparison",  "exp1  like-for-like comparison",              comparison),
     ("zeta",        "exp3  the ζ sweep of RDFO",                   zeta_sweep),
