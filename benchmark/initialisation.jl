@@ -48,6 +48,9 @@ include("experiments/exp15_slow_saddle.jl")
 # The activity dichotomy on sin(x)/x.
 include("experiments/exp16_sinc_dichotomy.jl")
 
+# Performance profiles for the second-order rules on CUTEst.
+include("experiments/exp17_second_order_profiles.jl")
+
 # -----------------------------------------------------------------------------
 # Two gaps, flagged rather than papered over
 # -----------------------------------------------------------------------------

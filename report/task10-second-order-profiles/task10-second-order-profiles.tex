@@ -1,0 +1,331 @@
+% =============================================================================
+% Performance profiles for the second-order radius rules on CUTEst.
+%
+% Standalone. Own preamble, no bibliography, no \cite. The macro block mirrors
+% the one near the top of _Thesis_FINAL/Article3/Survey-part3-v1.tex, through
+% \providecommand, so this file can later be folded into that document.
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{subcaption}
+\usepackage[hidelinks]{hyperref}
+\geometry{margin=2.5cm}
+
+% ---- macros mirrored from Survey-part3-v1.tex -------------------------------
+\providecommand{\defeq}{\mathrel{:=}}
+\providecommand{\kbar}{\overline{\kappa}}
+\providecommand{\calO}{{\mathcal{O}}}
+\providecommand{\NN}{{\mathbb{N}}}
+\providecommand{\abs}[1]{\left \vert #1 \right \vert}
+\providecommand{\norm}[1]{\left \lVert #1 \right \rVert}
+\providecommand*\mykappa[1]{ \kappa_{\scriptscriptstyle \text{#1}} }
+\providecommand*\myeta[1]{ \eta_{\scriptscriptstyle \text{#1}} }
+\providecommand{\Rdelta}{\textsf{R-delta}}
+\providecommand{\Rstep}{\textsf{R-step}}
+\providecommand{\Rdfo}{\textsf{R-DFO}}
+\providecommand{\Rgrad}{\textsf{R-grad}}
+\providecommand{\Rrtr}{\textsf{R-RTR}}
+\providecommand{\Rgrtr}{\textsf{R-gRTR}}
+\providecommand{\RAdaptiveGrad}{\textsf{R-adaptive-grad}}
+\providecommand{\RAdaptstep}{\textsf{R-adaptive-step}}
+\providecommand{\gone}{\gamma_1}
+\providecommand{\gtwo}{\gamma_2}
+\providecommand{\gthree}{\gamma_3}
+
+\newtheorem{proposition}{Proposition}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+
+\title{Performance profiles for the second-order radius rules\\ on CUTEst}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+PLACEHOLDER-ABSTRACT
+\end{abstract}
+
+% =============================================================================
+\section{What is measured}\label{sec: measured}
+% =============================================================================
+
+Three performance profiles, in this order of importance.
+
+\begin{description}[leftmargin=2.2em, style=nextline]
+  \item[P1] Among the second-order radius rules, on the second-order task. Only
+    the radius rule differs across the lines, so this profile needs no further
+    argument.
+  \item[P2] Second-order against first-order, scored on the \emph{first-order}
+    task. This is the overhead of carrying the curvature machinery when a
+    first-order point is all that was wanted.
+  \item[P3] Second-order against first-order, scored on the \emph{second-order}
+    task. This is the payoff.
+\end{description}
+
+P2 and P3 together are how the two families compare. Neither alone is an answer.
+A report quoting only P2 says the second-order arm is expensive, a report quoting
+only P3 says it is reliable, and each has described half of one trade.
+
+\subsection{The rule that makes the comparison valid}\label{sec: scoring}
+
+Every run is scored afterwards, from the point it returned, against one criterion
+applied by the same code to every run. No profile in this report is drawn on the
+solver's own status.
+
+The reason is that the two families stop on different tests. A first-order radius
+rule stops when the gradient is small. A second-order rule keeps going until it
+also has curvature. Profiling the two on their own stopping tests compares the
+cost of an easy task with the cost of a hard one, and the first-order rules win by
+construction.
+
+Two tolerances are fixed once,
+\begin{equation}
+  \varepsilon_g = 10^{-5}, \qquad \varepsilon_H = 10^{-6} .
+  \label{eqn: tolerances}
+\end{equation}
+Both are the package's shared settings, $\varepsilon_g$ the \texttt{tol} of
+\texttt{SOLVER\_PARAMS} and $\varepsilon_H$ the \texttt{tol\_H} of
+\texttt{SECOND\_ORDER\_PARAMS}. The two criteria are
+\begin{align}
+  \text{first-order} &: \quad \norm{g} \leq \varepsilon_g ,
+  \label{eqn: first order criterion} \\
+  \text{second-order} &: \quad \norm{g} \leq \varepsilon_g
+     \ \text{ and } \ \lambda_{\min} \geq -\varepsilon_H .
+  \label{eqn: second order criterion}
+\end{align}
+Both are evaluated by \texttt{second\_order\_status} of the package, which is the
+same function the solver's own stopping test uses, called here on the returned
+point of every run whatever that run's status was.
+
+% =============================================================================
+\section{Three things established before the runs}\label{sec: established}
+% =============================================================================
+
+\subsection{The subproblem solver}\label{sec: subsolver}
+
+Part~II asks the step for a fraction of the decrease available along the leftmost
+eigenvector. Assumption \texttt{as: Eigenpoint decrease} requires
+\begin{equation}
+  m_k(0) - m_k(s_k) \;\geq\; \tfrac12 \mykappa{fed} \abs{\lambda_k^-} \Delta_k^2
+  \qquad\text{whenever } \lambda_k^- < 0 ,
+  \label{eqn: eigenpoint decrease}
+\end{equation}
+and \texttt{as: max Cauchy/eigen decrease} asks for the better of that and the
+Cauchy decrease. Theorem \texttt{thm: Eigenpoint decrease} of Part~II supplies
+\eqref{eqn: eigenpoint decrease} for the eigenpoint $s_k^E = \Delta_k u_k$ of
+\texttt{eqn: eigenpoint}, with $u_k$ any direction satisfying
+\texttt{eqn: sufficient negative curvature direction}.
+
+Three subproblem solvers of the package were examined against that condition.
+
+\begin{description}[leftmargin=2.2em, style=nextline]
+  \item[\texttt{ExactMS}] Solves the trust-region subproblem exactly by the
+    Mor\'e--Sorensen characterisation, hard case included, so it dominates both
+    the Cauchy point and the eigenpoint and satisfies
+    \eqref{eqn: eigenpoint decrease} with $\mykappa{fed} = 1$. It needs a dense
+    eigendecomposition and refuses above its \texttt{nmax}, which is $200$.
+  \item[\texttt{EigenPoint(SteihaugCG())}] Computes $\pm\Delta v_{\min}$ and
+    returns whichever of that and the inner step decreases the model more, so it
+    satisfies \eqref{eqn: eigenpoint decrease} with $\mykappa{fed} = \mykappa{snc}$,
+    the quality of the eigenvector. That is $1$ in the dense branch and
+    Lanczos-limited above it.
+  \item[\texttt{SteihaugCG}] Terminates on the first direction of negative
+    curvature the conjugate-gradient recurrence reaches and runs to the boundary
+    along it. The decrease is real and the direction is whichever the recurrence
+    happened to find, so the guaranteed decrease carries no
+    $\abs{\lambda_k^-}\Delta_k^2$ term. It does not deliver the eigenpoint
+    decrease.
+\end{description}
+
+The second-order arm therefore uses \texttt{ExactMS} at $n \leq 200$ and
+\texttt{EigenPoint(SteihaugCG())} above. The switch is on the problem, not on the
+column, so every line of a profile sees the same subproblem solver on a given
+problem and the per-problem normalisation is unaffected. The first-order arm uses
+the package's default, \texttt{SteihaugCG}. Every caption names the pair.
+
+\subsection{The criticality measure}\label{sec: tau}
+
+Part~II defines the second-order criticality measure at
+\texttt{eqn:tau definition},
+\begin{equation}
+  \tau_k \defeq \max\{\norm{g_k},\, -\lambda_k^-\} \;\geq\; 0 ,
+  \label{eqn: tau}
+\end{equation}
+with $\lambda_k^-$ the leftmost eigenvalue of the \emph{model} Hessian $H_k$.
+Part~II states that $\tau_k$ is a property of the pair $(x_k, H_k)$ and not of
+$x_k$ alone, for that reason.
+
+The package computes $\tau$ in \texttt{tau\_criticality} as
+$\max\{\norm{g}, -\min(\lambda_{\min}, 0)\}$. The inner clamp is a no-op inside
+the maximum, since $\norm{g} \geq 0$. The two forms were compared on a grid of
+twenty pairs $(\norm{g}, \lambda)$ covering $\lambda < 0$, $\lambda = 0$ and
+$\lambda > 0$, and the worst absolute difference is $0$. So the package
+implements \eqref{eqn: tau} exactly and no choice arises.
+
+The open note at \texttt{app: measure} of the numerical study says that $\tau_k$
+is the leftmost model Hessian eigenvalue in Part~I and the whole second-order
+measure in Part~II, and that Part~III must pick one. \textbf{The premise is
+inaccurate and there is nothing to pick.} Part~I defines no second-order
+criticality measure. Its criticality-anchored section carries a generic measure
+$\chi_k$ with $\chi_k = \norm{g_k}$ as its stated example, at
+\texttt{eqn:criticality step}, and its concluding section says that second-order
+stationarity is outside the scope of its framework. The string \texttt{eigen} does
+not occur anywhere in the Part~I source, and its four occurrences of
+\texttt{lambda\_} are the rates $\lambda_1$ and $\lambda_2$ of the adaptive
+update. The note should be resolved by recording that $\tau_k$ is
+\eqref{eqn: tau} of Part~II, which is what the package already implements.
+
+\subsection{Per-iteration costs, and the route taken}\label{sec: costs}
+
+Post hoc scoring needs the cost a run had spent when it \emph{first} met the
+criterion, not its total at the end. The package's trace does not carry that. The
+trajectories it records are the radius, the gradient norm, the objective, the
+ratio, the step norm, the activity and acceptance flags, $\tau$, the curvature
+and a further nine diagnostics. Not one of them is an evaluation count. The benchmark record adds three totals, read off the model after the solve,
+and no per-iteration counts either.
+
+The fallback route was taken. Each configuration is run twice, with the tightened
+criterion as its \emph{actual} stopping rule.
+
+\begin{description}[leftmargin=2.2em, style=nextline]
+  \item[Pass g] halts at the first iterate with $\norm{g_k} \leq \varepsilon_g$.
+    Its cost is what P2 scores.
+  \item[Pass h] halts at the first iterate that also has
+    $\lambda_{\min} \geq -\varepsilon_H$. Its cost is what P1 and P3 score.
+\end{description}
+
+This is more runs and it is exact. Both passes keep their arm's own
+\texttt{tol\_H}, which in this package controls the curvature estimate as well as
+the stopping test. Switching it off in pass~g would also switch off the cost that
+pass exists to measure, so pass~g halts through a callback instead.
+
+One arithmetic consequence of the package's design bears on
+Section~\ref{sec: cost axes}. With \texttt{ExactHessian} at $n \leq 200$ the
+curvature estimate goes through \texttt{dense\_hessian}, hence through
+\texttt{NLPModels.hess}, and is paid in \emph{Hessian evaluations}. Above $200$ it
+goes through Lanczos on \texttt{hessian\_op} and is paid in Hessian-vector
+products. A profile on Hessian-vector products alone would therefore show the
+second-order arm as free on the small problems, which is the opposite of true.
+Both axes are reported.
+
+% =============================================================================
+\section{The configurations}\label{sec: configs}
+% =============================================================================
+
+Six radius rules, in two groups of three.
+
+\begin{table}[H]
+  \centering
+  \caption{The roster. The second column is \texttt{is\_criticality\_anchored} and
+    the third \texttt{asymptotic\_regime}, both read from the package rather than
+    assumed. $\omega_k$ is the measure the radius is anchored to in the
+    second-order arm.}
+  \label{tab: roster}
+  \begin{tabular}{llll}
+    \toprule
+    rule & reads a measure & regime & $\omega_k$ in the second-order arm \\
+    \midrule
+    $\Rdelta$ & no  & \texttt{bounded\_below} & not read \\
+    $\Rstep$  & no  & \texttt{step\_summable} & not read \\
+    $\Rrtr$   & no  & \texttt{step\_summable} & not read \\
+    $\Rdfo$   & yes & \texttt{vanishing}      & $\tau_k$ \\
+    $\Rgrad$  & yes & \texttt{vanishing}      & $\tau_k$ \\
+    $\Rgrtr$  & yes & \texttt{vanishing}      & $\tau_k$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The distinction in Table~\ref{tab: roster} governs how every caption in this
+report must be read. $\Rdfo$, $\Rgrad$ and $\Rgrtr$ read a criticality measure, so
+replacing $\norm{g_k}$ by $\tau_k$ changes the radius rule itself. $\Rdelta$,
+$\Rstep$ and $\Rrtr$ do not read one, so for them the second-order arm is
+\emph{the same radius rule under a different stopping test and a different
+subproblem solver}. Both groups belong in P1, and a caption that does not say
+which is which claims a distinction the figure does not have.
+
+The two arms differ in exactly three things.
+
+\begin{table}[H]
+  \centering
+  \caption{The two arms. Everything not listed is identical, including the model
+    Hessian, the acceptance and scaling thresholds, the contraction and expansion
+    factors, the initial radius, the iteration cap and the two tolerances of
+    \eqref{eqn: tolerances}.}
+  \label{tab: arms}
+  \begin{tabular}{lll}
+    \toprule
+     & first-order arm & second-order arm \\
+    \midrule
+    second-order stopping test & off & on, $\varepsilon_H = 10^{-6}$ \\
+    $\omega_k$, where read     & $\norm{g_k}$ & $\tau_k$ \\
+    subproblem solver          & \texttt{SteihaugCG}
+                               & \texttt{ExactMS} ($n \leq 200$), \\
+                               & & \texttt{EigenPoint(SteihaugCG())} ($n > 200$) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The shared settings are those of \texttt{SOLVER\_PARAMS}, unchanged:
+$\eta = \eta_1 = 0.1$, $\eta_2 = 0.9$, $\gone = 0.25$, $\gtwo = 0.5$,
+$\gthree = 2$, $\Delta_0 = 1$, $\Delta_{\min} = 0$, and at most $10^4$ iterations.
+$\Rdfo$ runs at $\zeta = 100$ and $\Rgrad$ and $\Rgrtr$ at $\mu_0 = 1$ with no
+cap. The two retrospective rules run at their own $\tilde\eta_1 = 0.05$ and
+$\tilde\eta_2 = 0.9$. Per-rule tuning would measure tuning effort rather than
+algorithmic merit, which is why the settings are shared.
+
+The model Hessian is \texttt{ExactHessian} in both arms. That choice is what makes
+the criterion \eqref{eqn: second order criterion} a statement about $f$. It was
+checked rather than assumed. On the problems tested, the model's dense Hessian
+agrees with \texttt{NLPModels.hess} entry by entry, and the package's
+$\lambda_{\min}$ agrees with a direct dense eigendecomposition, both to $0$ in
+floating point.
+
+\subsection{\texttt{LBFGSModel} gets no line}\label{sec: lbfgs}
+
+\texttt{LBFGSModel} enforces $B \succ 0$, so $\lambda_{\min} > 0$ at every
+iteration, so $\tau_k = \norm{g_k}$ identically and the second-order variant of a
+rule \emph{is} its first-order variant. It therefore has no line of its own in P1.
+
+This was verified on iterate sequences and not asserted. For each of the three
+criticality-anchored rules, on two problems, the wrapped and unwrapped rules were
+run over \texttt{LBFGSModel} and their iteration counts, gradient trajectories and
+radius trajectories compared. All six pairs are identical, entry by entry. There
+is no difference to report as a finding.
+
+% =============================================================================
+\section{The problem set}\label{sec: problems}
+% =============================================================================
+
+CUTEst, unconstrained, with all variables free, $2 \leq n \leq 1000$ and no
+constraints. CUTEst version \texttt{1.4.0}. The query returns \textbf{196}
+problems, of which \textbf{185} have $n \leq 200$ and \textbf{11} have $n > 200$.
+The realised list of names and dimensions is written beside the results, in
+\texttt{exp17\_problems.txt}.
+
+The fallback was disabled deliberately. \texttt{default\_problems()} of the
+benchmark returns the analytic set when the CUTEst query comes back empty, so a
+run in which CUTEst failed to load produces a table that reads as a CUTEst
+benchmark and is not one. The experiment checks \texttt{HAS\_CUTEST}, checks that
+the query returned something, and raises rather than falling back.
+
+P3 runs on the $185$ problems with $n \leq 200$ and no others. Above that
+dimension the package estimates $\lambda_{\min}$ by Lanczos, a Ritz value
+satisfies $\lambda_{\text{Ritz}} \geq \lambda_{\min}$, and an under-resolved run
+therefore \emph{understates} the negative curvature and makes the second-order
+test optimistic. Scoring P3 on such an estimate would rank the runs by the
+machinery the profile exists to compare. On the $185$ problems the estimate is a
+dense symmetric eigendecomposition of $\nabla^2 f(x)$ and is exact.
+
+PLACEHOLDER-RESULTS
+
+\end{document}

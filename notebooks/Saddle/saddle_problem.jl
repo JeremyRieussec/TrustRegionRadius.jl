@@ -23,6 +23,18 @@
 # consistent, and which set the paper adopts is the author's to settle.
 # =============================================================================
 
+using PyPlot   # the four-panel figure is written against PyPlot's subplot API
+
+using TrustRegionRadius
+using ADNLPModels, NLPModels
+using LinearAlgebra, Printf, Statistics
+using Plots, LaTeXStrings
+
+gr()
+default(fontfamily = "Computer Modern", framestyle = :box, grid = true,
+        gridalpha = 0.25, legendfontsize = 7, guidefontsize = 9,
+        titlefontsize = 10, tickfontsize = 8)
+
 # ---------------------------------------------------------------- constants
 
 # ---- standard parameters (change these and re-run) -----------------------
@@ -46,6 +58,15 @@ const X0_DEFAULT = [-0.5, 0.6]
 
 const CRITPTS = [("origin",  ORIGIN), ("saddle", SADDLE),
                  ("min+",    MINP),   ("min-",   MINM)]
+
+println("Critical points of f\n")
+@printf("%-8s %-22s %12s %12s %22s\n", "name", "x", "f(x)", "||grad||", "eig(hess)")
+println("-"^80)
+for (nm, p) in CRITPTS
+    w = eigvals(Symmetric(hess(p)))
+    @printf("%-8s (%+.6f, %+.6f) %12.8f %12.2e   (%+.5f, %+.5f)\n",
+            nm, p[1], p[2], f(p), norm(grad(p)), w[1], w[2])
+end
 
 # ---------------------------------------------------------------- test function
 f(p) = p[1]^4 - p[1]^3 + (0.25 - p[1]/2)*p[2]^2 + p[2]^4/4
@@ -103,3 +124,183 @@ end
 # `active_fraction` takes five, because floor(0.9n) is the last index before the
 # tail and the tail starts at floor(0.9n) + 1. Use the package, which does the
 # slice once and correctly, and takes `stats` rather than `stats.solver_specific`.
+
+
+
+"""
+    plot_run(st, xs; savepath, rule_name, model_name, solver_name, draw_regions, η, η1, η2)
+
+Four-panel diagnostic for one `tr_solve` run.
+
+`st` is the `GenericExecutionStats` returned by `tr_solve(...; trace = true)` and `xs` the
+iterate path collected through its `callback` — exactly what `solve_path` returns. Every
+series is read from `st.solver_specific`; nothing is recomputed.
+
+`draw_regions` controls the per-iteration trust-region circles in panel (a): `:auto` draws
+them only when there are ≤ 60 accepted steps, `true`/`false` force on/off.
+"""
+function plot_run(st, xs; savepath = nothing, rule_name = "", model_name = "",
+                  solver_name = "", draw_regions = :auto,
+                  η = ETA1, η1 = ETA1, η2 = ETA2)
+    ss = st.solver_specific
+    Δv = ss[:delta_trajectory]          # length K+1
+    fv = ss[:obj_trajectory]            # length K+1
+    ρv = ss[:ratio_trajectory]          # length K
+    sv = ss[:step_trajectory]           # length K
+    av = ss[:active_trajectory]         # length K
+    cv = ss[:accepted_trajectory]       # length K
+    K  = length(ρv)
+
+    P = reduce(hcat, xs)
+    naccept = count(cv)
+
+    tag = isempty(rule_name) && isempty(model_name) ? "" :
+          ": " * join(filter(!isempty, [model_name, rule_name, solver_name]), " + ")
+
+    fig  = PyPlot.figure(figsize = (13.5, 10.5))
+    ax_a = fig.add_subplot(2, 2, 1); ax_b = fig.add_subplot(2, 2, 2)
+    ax_c = fig.add_subplot(2, 2, 3); ax_d = fig.add_subplot(2, 2, 4)
+
+    # ---------- (a) phase portrait ----------
+    ax = ax_a
+    xg = range(-0.95, 1.30, length = 420)
+    yg = range(-0.85, 0.90, length = 380)
+    Xg = [xi for yi in yg, xi in xg]
+    Yg = [yi for yi in yg, xi in xg]
+    Zg = @. Xg^4 - Xg^3 + (0.25 - Xg/2)*Yg^2 + Yg^4/4
+    lv = sort(vcat(collect(range(-0.13, 0.02, length = 14)),
+                   collect(range(0.03, 0.9, length = 10))))
+    ax.contour(Xg, Yg, Zg, levels = lv, colors = "0.72", linewidths = 0.6, zorder = 1)
+    ax.contour(Xg, Yg, Zg, levels = [f(SADDLE)], colors = "crimson",
+               linewidths = 1.3, linestyles = "--", zorder = 2)
+
+    xq = range(-0.9, 1.2, length = 22); yq = range(-0.8, 0.8, length = 18)
+    QX = Float64[]; QY = Float64[]; QU = Float64[]; QV = Float64[]
+    for xi in xq, yi in yq
+        gg = -grad([xi, yi]); n = norm(gg)
+        n == 0 && continue
+        push!(QX, xi); push!(QY, yi); push!(QU, gg[1]/n); push!(QV, gg[2]/n)
+    end
+    ax.quiver(QX, QY, QU, QV, color = "0.62", width = 0.0028, scale = 42,
+              alpha = 0.75, zorder = 1)
+
+    # Per-iteration trust regions on accepted steps. Step i LEAVES xs[i] with radius Δv[i]:
+    # xs has K+1 entries and cv has K, so the index is the step, not the iterate reached.
+    show_reg = draw_regions === :auto ? naccept <= 60 : draw_regions
+    if show_reg
+        for i in 1:K
+            cv[i] || continue
+            ax.add_patch(PyPlot.matplotlib.patches.Circle((P[1, i], P[2, i]), Δv[i],
+                         fill = false, ec = "#1565c0", lw = 0.85, alpha = 0.5, zorder = 3))
+        end
+    end
+
+    ax.plot([MINP[1], MINM[1]], [MINP[2], MINM[2]], "o", ms = 11, mfc = "#2e7d32",
+            mec = "k", mew = 1.2, zorder = 6, label = "local minima")
+    ax.plot([ORIGIN[1]], [ORIGIN[2]], "D", ms = 8, mfc = "0.55", mec = "k", mew = 1.1,
+            zorder = 6, label = "degenerate crit. pt")
+    ax.plot([SADDLE[1]], [SADDLE[2]], "*", ms = 24, mfc = "#d32f2f", mec = "k", mew = 1.3,
+            zorder = 7, label = "saddle \$x^*\$")
+
+    stride = max(1, size(P, 2) ÷ 400)          # don't paint thousands of markers
+    idx = unique(vcat(1:stride:size(P, 2), size(P, 2)))
+    ax.plot(P[1, idx], P[2, idx], "-o", color = "#0d47a1", ms = 5.5, lw = 2.0,
+            mfc = "white", mec = "#0d47a1", mew = 1.6, zorder = 8, label = "iterates \$x_k\$")
+    ax.plot([P[1, 1]], [P[2, 1]], "s", ms = 10, mfc = "#0d47a1", mec = "k", mew = 1.2,
+            zorder = 9, label = "\$x_0\$")
+    if st.status === :exception                # was "breakdown": no model exists here
+        ax.plot([P[1, end]], [P[2, end]], "X", ms = 14, mfc = "#c62828", mec = "k",
+                mew = 1.4, zorder = 10, label = "breakdown")
+    end
+
+    ax.set_title("(a) Phase portrait" * tag * "  →  " * which_crit(st.solution),
+                 fontsize = 11, fontweight = "bold")
+    ax.set_xlabel("\$x\$"); ax.set_ylabel("\$y\$")
+    ax.legend(loc = "lower left", fontsize = 8, framealpha = 0.93)
+    ax.set_xlim(-0.95, 1.30); ax.set_ylim(-0.85, 0.90)
+    ax.set_aspect("equal"); ax.grid(alpha = 0.14)
+
+    # ---------- (b) function values ----------
+    ax = ax_b
+    ax.plot(0:length(fv)-1, fv, "-o", color = "#0d47a1", ms = 4, lw = 1.6,
+            mfc = "white", mew = 1.2)
+    ax.axhline(f(SADDLE), color = "crimson", ls = "--", lw = 1.3,
+               label = "\$f(x^*) = -27/256\$")
+    ax.axhline(-0.125, color = "#2e7d32", ls = ":", lw = 1.3,
+               label = "\$f\$ at minima \$= -1/8\$")
+    ax.axhline(0.0, color = "0.55", ls = ":", lw = 1.0, label = "\$f(0,0) = 0\$")
+    ax.set_title("(b) Function values \$f(x_k)\$", fontsize = 11, fontweight = "bold")
+    ax.set_xlabel("iteration \$k\$"); ax.set_ylabel("\$f(x_k)\$")
+    K > 200 && ax.set_xscale("symlog")
+    ax.legend(fontsize = 8.5); ax.grid(alpha = 0.25)
+
+    # ---------- (c) radius and step length ----------
+    ax = ax_c
+    ax.semilogy(0:length(Δv)-1, max.(Δv, 1e-18), "-o", color = "#1565c0", ms = 4,
+                lw = 1.6, mfc = "white", mew = 1.2, label = "\$\\Delta_k\$")
+    if K > 0
+        ax.semilogy(0:K-1, max.(sv, 1e-18), "--s", color = "#ef6c00", ms = 3.5, lw = 1.3,
+                    alpha = 0.9, label = "\$\\|s_k\\|\$")
+    end
+    if K <= 200                                # active shading only when legible
+        for i in 1:K
+            av[i] && ax.axvspan(i-1.5, i-0.5, color = "#1565c0", alpha = 0.07, zorder = 0)
+        end
+    end
+    ax.set_title("(c) Trust-region radius", fontsize = 11, fontweight = "bold")
+    ax.set_xlabel("iteration \$k\$"); ax.set_ylabel("\$\\Delta_k\$, \$\\|s_k\\|\$")
+    K > 200 && ax.set_xscale("symlog")
+    ax.legend(fontsize = 9); ax.grid(alpha = 0.25, which = "both")
+
+    # ---------- (d) ρ_k ----------
+    ax = ax_d
+    KR = collect(0:K-1)
+    fin = findall(isfinite, ρv)                # ρ = -Inf when pred ≤ 0; drop, don't plot
+    KR, R = KR[fin], ρv[fin]
+    # three thresholds now, not two: η accepts, η1 and η2 scale.
+    cols = [v >= η2 ? "#2e7d32" : (v >= η1 ? "#f9a825" :
+            (v >= η  ? "#7e57c2" : "#c62828")) for v in R]
+    if length(KR) <= 200
+        ax.bar(KR, R, color = cols, edgecolor = "k", lw = 0.6, width = 0.66, zorder = 3)
+    else
+        ax.scatter(KR, R, c = cols, s = 6, edgecolors = "none", zorder = 3)
+        ax.set_xscale("symlog")
+    end
+    ax.axhline(η2, color = "#2e7d32", ls = "--", lw = 1.2,
+               label = "\$\\eta_2 = $(round(η2, digits=3))\$")
+    ax.axhline(η1, color = "#f9a825", ls = "--", lw = 1.2,
+               label = "\$\\eta_1 = $(round(η1, digits=3))\$")
+    η < η1 && ax.axhline(η, color = "#7e57c2", ls = "-.", lw = 1.2,
+                         label = "\$\\eta = $(round(η, digits=3))\$ (accept)")
+    ax.axhline(1.0, color = "0.35", ls = "--", lw = 1.2, label = "\$\\rho = 1\$")
+    ax.set_title("(d) Ratio \$\\rho_k\$" * (η < η1 ? "  (purple: accepted, radius contracts)" : ""),
+                 fontsize = 11, fontweight = "bold")
+    ax.set_xlabel("iteration \$k\$"); ax.set_ylabel("\$\\rho_k\$")
+    ax.legend(fontsize = 8.5); ax.grid(alpha = 0.25, axis = "y")
+
+    PyPlot.tight_layout()
+    savepath === nothing || PyPlot.savefig(savepath, dpi = 165, bbox_inches = "tight")
+    return fig
+end
+
+"""
+    diagnose(; rule, model, subsolver, x0, kmax, tol, tol_H, savepath)
+
+Run one configuration through `tr_solve` and produce the four-panel diagnostic, labelled
+automatically from the types.
+"""
+function diagnose(; rule::RadiusRule, model::ModelHessian = ExactHessian(),
+                    subsolver::SubproblemSolver = SteihaugCG(),
+                    x0 = X0_DEFAULT, kmax = 4000, tol = 1e-8, tol_H = -1.0,
+                    savepath = nothing)
+    st, xs = solve_path(rule = rule, model = model, subsolver = subsolver,
+                        x0 = x0, kmax = kmax, tol = tol, tol_H = tol_H)
+    @printf("%s + %s + %s : %s in %d iters -> %s\n",
+            nameof(typeof(model)), nameof(typeof(rule)), nameof(typeof(subsolver)),
+            st.status, st.iter, which_crit(st.solution))
+    return plot_run(st, xs;
+                    rule_name  = string(nameof(typeof(rule))),
+                    model_name = string(nameof(typeof(model))),
+                    solver_name = string(nameof(typeof(subsolver))),
+                    savepath = savepath)
+end
