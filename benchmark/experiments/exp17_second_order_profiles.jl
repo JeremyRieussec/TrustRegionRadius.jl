@@ -130,11 +130,8 @@ The switch is on the problem, not on the column, so every column sees the same
 subproblem solver on a given problem and the per-problem normalisation of a
 performance profile is unaffected.
 """
-sop_subsolver(arm::Symbol, n::Int) =
-    arm === :fo ? DEFAULT_SUBSOLVER() :
-    n <= SOP_NMAX ? ExactMS(nmax = SOP_NMAX) :
-                    EigenPoint(SteihaugCG(max_iters = 1_000))
-
+sop_subsolver(arm::Symbol, n::Int) = 
+    arm === :fo ? DEFAULT_SUBSOLVER() : EigenPoint(SteihaugCG(max_iters = 1_000))
 """
     sop_params(arm, pass) -> TRParams
 

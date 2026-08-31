@@ -16,8 +16,16 @@
 \usepackage{float}
 \usepackage{enumitem}
 \usepackage{subcaption}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
 \usepackage[hidelinks]{hyperref}
 \geometry{margin=2.5cm}
+
+% Every number quoted in Sections~\ref{sec: realised} onward is a macro emitted by
+% make_tables.jl from the archive, so no result in this report is typed by hand.
+% Regenerate with
+%   julia --project=benchmark report/task10-second-order-profiles/make_tables.jl <archive>
+\input{numbers.tex}
 
 % ---- macros mirrored from Survey-part3-v1.tex -------------------------------
 \providecommand{\defeq}{\mathrel{:=}}
@@ -52,7 +60,33 @@
 \maketitle
 
 \begin{abstract}
-PLACEHOLDER-ABSTRACT
+Six radius update rules are run on the unconstrained CUTEst set in two arms, a
+first-order and a second-order one, and in two passes, so that the cost each arm
+had spent when it first met each of two criteria is measured rather than inferred.
+Every run is then scored after the fact, from the point it returned, by one
+criterion applied by the same code to every run and never by the solver's own
+status. \NOpened{} problems ran, \NRuns{} runs in all.
+
+Of the three profiles, P1 stands as designed: on the second-order task the six
+rules separate by at most five percentage points in robustness and by nearly a
+factor of three in cost, with $\Rgrtr$ jointly the most robust and the cheapest
+and $\Rdfo$ last on both counts. P2 stands with one qualification and one figure
+withdrawn: the second-order arm is \emph{more} robust than its first-order
+counterpart on the \emph{first-order} task, for every rule, and spends fewer
+Hessian-vector products doing it --- but the arms differ in three things at once,
+so this compares configurations and not second-order-ness. P3 measured nothing.
+Its first-order columns read $0$ on every rule because the first-order arm never
+records $\lambda_{\min}$, so the criterion rejects those runs before consulting a
+single numerical fact about them.
+
+What the archive does still answer changes how the rest should be read. On this
+problem set, at these tolerances, the point at which $\norm{g} \leq \varepsilon_g$
+first held \emph{already} satisfied $\lambda_{\min} \geq -\varepsilon_H$ on
+\CurvAlreadyMin--\CurvAlreadyMax\% of problems, and the median cost of certifying
+the curvature beyond that point was exactly zero extra iterations. The
+second-order machinery here buys a certificate rather than a better point, at
+full price on every problem, to matter on about five --- and where it matters it
+matters completely.
 \end{abstract}
 
 % =============================================================================
@@ -326,6 +360,491 @@ test optimistic. Scoring P3 on such an estimate would rank the runs by the
 machinery the profile exists to compare. On the $185$ problems the estimate is a
 dense symmetric eigendecomposition of $\nabla^2 f(x)$ and is exact.
 
-PLACEHOLDER-RESULTS
+% =============================================================================
+\section{The realised campaign}\label{sec: realised}
+% =============================================================================
+
+The query of Section~\ref{sec: problems} returned \NListed{} names. \NOpened{} of
+them opened; \NNeverOp{} raised at construction and never reached the solver.
+Those \NNeverOp{} are \NeverOpened{}. Section~\ref{sec: defects} takes up what
+that costs the shipped tables; here it is enough to record that every count in
+this report is denominated by the \NOpened{} problems that produced data, of which
+\NSmall{} have $n \leq \NMaxExact{}$ and \NBig{} have $n > \NMaxExact{}$.
+
+Six rules, two arms, two passes gives \NRunsPerProblem{} runs per problem and
+\NRuns{} in all. Figure~\ref{fig: cells} is the run matrix for one rule: the
+four cells, what halts each, and which profile reads which.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[
+    font=\footnotesize,
+    cell/.style={draw, minimum width=5.4cm, minimum height=2.5cm, align=left,
+                 inner sep=7pt, text width=5.0cm},
+    void/.style={cell, dashed, fill=black!6},
+    colhdr/.style={font=\footnotesize\itshape, align=center},
+    rowhdr/.style={font=\footnotesize, align=right, text width=2.7cm}
+  ]
+  \node[colhdr] at (0,  2.55) {pass~g\\[-1pt]halts at $\norm{g_k} \leq \varepsilon_g$};
+  \node[colhdr] at (6.2, 2.55) {pass~h\\[-1pt]halts on the arm's own test};
+
+  \node[rowhdr] at (-5.0, 0.55) {first-order arm\\ \texttt{SteihaugCG}\\ \texttt{tol\_H} $= -1$};
+  \node[rowhdr] at (-5.0,-2.55) {second-order arm\\ \texttt{ExactMS}\\ \texttt{tol\_H} $= \varepsilon_H$};
+
+  \node[cell] at (0, 0.55) {%
+    Reaches a first-order point.\\
+    No curvature is computed at any iterate: $H$ evaluations $= 0$.\\[2pt]
+    \textbf{Read by P2.}};
+  \node[void] at (6.2, 0.55) {%
+    Reaches a first-order point.\\
+    $\lambda_{\min}$ is never recorded, so the archived value is
+    \texttt{NaN}.\\[2pt]
+    \textbf{Read by P3}, where it scores $0$ before any number is consulted.};
+
+  \node[cell] at (0,-2.55) {%
+    Reaches the same first-order point, having paid for $\lambda_{\min}$ at every
+    iteration.\\[2pt]
+    \textbf{Read by P2.}};
+  \node[cell, very thick] at (6.2,-2.55) {%
+    Reaches a point with $\norm{g} \leq \varepsilon_g$ \emph{and}
+    $\lambda_{\min} \geq -\varepsilon_H$.\\[2pt]
+    \textbf{Read by P1 and P3.}};
+
+  \draw[dashed, black!45] (3.1, 3.1) -- (3.1, -4.05);
+\end{tikzpicture}
+\caption{The run matrix for one rule. Three cells carry information. The dashed
+  cell is where P3 is lost: with \texttt{tol\_H} $=-1$, an unwrapped rule and a
+  subsolver that requests no eigenvector, the solver sets
+  \texttt{want\_curv = false}, \texttt{attach\_trace!} omits
+  \texttt{:lambda\_min\_trajectory}, and the criterion
+  \eqref{eqn: second order criterion} has no $\lambda_{\min}$ to test.}
+\label{fig: cells}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \caption{Status composition of the \NRuns{} archived runs, both passes pooled.
+    \texttt{user} is the pass-g callback of Section~\ref{sec: costs} firing, so it
+    counts pass-g runs that reached a first-order point. The last line is the
+    subject of Section~\ref{sec: P3}.}
+  \label{tab: campaign}
+  \input{tab_campaign.tex}
+\end{table}
+
+Two settings of the realised run differ from the defaults quoted in
+Section~\ref{sec: configs} and should be recorded. The per-run time limit was
+$60$~s, set through \texttt{TRR\_SO\_MAXTIME}, not the $120$~s of
+\texttt{SOLVER\_PARAMS}; the archive's \texttt{extra} block carries the $60$ and
+the \texttt{params} block it writes beside it still carries the $120$, so the two
+disagree and the runs used the smaller. It binds: \MaxTimeFo{} first-order and
+\MaxTimeSo{} second-order runs of pass~g ended on it. And the campaign consumed
+about five and three quarter hours of wall time.
+
+% =============================================================================
+\section{The two cost axes}\label{sec: cost axes}
+% =============================================================================
+
+Section~\ref{sec: costs} predicted that the curvature estimate would be paid in
+Hessian evaluations below $n = \NMaxExact{}$ and in Hessian-vector products above
+it, and that a profile on products alone would show the second-order arm as free.
+The run bears this out in the sharper form: across all \NLamFoTotal{} first-order
+runs the Hessian-evaluation count is \emph{identically zero}. That arm never forms
+a Hessian on any problem at any dimension, because nothing in its configuration
+asks for curvature.
+
+Two consequences follow, and they pull in opposite directions.
+
+\begin{enumerate}[leftmargin=1.8em]
+  \item The second-order arm's Hessian evaluations are pure overhead with no
+    counterpart in the other arm, so on that axis the comparison is $0$ against a
+    positive number and there is no ratio to profile. This is why
+    \texttt{exp17\_P2\_h\_evals.pdf} is withdrawn in Section~\ref{sec: defects}.
+  \item On Hessian-vector products the sign reverses. \texttt{SteihaugCG} iterates
+    where \texttt{ExactMS} factorises, so it is the \emph{first-order} arm that
+    spends products, by a factor of \PtwoHpMin{} to \PtwoHpMax{}. Reporting either
+    axis alone would misstate the trade in one direction or the other.
+\end{enumerate}
+
+% =============================================================================
+\section{P1: the six rules on the second-order task}\label{sec: P1}
+% =============================================================================
+
+\begin{table}[H]
+  \centering
+  \caption{P1. Second-order arm, pass~h, scored by
+    \eqref{eqn: second order criterion} at the returned point. Costs are totals
+    over all \NOpened{} problems, met or not: no filtering on success and no mean
+    over survivors. $\rho(\infty)$ is the robustness of the corresponding profile
+    line. Subproblem solver \texttt{ExactMS} at $n \leq \NMaxExact{}$,
+    \texttt{EigenPoint(SteihaugCG())} above.}
+  \label{tab: p1}
+  \input{tab_p1.tex}
+\end{table}
+
+Robustness spans \PoneMetMin{} to \PoneMetMax{} of \NListed{}, a range of five
+percentage points. Cost spans nearly a factor of three. The separation between
+these rules is therefore in what they spend, not in what they reach, and three
+readings follow from Table~\ref{tab: p1}.
+
+\begin{description}[leftmargin=1.8em, style=nextline]
+  \item[$\Rgrtr$ is first on both counts.] It meets the criterion on the same
+    \PoneRgrtrMet{} problems as $\Rgrad$ while spending \GrtrVsGradF\% fewer
+    objective evaluations and \GrtrVsGradHe\% fewer Hessian evaluations, and
+    \GrtrVsDfoHe\% fewer Hessian evaluations than $\Rdfo$.
+  \item[$\Rdfo$ is last on both counts.] Fewest problems met, \PoneRdfoMet{}, and
+    the largest bill: \DfoVsGrtrF$\times$ the objective evaluations of $\Rgrtr$ and
+    \DfoVsGrtrHe$\times$ its Hessian evaluations. Under $\omega_k = \tau_k$ the
+    $\Delta_k > \zeta\norm{g_k}$ test of $\Rdfo$ is not paying for itself here.
+  \item[The two retrospective rules buy their products.] $\Rrtr$ and $\Rgrtr$
+    require $\tilde\rho$, hence one further Hessian-vector product at the trial
+    point on every accepted step. With \texttt{ExactMS} solving the subproblem
+    that extra product is most of the product count, which is why both sit near
+    twice the field on the $Hv$ axis of Table~\ref{tab: p1} while their other
+    columns are competitive or better. It is an accounting fact about the
+    retrospective ratio and not a defect of either rule.
+\end{description}
+
+\begin{figure}[H]\centering
+  \begin{subfigure}[t]{0.48\textwidth}\centering
+    \includegraphics[width=\textwidth]{figs/exp17_P1_h_evals.pdf}
+    \caption{Hessian evaluations}\label{fig: p1 he}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}\centering
+    \includegraphics[width=\textwidth]{figs/exp17_P1_h_prods.pdf}
+    \caption{Hessian-vector products}\label{fig: p1 hp}
+  \end{subfigure}
+
+  \vspace{0.7em}
+  \begin{subfigure}[t]{0.48\textwidth}\centering
+    \includegraphics[width=\textwidth]{figs/exp17_P1_f_evals.pdf}
+    \caption{objective evaluations}\label{fig: p1 f}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}\centering
+    \includegraphics[width=\textwidth]{figs/exp17_P1_data.pdf}
+    \caption{data profile, objective evaluations}\label{fig: p1 data}
+  \end{subfigure}
+\caption{P1. Six second-order configurations on the second-order criterion.
+  $\Rdelta$, $\Rstep$ and $\Rrtr$ do not read a criticality measure, so for them
+  these lines are the unmodified rule under a second-order stopping test and
+  \texttt{ExactMS}; $\Rdfo$, $\Rgrad$ and $\Rgrtr$ read one, so their lines are
+  the rule with $\omega_k = \tau_k$. Panel~\subref{fig: p1 hp} carries the
+  retrospective penalty discussed above and should not be read as a cost ranking
+  on its own.}
+\label{fig: p1}
+\end{figure}
+
+% =============================================================================
+\section{P2: the two arms on the first-order task}\label{sec: P2}
+% =============================================================================
+
+\begin{table}[H]
+  \centering
+  \caption{P2. Both arms, pass~g, scored by \eqref{eqn: first order criterion} at
+    the returned point, over all \NOpened{} problems. The first-order arm's
+    Hessian-evaluation column is omitted because it is identically zero
+    (Section~\ref{sec: cost axes}).}
+  \label{tab: p2}
+  \input{tab_p2.tex}
+\end{table}
+
+The expected reading of P2 was that the second-order arm would be the expensive
+one. It is not the reading the table supports.
+
+\begin{description}[leftmargin=1.8em, style=nextline]
+  \item[Robustness goes to the second-order arm in every row.] By \PtwoGainMin{}
+    to \PtwoGainMax{} problems. $\Rstep$ is the extreme: \PtwoStepFo{} against
+    \PtwoStepSo{}. The second-order configuration reaches \emph{more} first-order
+    points than the first-order one.
+  \item[So do Hessian-vector products, in every row,] by \PtwoHpMin{} to
+    \PtwoHpMax{} times.
+  \item[Objective and gradient evaluations are genuinely mixed.] $\Rrtr$ is
+    \PtwoRtrFRatio$\times$ cheaper in the first-order arm; $\Rstep$ is
+    \PtwoStepFRatio$\times$ cheaper in the second-order arm; $\Rgrad$ is a wash.
+  \item[Stalling is the mechanism.] Over the \NLamFoTotal{} runs of each arm,
+    pass~g: the first-order arm stalled \StallFo{} times and hit the iteration cap
+    \MaxIterFo{}, the second-order arm \StallSo{} and \MaxIterSo{}.
+\end{description}
+
+The qualification is unavoidable and belongs in every sentence quoting these
+numbers. Table~\ref{tab: arms} lists three differences between the arms, and all
+three are active in P2. A statement of the form ``$\Rdelta$ saves
+\PtwoDeltaHpSaved{} Hessian-vector products and pays \PtwoDeltaHe{} Hessian
+evaluations for them'' is true, and is a statement about \texttt{ExactMS} against
+\texttt{SteihaugCG}. It is not a measurement of what second-order stopping costs.
+Section~\ref{sec: next} gives the cell that would separate them.
+
+\begin{figure}[H]\centering
+  \begin{subfigure}[t]{0.48\textwidth}\centering
+    \includegraphics[width=\textwidth]{figs/exp17_P2_h_prods.pdf}
+    \caption{Hessian-vector products}\label{fig: p2 hp}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}\centering
+    \includegraphics[width=\textwidth]{figs/exp17_P2_f_evals.pdf}
+    \caption{objective evaluations}\label{fig: p2 f}
+  \end{subfigure}
+\caption{P2. Both arms on the first-order criterion, twelve lines. The
+  \textsf{(1st)} lines use \texttt{SteihaugCG} and the \textsf{(2nd)} lines
+  \texttt{ExactMS} at $n \leq \NMaxExact{}$; the arms also differ in the stopping
+  test and, for $\Rdfo$, $\Rgrad$ and $\Rgrtr$, in $\omega_k$. The profile on
+  Hessian evaluations is not shown here and is withdrawn in
+  Section~\ref{sec: defects}.}
+\label{fig: p2}
+\end{figure}
+
+% =============================================================================
+\section{P3 measured nothing}\label{sec: P3}
+% =============================================================================
+
+All six first-order columns of P3 read $0$ out of \NSmall{}. That is not a
+finding about the first-order arm. It is what the scoring function returns when
+the field it tests is absent.
+
+The chain is short and each link is in the package.
+\texttt{TRSolver} computes a curvature estimate only when
+\texttt{want\_curv} holds, and \texttt{want\_curv} is
+\texttt{needs\_curvature(rule)} $\vee$ \texttt{tol\_H} $> 0$ $\vee$
+\texttt{needs\_eigenvector(subsolver)}. In the first-order arm the rule is
+unwrapped so the first disjunct is false, \texttt{tol\_H} $= -1$ so the second is
+false, and \texttt{SteihaugCG} requests no eigenvector so the third is false.
+\texttt{attach\_trace!} then omits \texttt{:lambda\_min\_trajectory} altogether,
+by design, so that its absence is unambiguous rather than a column of
+\texttt{NaN}. The experiment reads the missing trajectory back as \texttt{NaN},
+and the scoring predicate opens with \texttt{isfinite}. The criterion is
+therefore false for every first-order run before
+\eqref{eqn: second order criterion} is evaluated at all.
+
+\begin{table}[H]
+  \centering
+  \caption{P3, and why it is empty. The left pair is the criterion; the right pair
+    counts the runs that carried a finite $\lambda_{\min}$ for it to be tested on.
+    Second-order arm, pass~h, $n \leq \NMaxExact{}$.}
+  \label{tab: p3}
+  \input{tab_p3.tex}
+\end{table}
+
+The second-order columns are sound --- \PthreeSoMin{} to \PthreeSoMax{} of
+\NSmall{} --- but they are P1 restricted to $n \leq \NMaxExact{}$ and carry no
+information P1 does not already have. Everything specific to P3 is lost, and none
+of it is recoverable from the archive: the first-order arm's returned points are
+stored, but the runs cannot be re-scored without evaluating
+$\lambda_{\min}(\nabla^2 f)$ there, which is a computation and not a lookup.
+
+\begin{figure}[H]\centering
+  \includegraphics[width=0.62\textwidth]{figs/exp17_P3_h_evals.pdf}
+\caption{P3 as drawn. The six \textsf{(1st)} lines are flat at $0$ across the whole
+  axis. Read as a profile the figure says that the first-order arm never reaches a
+  second-order point; read correctly it says that the campaign never asked.}
+\label{fig: p3}
+\end{figure}
+
+% =============================================================================
+\section{What the archive still answers}\label{sec: salvage}
+% =============================================================================
+
+The first-order arm's curvature is gone. Three measurements that survive answer
+most of what P3 was for, and the first of them changes how the whole campaign
+should be read.
+
+\subsection{The first-order point was already second-order}\label{sec: already}
+
+Pass~g of the \emph{second-order} arm halts at the first iterate with
+$\norm{g_k} \leq \varepsilon_g$ and has computed $\lambda_{\min}$ there, because
+that arm keeps \texttt{tol\_H} $> 0$ in both passes. That is exactly the
+measurement P3 wanted, taken on the arm that recorded it.
+
+\begin{table}[H]
+  \centering
+  \caption{Curvature at the first-order point. Second-order arm, pass~g,
+    $n \leq \NMaxExact{}$, so $\lambda_{\min}$ is a dense eigendecomposition of
+    $\nabla^2 f(x)$ and exact.}
+  \label{tab: curv}
+  \input{tab_curv.tex}
+\end{table}
+
+On \CurvAlreadyMin--\CurvAlreadyMax\% of problems the point at which the gradient
+test first passed \emph{already} satisfied $\lambda_{\min} \geq -\varepsilon_H$.
+Between \CurvNegMin{} and \CurvNegMax{} problems per rule had genuine negative
+curvature there, and the magnitudes are $10^{-5}$ to $10^{-6}$, barely past
+$\varepsilon_H$. On this problem set at these tolerances the second-order task is
+very nearly the first-order task.
+
+\subsection{Certifying the curvature cost nothing}\label{sec: extra}
+
+\begin{table}[H]
+  \centering
+  \caption{Cost of pass~h relative to pass~g within the second-order arm, median
+    over the problems on which both met their criterion, $n \leq \NMaxExact{}$.}
+  \label{tab: extra}
+  \input{tab_extra.tex}
+\end{table}
+
+Every entry of Table~\ref{tab: extra} is $1.000$. On the median problem the
+second-order arm took no iteration beyond the one that satisfied the gradient
+test, which is Section~\ref{sec: already} restated as a cost. The arm's overhead
+is therefore not a search for curvature. It is the per-iteration price of forming
+$\nabla^2 f$ and eigendecomposing it, paid on every iteration of every problem, to
+certify something that was already true.
+
+\subsection{Where the two arms landed}\label{sec: obj}
+
+\begin{table}[H]
+  \centering
+  \caption{Final objective, first-order arm against second-order arm, pass~h,
+    $n \leq \NMaxExact{}$, on problems where the first arm met
+    \eqref{eqn: first order criterion} and the second met
+    \eqref{eqn: second order criterion}. ``Same point'' is a relative gap below
+    $10^{-8}$.}
+  \label{tab: obj}
+  \input{tab_obj.tex}
+\end{table}
+
+The direction leans the second-order way in every row --- \ObjSoMin{} to
+\ObjSoMax{} problems against \ObjFoMin{} to \ObjFoMax{} --- but the majority is
+``same point'' and the tail runs both ways. Only \NGapPairs{} of
+\NComparedPairs{} $(\text{problem}, \text{rule})$ pairs differ by more than
+$10^{-4}$ in relative objective.
+
+\begin{table}[H]
+  \centering
+  \caption{The pairs where the arms genuinely disagreed: the sixteen largest
+    relative gaps, of \NGapPairs{} exceeding $10^{-4}$. One row per
+    $(\text{problem}, \text{rule})$ pair, because on \texttt{MGH17SLS} and
+    \texttt{BIGGS6} the direction differs between rules and a per-problem row
+    would state neither finding.}
+  \label{tab: gaps}
+  \input{tab_gaps.tex}
+\end{table}
+
+\texttt{POWERSUM} is the case the second-order theory is written for: the
+first-order arm stops at $f \approx 37.4$ and the second-order arm reaches machine
+zero, on four of the six rules. \texttt{MGH17SLS} and \texttt{LOGHAIRY} are the
+same story at smaller amplitude. But \texttt{RAT43LS}, \texttt{BOXBODLS},
+\texttt{COATING} and \texttt{BIGGS6} run the other way. This is not a
+contradiction: \eqref{eqn: second order criterion} constrains the curvature at the
+point reached and says nothing about which basin it lies in. It is, however, the
+reason the payoff cannot be reported as an average, and must be reported as this
+asymmetry.
+
+% =============================================================================
+\section{Defects}\label{sec: defects}
+% =============================================================================
+
+Four, in descending order of what they cost the conclusions.
+
+\begin{description}[leftmargin=1.8em, style=nextline]
+  \item[D1. P3's first-order columns are an instrumentation artefact.]
+    Section~\ref{sec: P3}. \NLamFoFinite{} of \NLamFoTotal{} first-order runs
+    carry a finite $\lambda_{\min}$, against \NLamSoFinite{} of \NLamSoTotal{} in
+    the second-order arm. The argument of Section~\ref{sec: costs} anticipated
+    this hazard for the wrong arm: it reasons that \texttt{tol\_H} must not be
+    switched off in pass~g because that would switch off the cost the pass exists
+    to measure, and then switches it off in the first-order arm in both passes,
+    which switches off the measurement P3 exists to make. \textbf{P3 should not be
+    reported} --- not as a result, not as a null result, not with a caveat.
+  \item[D2. The P2 profile on Hessian evaluations is degenerate.] The first-order
+    arm spends none, and \texttt{sop\_matrix} guards a zero cost to $1$ so that the
+    per-problem normalisation does not divide by zero. Every first-order line
+    therefore wins outright at $\tau = 1$ and is flat thereafter, and each
+    second-order line is not a ratio but its own raw Hessian-evaluation count on a
+    logarithmic axis. \texttt{exp17\_P2\_h\_evals.pdf} is withdrawn. The
+    comparison it was meant to carry is in Table~\ref{tab: p2}, where $0$ against
+    a positive number is stated plainly.
+  \item[D3. The two arms differ in three ways at once.] Table~\ref{tab: arms}
+    lists them and Section~\ref{sec: subsolver} defends the subsolver switch on
+    its merits --- \texttt{SteihaugCG} does not deliver
+    \eqref{eqn: eigenpoint decrease}, so the second-order arm genuinely requires a
+    different solver. The consequence for the write-up stands regardless: P2
+    compares configurations, not second-order-ness. The same confound means this
+    campaign \emph{cannot} answer whether $\omega_k = \tau_k$ helps, because no
+    pair of columns differs in the wrapper alone.
+  \item[D4. \NNeverOp{} problems that never opened are counted as solver failures.]
+    Each produced \NRunsPerProblem{} placeholder records with $n = 0$. Three
+    knock-on errors follow. Hazard H4 reports \NExcReported{} runs raised; the true
+    figure is \NExcArchived{}, all on \ExcProblems{} at $n = \ExcDim{}$, and the
+    other \NExcPhantom{} never reached the solver. Every status table's exception
+    column is inflated by \NNeverOp{} and every denominator reads \NListed{} where
+    \NOpened{} problems have data. And \texttt{exp17\_problems.txt} reports
+    \NSmall{} problems at $n \leq \NMaxExact{}$ and $17$ above, where only \NBig{}
+    are above and the remaining \NNeverOp{} are the placeholders --- which is also
+    why Section~\ref{sec: problems} anticipated $185$ small problems and the run
+    delivered \NSmall{}. Worth reproducing before it is treated as a stable CUTEst
+    failure: \texttt{ARGLINA} and \texttt{ARGLINC} both opened successfully during
+    the checks of Section~\ref{sec: configs}, minutes earlier, and
+    \texttt{ARGLINB} opened in the campaign itself.
+\end{description}
+
+% =============================================================================
+\section{What this run supports}\label{sec: supports}
+% =============================================================================
+
+\begin{description}[leftmargin=1.8em, style=nextline]
+  \item[P1, without qualification.] Six second-order configurations on the
+    second-order task separate by at most five percentage points in robustness and
+    by nearly a factor of three in cost. $\Rgrtr$ is jointly the most robust and
+    the cheapest in objective, gradient and Hessian evaluations; $\Rdfo$ is last
+    on both. The $Hv$ column of the two retrospective rules is the retrospective
+    ratio's extra product and carries no further meaning.
+  \item[P2, with the confound named in the sentence.] The second-order
+    configuration is more robust than its first-order counterpart on the
+    \emph{first-order} task, for every rule, by \PtwoGainMin{} to \PtwoGainMax{}
+    problems, and uses \PtwoHpMin{} to \PtwoHpMax{} times fewer Hessian-vector
+    products, paying for both with a dense Hessian and an eigendecomposition per
+    iteration. Stated as a comparison of configurations this is a usable result.
+    Stated as ``the price of the second-order machinery'' it is not.
+  \item[P3, not at all.] Its first-order columns record the absence of a
+    measurement, not the outcome of one, and there is no reading of them that is
+    about the algorithms.
+  \item[The finding that reframes the campaign.] On CUTEst at
+    $\varepsilon_g = \EpsG$ and $\varepsilon_H = \EpsH$, the first-order point was
+    already second-order on \CurvAlreadyMin--\CurvAlreadyMax\% of problems, and
+    the second-order arm spent zero extra iterations reaching it on the median
+    problem. What the machinery buys here is a \emph{certificate}, not a better
+    point, and it buys it at full price on all \NOpened{} problems in order to
+    matter on about five. Where it matters it matters completely --- on
+    \texttt{POWERSUM} the objective falls from $37.4$ to machine zero. Where it
+    goes the other way it also goes completely. That asymmetry, and not an
+    average, is the honest statement of the payoff.
+\end{description}
+
+\begin{remark}
+These are average-case results on one problem set at one pair of tolerances.
+Nothing here bears on the sharpness of a worst-case complexity bound, and
+Section~\ref{sec: already} suggests the problem set is the binding constraint on
+what the second-order half of the study can observe at all.
+\end{remark}
+
+% =============================================================================
+\section{Changes for the next run}\label{sec: next}
+% =============================================================================
+
+\begin{enumerate}[leftmargin=1.8em]
+  \item \textbf{Score the first-order arm's curvature after the fact.} The arm
+    must reach its point using first-order machinery, then have $\lambda_{\min}$
+    evaluated once at the returned point purely for scoring. One call to
+    \texttt{lambda\_min\_estimate(ExactHessian(), nlp, st.solution)} in
+    \texttt{sop\_solve} after \texttt{tr\_solve} returns, charged to no counter,
+    is the whole fix: one extra \texttt{hess} per run, and the arm's search
+    behaviour untouched. This repairs D1 and makes P3 the profile it was designed
+    to be.
+  \item \textbf{Withdraw the Hessian-evaluation axis from P2, or change its
+    currency.} A metric one arm cannot spend is not a metric two arms can be
+    profiled on. Either drop it from \texttt{SOP\_METRICS} for P2, or replace both
+    Hessian axes by a single $Hv + n \cdot H$ cost so the arms spend in the same
+    units. This repairs D2.
+  \item \textbf{Separate ``could not open'' from ``raised''.}
+    \texttt{sop\_failed\_row} should carry a distinct status, and those problems
+    should leave every denominator rather than count as failures. This repairs D4,
+    hazard H4, the exception columns and the $n > \NMaxExact{}$ tally at once.
+  \item \textbf{Add the third arm.} A plain criticality-anchored rule with
+    \texttt{ExactMS} and \texttt{tol\_H} $= \varepsilon_H$ differs from the
+    second-order arm in the \texttt{SecondOrder} wrapper alone. Three arms rather
+    than two turn P1's ranking into an attribution, and the question it answers
+    --- whether $\omega_k = \tau_k$ earns its place --- is the one the wrapper
+    exists to raise. This repairs D3.
+  \item \textbf{Promote Table~\ref{tab: curv}.} It is the most decision-relevant
+    measurement in the campaign, it is currently in no shipped table, and it sets
+    the context in which every other result here has to be read. If the
+    second-order question is to be pressed further, the problem set should be
+    chosen so that this table is not $97\%$ trivial.
+\end{enumerate}
 
 \end{document}

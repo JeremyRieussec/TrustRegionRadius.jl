@@ -8,6 +8,21 @@ applied by the same code to every run. No profile here is drawn on the solver's
 own status. The two families stop on different tests, so profiling them on their
 own statuses would compare the cost of an easy task with the cost of a hard one.
 
+## Status of the three profiles
+
+| | verdict |
+|---|---|
+| **P1** | Sound. `R-gRTR` jointly the most robust and the cheapest, `R-DFO` last on both. |
+| **P2** | Sound, with the confound of Table 2 named in every sentence quoting it. The second-order arm is *more* robust on the *first*-order task, for every rule. |
+| **P3** | **Void. Do not report.** The first-order arm never records `λ_min`, so all six of its columns score 0 by construction rather than by measurement. Report Section 11, defect D1. |
+
+The measurement that reframes the rest: at these tolerances the first-order point
+was *already* second-order on 96.8–98.1% of problems, and certifying the curvature
+cost zero extra iterations on the median problem. The machinery buys a certificate
+rather than a better point on nearly every problem in this set — and where it does
+buy a better point (`POWERSUM`, 37.4 to machine zero) it buys it completely.
+Section 10 of the report.
+
 ## Reproducing
 
 From the root of `TrustRegionRadius.jl`. The experiment runs through
@@ -19,11 +34,26 @@ TRR_SO_MAXVAR=1000 TRR_SO_MAXTIME=60 julia --project=benchmark -e 'include("benc
 ```
 
 That writes a timestamped archive under `benchmark/results/`. Copy its figures
-into `figs/` and its tables beside this file, then build the report:
+into `figs/`, regenerate the tables from the archive, then build the report:
+
+```bash
+cp benchmark/results/<archive>/figures/*.pdf report/task10-second-order-profiles/figs/
+```
+
+```bash
+julia --project=benchmark report/task10-second-order-profiles/make_tables.jl benchmark/results/<archive>
+```
 
 ```bash
 pdflatex -interaction=nonstopmode task10-second-order-profiles.tex
 ```
+
+`make_tables.jl` emits `numbers.tex` and every `tab_*.tex` the report inputs, from
+the archived runs and from nothing else, so no result in the report is typed by
+hand. With no argument it takes the newest `*_second_order_profiles` archive.
+Run `pdflatex` twice: the report cross-references its own tables and figures.
+
+The archive reported here is `exp_2026-08-30_12-21-55_second_order_profiles`.
 
 The campaign is resumable per `(problem, rule, arm, pass)`. To continue an
 interrupted one into the same archive:
@@ -59,7 +89,7 @@ exhaust it appear as `max_time` in the status tables rather than being dropped.
 | Machine | Intel Core i7-8565U @ 1.80 GHz, 8 logical cores, 15.8 GB |
 | OS | Windows 11 Pro 10.0.26200 |
 | Julia threads | 1 |
-| Wall time | PLACEHOLDER-WALL |
+| Wall time | 5 h 43 min (2026-08-30, 12:21:55 to 18:04:35) |
 
 An unrelated Julia campaign was running on the same machine throughout, so the
 wall time is an upper bound rather than a clean measurement of this experiment
@@ -74,7 +104,14 @@ the query returned something, and raises rather than falling back, because
 `default_problems()` would otherwise produce a table that reads as a CUTEst
 benchmark and is not one.
 
-P3 runs on the 185 problems with `n <= 200`. Above that dimension the package
+In the realised campaign **190** of the 196 opened. Six — `ARGLINA`, `ARGLINC`,
+`BROWNAL`, `CERI651BLS`, `CERI651DLS`, `CERI651ELS` — raised at construction and
+never reached the solver, which is why the report is denominated by 190 problems
+and **179** rather than 185 with `n <= 200`, and why the shipped
+`exp17_hazards.txt` reports 148 runs raised where the true figure is 4. See
+Section 11 of the report, defect D4.
+
+P3 runs on the problems with `n <= 200`. Above that dimension the package
 estimates the smallest eigenvalue by Lanczos; a Ritz value over-states it, so the
 second-order test becomes optimistic and scoring P3 there would rank runs by the
 machinery the profile exists to compare.
@@ -101,6 +138,11 @@ Pass `g` halts through a callback, which is why its runs report `user` rather th
 | file | contents |
 |---|---|
 | `task10-second-order-profiles.tex`, `.pdf` | the standalone report |
+| `make_tables.jl` | emits `numbers.tex` and `tab_*.tex` from an archive |
+| `numbers.tex` | every number the report's prose quotes, as macros |
+| `tab_p1.tex`, `tab_p2.tex`, `tab_p3.tex` | the three profiles as tables |
+| `tab_campaign.tex` | status composition of the 4560 archived runs |
+| `tab_curv.tex`, `tab_extra.tex`, `tab_obj.tex`, `tab_gaps.tex` | Section 10, what the archive still answers |
 | `figs/exp17_P1_*.pdf` | P1, one profile per cost axis |
 | `figs/exp17_P2_*.pdf` | P2, likewise |
 | `figs/exp17_P3_*.pdf` | P3, likewise |
