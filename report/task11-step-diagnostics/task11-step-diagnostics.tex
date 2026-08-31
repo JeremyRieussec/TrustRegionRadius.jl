@@ -1,0 +1,663 @@
+% =============================================================================
+% Reading the step diagnostics of the quartic saddle notebooks.
+%
+% Companion to notebooks/Saddle/step_diagnostics_v1.ipynb. Every number in this
+% file is printed by a cell of that notebook that ran; none is transcribed from
+% anywhere else.
+%
+% Standalone. Own preamble, no bibliography, no \cite. The macro block mirrors
+% the one near the top of _Thesis_FINAL/Article3/Survey-part3-v1.tex, through
+% \providecommand, so this file can later be folded into that document.
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\geometry{margin=2.4cm}
+
+% ---- macros mirrored from Survey-part3-v1.tex -------------------------------
+\providecommand{\defeq}{\mathrel{:=}}
+\providecommand{\kbar}{\overline{\kappa}}
+\providecommand{\calO}{{\mathcal{O}}}
+\providecommand{\calK}{{\mathcal{K}}}
+\providecommand{\NN}{{\mathbb{N}}}
+\providecommand{\abs}[1]{\left \vert #1 \right \vert}
+\providecommand{\norm}[1]{\left \lVert #1 \right \rVert}
+\providecommand*\mykappa[1]{ \kappa_{\scriptscriptstyle \text{#1}} }
+\providecommand*\myeta[1]{ \eta_{\scriptscriptstyle \text{#1}} }
+\providecommand{\Rdelta}{\textsf{R-delta}}
+\providecommand{\Rstep}{\textsf{R-step}}
+\providecommand{\Rdfo}{\textsf{R-DFO}}
+\providecommand{\Rgrad}{\textsf{R-grad}}
+\providecommand{\Rrtr}{\textsf{R-RTR}}
+\providecommand{\Rgrtr}{\textsf{R-gRTR}}
+\providecommand{\gone}{\gamma_1}
+\providecommand{\gtwo}{\gamma_2}
+\providecommand{\gthree}{\gamma_3}
+
+\newcommand{\e}[1]{\times 10^{#1}}
+\newtheorem{proposition}{Proposition}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+
+\title{Reading the step diagnostics\\
+       \large A companion to \texttt{step\_diagnostics\_v1.ipynb}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We explain the eight columns of the step-diagnostic tables and the six functions
+that produce them, and we interpret the tables of
+\texttt{step\_diagnostics\_v1.ipynb}. Truncated conjugate gradient leaves its loop
+in three ways and every one of them returns a positive multiple of $-g_k$, so a
+one-dimensional Krylov subspace forces the cosine test to pass. The two Cauchy
+statistics are therefore nested rather than independent, $\texttt{cg1} \leq
+\texttt{cauchy}$, which is why they print the same number on $28$ of $30$ rows.
+On the two rows where they separate the accepted explanation, that $g_k$ is near
+an eigenvector, is refuted by the measurement. The quantity that separates the
+populations is the gap between the first conjugate-gradient iterate and the
+boundary, whose median is $6.5\times10^{-9}$ at the disagreeing iterations and
+$1.6\times10^{-3}$ at the agreeing ones. We give the arithmetic that turns that
+gap into an angle below the $10^{-12}$ threshold, and we check it. The truncation
+condition is confirmed on $17755$ of $17763$ exact-Hessian iterations, and all
+eight exceptions are the one conjugate-gradient exit the condition does not
+model.
+\end{abstract}
+
+% =============================================================================
+\section{The setting}\label{sec: setting}
+% =============================================================================
+
+The test function is
+\begin{equation}
+  f(p) = p_1^4 - p_1^3
+       + \left(\tfrac14 - \tfrac{p_1}{2}\right)p_2^2
+       + \tfrac{p_2^4}{4},
+  \label{eqn: f}
+\end{equation}
+with four critical points. The origin is degenerate, $\nabla^2 f(0,0)$ being
+singular and positive semidefinite. The point $(0.75, 0)$ is a strict saddle with
+$\lambda_{\min} = -1/4$. Two local minimisers sit at
+$\bigl(\tfrac{1+\sqrt5}{4}, \pm\sqrt{\tfrac{\sqrt5-1}{4}}\bigr)$.
+
+Every run in the notebook uses $\Rgrad$ capped, so
+$\Delta_k = \mu_k\norm{g_k}$ with $\mu_k \leq \overline{\mu}$, sweeping
+$\overline{\mu}$ over
+$\{0.01, 0.05, 0.1, 0.3, 0.5, 1, 2, 4, 8, 128\}$ against three model Hessians,
+\texttt{ExactHessian}, \texttt{SR1} and \texttt{LBFGS}. The subproblem solver is
+truncated conjugate gradient throughout, apart from one comparison against
+\texttt{ExactMS}. The starting point is $(-0.5, 0.6)$ and the tolerance
+$10^{-9}$, with at most $2000$ iterations.
+
+Everything below is read from \texttt{stats.solver\_specific}. Nothing is
+recomputed from the iterates that the trace already carries.
+
+\subsection{The three ways truncated conjugate gradient stops}
+\label{sec: exits}
+
+The whole of Section~\ref{sec: columns} follows from the recurrence, so it is
+worth setting down first. \texttt{SteihaugCG} starts at $s = 0$ with residual
+$r_0 = -g_k$ and first direction $d_0 = -g_k$, and it leaves the loop in exactly
+three ways.
+
+\begin{enumerate}[label=(E\arabic*), leftmargin=3em]
+  \item \label{it: negcurv}
+    \emph{Negative curvature.} If $d_0^{\!\top}B_kd_0 \leq 0$ the recurrence runs
+    to the boundary along $d_0$ and returns $s_k = -\Delta_k g_k/\norm{g_k}$.
+  \item \label{it: boundary}
+    \emph{The boundary.} Otherwise it forms
+    $\alpha_0 = \norm{g_k}^2/(g_k^{\!\top}B_kg_k)$ and the candidate
+    $z_1 = -\alpha_0 g_k$. If $\norm{z_1} \geq \Delta_k$ it truncates to the
+    boundary and returns $s_k = -\Delta_k g_k/\norm{g_k}$.
+  \item \label{it: forcing}
+    \emph{The forcing condition.} Otherwise it accepts $z_1$, and if the new
+    residual satisfies
+    $\norm{r_1} \leq \min\{\chi, \norm{g_k}^\theta\}\norm{g_k}$ it stops there,
+    returning $s_k = z_1 = -\alpha_0 g_k$.
+\end{enumerate}
+
+Only if none of the three fires does the recurrence build a second direction.
+
+The consequence used throughout is immediate. \emph{In all three exits the
+returned step is a positive multiple of $-g_k$.} A run that leaves after one
+conjugate-gradient iteration has taken a step along the steepest descent
+direction, whatever the model Hessian was.
+
+% =============================================================================
+\section{The six columns of Table 1}\label{sec: columns}
+% =============================================================================
+
+\subsection{\texttt{trunc}, \texttt{inside} and \texttt{krylov}}
+
+These are the three step classes of \texttt{step\_classes}, as fractions of the
+iterations that happened. Write $c_k$ for the inner iteration count and $a_k$ for
+the activity flag, which is true when $\norm{s_k} = \Delta_k$.
+\begin{align}
+  \texttt{trunc}  &= \tfrac1K \,\#\{k : c_k = 1 \text{ and } a_k\},
+  \label{eqn: trunc} \\
+  \texttt{inside} &= \tfrac1K \,\#\{k : c_k = 1 \text{ and } \lnot a_k\},
+  \label{eqn: inside} \\
+  \texttt{krylov} &= \tfrac1K \,\#\{k : c_k \geq 2\}.
+  \label{eqn: krylov}
+\end{align}
+The three partition the iterations, so they sum to one.
+
+\texttt{trunc} collects \ref{it: negcurv} and \ref{it: boundary}. The step is
+$-\Delta_k g_k/\norm{g_k}$, so the model Hessian has touched neither the
+direction nor the length: the direction is $-g_k$ and the length is $\Delta_k$.
+\textbf{This is the only one of the three that is gradient descent in disguise},
+and the step length is the radius rather than anything the model chose.
+
+\texttt{inside} is \ref{it: forcing}. The direction is again $-g_k$, but the
+length is $\alpha_0\norm{g_k} = \norm{g_k}^3/(g_k^{\!\top}B_kg_k)$, which is the
+exact minimiser of the model along $-g_k$. The Hessian set the length and not the
+direction. This is the Cauchy point in the strict sense.
+
+\texttt{krylov} is everything else, where a second direction entered and the
+Hessian influenced the direction as well.
+
+\emph{Interpretation.} Read \texttt{trunc} as the fraction of the run on which
+the trust region, rather than the model, decided the step. A \texttt{trunc} of
+one means the method was gradient descent with a prescribed step length for the
+whole run. \texttt{krylov} near one means the model was doing the work.
+
+\texttt{step\_classes} returns $(\mathrm{NaN}, \mathrm{NaN}, \mathrm{NaN})$ under
+\texttt{ExactMS}, which reports $c_k = 0$ throughout, since a direct solve has no
+inner iteration count. The notebook confirms this: \texttt{cg\_iters} takes the
+values $\{2, 1\}$ under \texttt{SteihaugCG} and $\{0\}$ under \texttt{ExactMS},
+and the classes are $(0.999, 0.000, 0.001)$ and
+$(\mathrm{NaN}, \mathrm{NaN}, \mathrm{NaN})$ respectively.
+
+\subsection{\texttt{cauchy}}
+
+The cosine-based fraction reported by \texttt{hypotheses\_report},
+\begin{equation}
+  \texttt{cauchy}
+    = \tfrac1K \,\#\Bigl\{k : \bigl\lvert \cos(s_k, -g_k) - 1 \bigr\rvert
+                                \leq 10^{-12}\Bigr\},
+  \qquad
+  \cos(s_k,-g_k) = \frac{-g_k^{\!\top}s_k}{\norm{g_k}\,\norm{s_k}}.
+  \label{eqn: cauchy}
+\end{equation}
+It measures how often the step \emph{pointed} along steepest descent, to within
+$10^{-12}$. It says nothing about the length.
+
+\subsection{\texttt{cg1}}
+
+The Krylov dimension,
+\begin{equation}
+  \texttt{cg1} = \tfrac1K \,\#\{k : c_k = 1\}
+              = \texttt{trunc} + \texttt{inside}.
+  \label{eqn: cg1}
+\end{equation}
+It measures how often the recurrence stopped before building a second direction.
+The identity with the two step classes is exact, not approximate, since
+\eqref{eqn: trunc} and \eqref{eqn: inside} split $\{c_k = 1\}$ on the activity
+flag.
+
+\subsection{\texttt{cos\_min}}
+
+The minimum of $\cos(s_k,-g_k)$ over the run,
+\begin{equation}
+  \texttt{cos\_min} = \min_{k} \cos(s_k, -g_k).
+  \label{eqn: cosmin}
+\end{equation}
+This is the column that stops a fraction from being read as a description of the
+whole run. \texttt{cauchy} says how \emph{often} the step was Cauchy;
+\texttt{cos\_min} says how far from Cauchy the run ever got. A run with
+$\texttt{cos\_min} = 1$ was gradient descent at \emph{every} iteration, not at
+most of them.
+
+\emph{Read \texttt{cos\_min} rather than the cosine at the final iterate.} The
+last value is one number out of however many iterations ran, and the two
+disagree: in the companion notebook \texttt{exact\_steihaug\_v1} the final-iterate
+cosine is $1.00000$ at $\overline{\mu} = 4$ while \texttt{cauchy} is $0.4885$
+there.
+
+% =============================================================================
+\section{Why \texttt{cauchy} and \texttt{cg1} answer the same question}
+\label{sec: same question}
+% =============================================================================
+
+Both ask whether the model Hessian influenced the \emph{direction} of the step.
+They ask it of different objects. \texttt{cg1} asks it of the Krylov subspace,
+$\dim\calK_k = 1$, and \texttt{cauchy} asks it of the angle the step came out at.
+
+The two are linked in one direction by Section~\ref{sec: exits}.
+
+\begin{proposition}[the inclusion]\label{prop: inclusion}
+  For every $k$ with $c_k = 1$, the returned step satisfies $s_k = -t g_k$ for
+  some $t > 0$, hence $\cos(s_k,-g_k) = 1$ exactly. Consequently
+  \begin{equation}
+    \{k : c_k = 1\} \;\subseteq\;
+    \bigl\{k : \abs{\cos(s_k,-g_k) - 1} \leq 10^{-12}\bigr\},
+    \qquad\text{so}\qquad
+    \texttt{cg1} \;\leq\; \texttt{cauchy}.
+    \label{eqn: inclusion}
+  \end{equation}
+\end{proposition}
+
+\begin{proof}
+  Each of \ref{it: negcurv}, \ref{it: boundary} and \ref{it: forcing} returns a
+  positive multiple of $d_0 = -g_k$, the first with $t = \Delta_k/\norm{g_k}$,
+  the second likewise, the third with $t = \alpha_0 > 0$.
+\end{proof}
+
+So \texttt{cauchy} counts everything \texttt{cg1} counts, and possibly more. The
+inequality \eqref{eqn: inclusion} is the whole relationship, and the two agree
+whenever the extra set is empty.
+
+\subsection{Why they hold the same value on nearly every row}
+
+Equality fails only at an iteration with $c_k \geq 2$ whose returned step is
+nonetheless within $10^{-12}$ of the $-g_k$ direction. That asks the second and
+later conjugate-gradient directions to add nothing \emph{measurable} to the
+direction, while still being taken.
+
+That is a demanding requirement, and on this problem it is met on $2$ of the $30$
+rows of Table~\ref{tab: one}. On the remaining $28$ the extra set is empty and the
+two columns print the same number, which is not a coincidence but
+Proposition~\ref{prop: inclusion} with nothing left over.
+
+\subsection{The two rows where they differ, and why}
+
+Under \texttt{ExactHessian} at $\overline{\mu} = 4$ and $\overline{\mu} = 8$ the
+columns separate, $0.4885$ against $0.3345$ and $0.4815$ against $0.3319$. Every
+one of the $308$ and $251$ disagreeing iterations goes the same way, the cosine
+counting an iteration the Krylov dimension does not, exactly as
+\eqref{eqn: inclusion} requires.
+
+The natural explanation is that $g_k$ is close to an eigenvector of $H_k$ there,
+so the second direction adds nothing. \textbf{It does not survive the
+measurement.} Pooled over the disagreeing runs, \texttt{eig\_deviation} has median
+$7.0695 \times 10^{-1}$ at the disagreeing iterations against
+$7.0617 \times 10^{-1}$ at the agreeing ones. The two populations are
+indistinguishable on that statistic, and both are far from zero.
+
+What separates them is the boundary. Writing
+$\varepsilon_k = 1 - \norm{z_1}/\Delta_k$ for the gap between the first
+conjugate-gradient iterate and the trust-region boundary, the median of
+$\varepsilon_k$ is $6.536\times10^{-9}$ at the disagreeing iterations against
+$1.6266\times10^{-3}$ at the agreeing ones, five orders of magnitude apart.
+
+The mechanism follows. At those iterations $\norm{z_1}$ falls a relative
+$6.5\times10^{-9}$ short of $\Delta_k$, so \ref{it: boundary} does not fire and
+the recurrence continues. The radial room left is only about
+$\varepsilon_k\Delta_k$. Moving from $z_1$ to the boundary along any direction
+making an angle $\varphi$ with $z_1$ costs a distance $\varepsilon_k\Delta_k /
+\cos\varphi$, so the step can rotate by at most about $\varepsilon_k$ radians,
+and
+\begin{equation}
+  1 - \cos(s_k,-g_k) \;\lesssim\; \tfrac12\varepsilon_k^2 .
+  \label{eqn: gap arithmetic}
+\end{equation}
+
+The notebook measures both sides. With the median $\varepsilon_k =
+6.536\times10^{-9}$ the bound \eqref{eqn: gap arithmetic} gives
+$2.136\times10^{-17}$, and the measured median of $\abs{1 - \cos(s_k,-g_k)}$ at
+the disagreeing iterations is $2.220\times10^{-16}$, which is
+$\texttt{eps(Float64)}$ exactly. The geometric bound sits below the rounding
+floor, so the measurement is floor limited rather than geometry limited. The
+measured value is four orders of magnitude below the $10^{-12}$ threshold of
+\eqref{eqn: cauchy} and the bound is five. The Krylov dimension counts two and
+the angle cannot tell.
+
+The threshold is nonetheless doing real work at the tail. The \emph{largest}
+$\abs{1 - \cos(s_k,-g_k)}$ among the disagreeing iterations is
+$9.2293\times10^{-13}$, that is $92\%$ of $10^{-12}$. The corresponding figure
+over the agreeing iterations has median $1.3101\times10^{-6}$ and maximum
+$3.2434\times10^{-1}$. The two populations are separated by ten orders of
+magnitude in the median, and one disagreeing iteration nonetheless sits close to
+the boundary of the test.
+
+\begin{remark}[which one to use]\label{rem: which}
+  \textbf{Use \texttt{cg1} as the definition of truncation and the cosine as
+  corroboration.} The truncation condition is a statement about the
+  conjugate-gradient recurrence, so the Krylov dimension is what states it, and
+  the angle is a consequence of it by Proposition~\ref{prop: inclusion}. Where
+  they disagree, \eqref{eqn: gap arithmetic} shows the angle is reporting an
+  arithmetic near-coincidence rather than a property of the step.
+\end{remark}
+
+% =============================================================================
+\section{The six diagnostics}\label{sec: six}
+% =============================================================================
+
+All six live in \texttt{saddle\_problem.jl} and are shared by the four saddle
+notebooks.
+
+\paragraph{\texttt{step\_classes(ss)}.}
+The triple \eqref{eqn: trunc} to \eqref{eqn: krylov}, read from
+\texttt{:cg\_iters\_trajectory} and \texttt{:active\_trajectory}.
+\emph{Does not apply} under \texttt{ExactMS}, which reports $c_k = 0$, and
+returns $(\mathrm{NaN}, \mathrm{NaN}, \mathrm{NaN})$ there rather than a fraction
+of zero. Read the angle instead in that case.
+
+\paragraph{\texttt{eig\_deviation(x)}.}
+The sine of the angle between $H(x)g(x)$ and $g(x)$,
+\begin{equation}
+  \texttt{eig\_deviation}(x)
+    = \sqrt{1 - \left(\frac{\abs{(Hg)^{\!\top}g}}{\norm{Hg}\,\norm{g}}\right)^{\!2}},
+  \label{eqn: eigdev}
+\end{equation}
+zero exactly when $g$ is an eigenvector of $H$. On \eqref{eqn: f} the Hessian is
+diagonal on the axis $p_2 = 0$ and the gradient lies along $e_1$ there, so the
+deviation vanishes on the axis. The notebook confirms it is $0$ to the last bit
+at $(0.3, 0)$, $(0.6, 0)$ and $(-0.5, 0)$, and $2.415\times10^{-1}$ at the
+starting point. \emph{Does not apply} where $g = 0$ or $Hg = 0$, returning
+\texttt{NaN}.
+
+\paragraph{\texttt{z1\_ratio(x, $\Delta$)}.}
+The first Steihaug iterate against the radius,
+\begin{equation}
+  \texttt{z1\_ratio}(x, \Delta)
+    = \frac{\norm{z_1}}{\Delta}
+    = \frac{\norm{g}^{3}}{\bigl(g^{\!\top}Hg\bigr)\,\Delta}.
+  \label{eqn: z1}
+\end{equation}
+It reaches one exactly when \ref{it: boundary} fires, so the truncation condition
+is
+\begin{equation}
+  \Delta \;\leq\; \frac{\norm{g}^{3}}{g^{\!\top}Hg},
+  \qquad\text{equivalently}\qquad
+  \mu \;\leq\; \frac{\norm{g}^{2}}{g^{\!\top}Hg}
+  \ \text{ when } \Delta = \mu\norm{g},
+  \label{eqn: trunc condition}
+\end{equation}
+a reciprocal curvature. A cap below that quantity truncates every step, which is
+the mechanism behind the top rows of Table~\ref{tab: one}.
+\emph{Does not apply} where $g^{\!\top}Hg \leq 0$, returning \texttt{Inf},
+because conjugate gradient then goes straight to the boundary through
+\ref{it: negcurv}. The notebook exhibits six such points, all near the axis
+between the origin and the saddle, with $g^{\!\top}Hg$ from
+$-4.33\times10^{-8}$ to $-2.15\times10^{-3}$.
+
+\paragraph{\texttt{spectrum\_variance(x)}.}
+The $g$-weighted variance of the spectrum of $H(x)$. With $H = V\Lambda V^{\!\top}$
+and weights $w_i = (V^{\!\top}g)_i^2/\norm{g}^2$,
+\begin{equation}
+  \texttt{spectrum\_variance}(x)
+    = \sum_i w_i\lambda_i^2 - \Bigl(\sum_i w_i\lambda_i\Bigr)^{\!2}.
+  \label{eqn: specvar}
+\end{equation}
+It is the coefficient in the \texttt{ExactMS} angle law of the first notebook,
+$1 - \cos(s_k,-g_k) \approx \tfrac12\,\texttt{spectrum\_variance}\,(\Delta_k/\norm{g_k})^2$.
+It vanishes where $g$ is an eigenvector, so it is $0$ on the axis $p_2 = 0$,
+which the notebook shows beside \eqref{eqn: eigdev}. \emph{Does not apply} where
+$g = 0$, returning \texttt{NaN}.
+
+\paragraph{\texttt{loglog\_fit(x, y)}.}
+Least squares slope of $\log_{10}y$ on $\log_{10}x$, with intercept, $R^2$ and
+the number of usable points. Points with $x \leq 0$, $y \leq 0$ or a non-finite
+value are dropped first. \emph{Does not apply} below five usable points, where it
+returns \texttt{NaN}, so a slope is never quoted from a handful of iterations.
+The notebook shows \texttt{NaN} at three and four points and slope $1.5$ with
+$R^2 = 1.0$ at five and eight. \textbf{Report $n$ and $R^2$ beside every slope
+taken from it.}
+
+\paragraph{\texttt{nearest\_crit(x)}.}
+The nearest of the four critical points and its distance, as a pair.
+\texttt{which\_crit} is written in terms of it, returning the name when the
+distance is below its tolerance and \texttt{"other"} otherwise, so a limit point
+is classified by one distance computation. The notebook shows the two agreeing at
+the four critical points and separating at $(-0.5, 0.6)$, where the nearest is
+the origin at distance $7.810\times10^{-1}$ and \texttt{which\_crit} returns
+\texttt{"other"}.
+
+\emph{Never report \texttt{"other"} as an outcome without the distance and
+$\norm{g}$ beside it.} A run that exhausted its budget while still moving is not
+a run that converged somewhere else, and only those two numbers separate the
+cases.
+
+% =============================================================================
+\section{The tables}\label{sec: tables}
+% =============================================================================
+
+\subsection{Table 1: the degeneration ladder}\label{sec: table one}
+
+\begin{table}[H]
+  \centering\small
+  \caption{$\Rgrad$ capped, truncated conjugate gradient, three model Hessians.
+    The columns are \eqref{eqn: trunc} to \eqref{eqn: cosmin}. Note
+    $\texttt{cg1} = \texttt{trunc} + \texttt{inside}$ on every row, to the
+    printed precision, which is \eqref{eqn: cg1}.}
+  \label{tab: one}
+  \begin{tabular}{llrrrrrrrr}
+    \toprule
+    model & $\overline{\mu}$ & status & iter
+      & \texttt{trunc} & \texttt{inside} & \texttt{krylov}
+      & \texttt{cauchy} & \texttt{cg1} & \texttt{cos\_min} \\
+    \midrule
+    ExactHessian & 0.01 & max\_iter & 2000 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    ExactHessian & 0.05 & max\_iter & 2000 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    ExactHessian & 0.10 & max\_iter & 2000 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    ExactHessian & 0.30 & max\_iter & 2000 & 1.000 & 0.000 & 0.001 & 0.9995 & 0.9995 & 0.877285 \\
+    ExactHessian & 0.50 & max\_iter & 2000 & 0.999 & 0.000 & 0.001 & 0.9990 & 0.9990 & 0.877285 \\
+    ExactHessian & 1.00 & max\_iter & 2000 & 0.999 & 0.000 & 0.002 & 0.9985 & 0.9985 & 0.877285 \\
+    ExactHessian & 2.00 & max\_iter & 2000 & 0.998 & 0.001 & 0.002 & 0.9985 & 0.9985 & 0.877285 \\
+    ExactHessian & 4.00 & max\_iter & 2000 & 0.334 & 0.001 & 0.665 & 0.4885 & 0.3345 & 0.877285 \\
+    ExactHessian & 8.00 & first\_order & 1678 & 0.331 & 0.001 & 0.668 & 0.4815 & 0.3319 & 0.675664 \\
+    ExactHessian & 128.00 & first\_order & 85 & 0.047 & 0.035 & 0.918 & 0.0824 & 0.0824 & 0.246457 \\
+    \midrule
+    SR1 & 0.01 & max\_iter & 2000 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    SR1 & 0.05 & max\_iter & 2000 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    SR1 & 0.10 & max\_iter & 2000 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    SR1 & 0.30 & max\_iter & 2000 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    SR1 & 0.50 & stalled & 83 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    SR1 & 1.00 & first\_order & 23 & 0.739 & 0.000 & 0.261 & 0.7391 & 0.7391 & 0.671198 \\
+    SR1 & 2.00 & first\_order & 24 & 0.625 & 0.042 & 0.333 & 0.6667 & 0.6667 & 0.692186 \\
+    SR1 & 4.00 & first\_order & 19 & 0.632 & 0.105 & 0.263 & 0.7368 & 0.7368 & 0.761860 \\
+    SR1 & 8.00 & first\_order & 19 & 0.632 & 0.105 & 0.263 & 0.7368 & 0.7368 & 0.761860 \\
+    SR1 & 128.00 & first\_order & 19 & 0.632 & 0.105 & 0.263 & 0.7368 & 0.7368 & 0.761860 \\
+    \midrule
+    LBFGS & 0.01 & max\_iter & 2000 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    LBFGS & 0.05 & max\_iter & 2000 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    LBFGS & 0.10 & max\_iter & 2000 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    LBFGS & 0.30 & max\_iter & 2000 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    LBFGS & 0.50 & stalled & 85 & 1.000 & 0.000 & 0.000 & 1.0000 & 1.0000 & 1.000000 \\
+    LBFGS & 1.00 & first\_order & 30 & 0.333 & 0.100 & 0.567 & 0.4333 & 0.4333 & 0.661424 \\
+    LBFGS & 2.00 & stalled & 28 & 0.464 & 0.143 & 0.393 & 0.6071 & 0.6071 & 0.599361 \\
+    LBFGS & 4.00 & first\_order & 21 & 0.333 & 0.238 & 0.429 & 0.5714 & 0.5714 & 0.426056 \\
+    LBFGS & 8.00 & first\_order & 21 & 0.333 & 0.238 & 0.429 & 0.5714 & 0.5714 & 0.426056 \\
+    LBFGS & 128.00 & first\_order & 21 & 0.333 & 0.238 & 0.429 & 0.5714 & 0.5714 & 0.426056 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Read the table down each block. Three regimes appear, and the cap is what moves
+between them.
+
+\paragraph{The degenerate regime, $\overline{\mu} \leq 0.1$.}
+$\texttt{trunc} = 1.000$, $\texttt{cauchy} = \texttt{cg1} = 1.0000$ and
+$\texttt{cos\_min} = 1.000000$, on all three models. Every step of two thousand
+was truncated at the boundary along $-g_k$. The method was gradient descent with
+step length $\Delta_k$ for the whole run, and $\texttt{cos\_min}$ is what says
+\emph{whole}: a fraction of one leaves open a single stray iteration, and a
+minimum of one does not.
+
+The mechanism is \eqref{eqn: trunc condition}. A cap below
+$\norm{g_k}^2/(g_k^{\!\top}H_kg_k)$ truncates every step, and the model never
+enters. That the three models agree exactly here is the point. When the region is
+this small the model Hessian is irrelevant, so \texttt{SR1} and \texttt{LBFGS}
+produce the same run as the exact Hessian.
+
+\paragraph{The mixed regime.}
+Between $\overline{\mu} = 0.3$ and $2$ under \texttt{ExactHessian}, \texttt{trunc}
+stays above $0.998$ while \texttt{cos\_min} drops to $0.877285$. The fractions
+barely move and the minimum does, which is the case the two kinds of column exist
+to separate. One or two iterations in two thousand escaped the truncated branch,
+and only \texttt{cos\_min} records that they did.
+
+\paragraph{The Krylov regime.}
+At $\overline{\mu} = 128$ under \texttt{ExactHessian}, $\texttt{krylov} = 0.918$
+and the run converges in $85$ iterations rather than exhausting $2000$.
+$\texttt{cos\_min} = 0.246457$, so the step direction departed from $-g_k$ by
+about $76^\circ$ at its worst. The model is choosing the direction, and the run
+is a trust-region method rather than a disguised gradient method.
+
+\paragraph{The quasi-Newton models reach that regime sooner.}
+\texttt{SR1} and \texttt{LBFGS} leave the degenerate regime at
+$\overline{\mu} = 1$, where \texttt{ExactHessian} is still at
+$\texttt{trunc} = 0.999$. Their runs then take $19$ to $30$ iterations against
+$2000$. The cap that degenerates a method is not a property of the cap alone.
+
+\paragraph{\texttt{inside} is almost never occupied.}
+It is $0.000$ or $0.001$ on every \texttt{ExactHessian} row and reaches $0.238$
+only under \texttt{LBFGS}. The degeneration proceeds by truncation rather than by
+a short interior step, which is why \texttt{trunc} and not \texttt{cg1} is the
+column that identifies gradient descent.
+
+\subsection{Table 2: the two Cauchy statistics}\label{sec: table two}
+
+Table~\ref{tab: one} already shows the answer to the question of
+Section~\ref{sec: same question}. On $28$ of the $30$ rows \texttt{cauchy} and
+\texttt{cg1} print the same number, which is Proposition~\ref{prop: inclusion}
+with an empty remainder. On the two \texttt{ExactHessian} rows at
+$\overline{\mu} = 4$ and $8$ they separate, and the notebook's Table 2 counts
+$308$ and $251$ disagreeing iterations, all in the direction the inclusion
+allows.
+
+\begin{table}[H]
+  \centering\small
+  \caption{The two candidate explanations, pooled over the runs that disagree at
+    all. \texttt{eig\_deviation} does not separate the two populations and the
+    boundary gap $1 - \norm{z_1}/\Delta$ separates them by five orders of
+    magnitude.}
+  \label{tab: two}
+  \begin{tabular}{lrrr}
+    \toprule
+    quantity & min & median & max \\
+    \midrule
+    \texttt{eig\_deviation}, disagreeing & $7.0343\e{-1}$ & $7.0695\e{-1}$ & $8.6594\e{-1}$ \\
+    \texttt{eig\_deviation}, agreeing    & $7.5345\e{-3}$ & $7.0617\e{-1}$ & $8.6594\e{-1}$ \\
+    \midrule
+    $1 - \norm{z_1}/\Delta$, disagreeing & $4.4409\e{-16}$ & $6.5360\e{-9}$ & $2.2238\e{-6}$ \\
+    $1 - \norm{z_1}/\Delta$, agreeing    & $-1.0790\e{0}$  & $1.6266\e{-3}$ & $6.8788\e{-1}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The negative entries in the last row are not an error. On a truncating iteration
+$\norm{z_1} \geq \Delta$, so $1 - \norm{z_1}/\Delta \leq 0$, and the agreeing
+population is dominated by such iterations. The disagreeing population sits at
+$+6.5\times10^{-9}$, that is just \emph{inside} the boundary, which is exactly
+the configuration \ref{it: boundary} fails to catch.
+
+\subsection{Table 3: the truncation condition, iteration by iteration}
+\label{sec: table three}
+
+\begin{table}[H]
+  \centering\small
+  \caption{The prediction $\norm{z_1}/\Delta_k \geq 1$ against the observed
+    $c_k = 1$. Rows with no disagreement under \texttt{SR1} and \texttt{LBFGS}
+    are omitted; the counts below are over all ten caps.}
+  \label{tab: three}
+  \begin{tabular}{llrrrr}
+    \toprule
+    model & $\overline{\mu}$ & iterations & predicted & observed & disagreements \\
+    \midrule
+    ExactHessian & 0.01 & 2000 & 2000 & 2000 & 0 \\
+    ExactHessian & 0.05 & 2000 & 2000 & 2000 & 0 \\
+    ExactHessian & 0.10 & 2000 & 2000 & 2000 & 0 \\
+    ExactHessian & 0.30 & 2000 & 1999 & 1999 & 0 \\
+    ExactHessian & 0.50 & 2000 & 1998 & 1998 & 0 \\
+    ExactHessian & 1.00 & 2000 & 1997 & 1997 & 0 \\
+    ExactHessian & 2.00 & 2000 & 1996 & 1997 & 1 \\
+    ExactHessian & 4.00 & 2000 & 667 & 669 & 2 \\
+    ExactHessian & 8.00 & 1678 & 555 & 557 & 2 \\
+    ExactHessian & 128.00 & 85 & 4 & 7 & 3 \\
+    \midrule
+    SR1 & 0.30 & 2000 & 1999 & 2000 & 1 \\
+    SR1 & 0.50 & 82 & 81 & 82 & 1 \\
+    SR1 & 1.00 & 23 & 16 & 17 & 1 \\
+    SR1 & 2.00 & 24 & 14 & 16 & 2 \\
+    SR1 & 4.00 & 19 & 11 & 14 & 3 \\
+    \midrule
+    LBFGS & 0.30 & 2000 & 1999 & 2000 & 1 \\
+    LBFGS & 0.50 & 84 & 83 & 84 & 1 \\
+    LBFGS & 1.00 & 30 & 19 & 13 & 12 \\
+    LBFGS & 2.00 & 27 & 16 & 16 & 4 \\
+    LBFGS & 4.00 & 21 & 11 & 12 & 5 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Under \texttt{ExactHessian} the prediction is right on $17755$ of $17763$
+iterations, a disagreement rate of $0.0005$. The rate is $0.0017$ under
+\texttt{SR1} and $0.0040$ under \texttt{LBFGS}, and that difference is a property
+of the diagnostic rather than of the condition: \texttt{z1\_ratio} reads the
+\emph{true} Hessian through \texttt{hess}, and conjugate gradient runs on the
+\emph{model} Hessian. The two coincide under \texttt{ExactHessian} and nowhere
+else.
+
+\begin{table}[H]
+  \centering\small
+  \caption{Every disagreement under \texttt{ExactHessian}, individually. Three
+    distinct iterates account for all eight, appearing once per cap large enough
+    to reach them.}
+  \label{tab: four}
+  \begin{tabular}{lrrrrrr}
+    \toprule
+    $\overline{\mu}$ & $k$ & \texttt{z1\_ratio} & $c_k$
+      & \texttt{eig\_deviation} & $\Delta_k$ & $\norm{g_k}$ \\
+    \midrule
+    2.00 & 3 & 0.74290 & 1 & 7.5345e-03 & 6.1095e-02 & 3.0547e-02 \\
+    4.00 & 3 & 0.74290 & 1 & 7.5345e-03 & 6.1095e-02 & 3.0547e-02 \\
+    4.00 & 4 & 0.76071 & 1 & 5.3537e-02 & 3.1586e-02 & 7.8966e-03 \\
+    8.00 & 3 & 0.74290 & 1 & 7.5345e-03 & 6.1095e-02 & 3.0547e-02 \\
+    8.00 & 4 & 0.76071 & 1 & 5.3537e-02 & 3.1586e-02 & 7.8966e-03 \\
+    128.00 & 3 & 0.74290 & 1 & 7.5345e-03 & 6.1095e-02 & 3.0547e-02 \\
+    128.00 & 4 & 0.76071 & 1 & 5.3537e-02 & 3.1586e-02 & 7.8966e-03 \\
+    128.00 & 7 & 0.78195 & 1 & 9.8707e-03 & 4.1855e-03 & 1.3080e-04 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+All eight have the same shape. \texttt{z1\_ratio} lies between $0.7429$ and
+$0.7819$, so the prediction says the step will not truncate, and $c_k = 1$ says
+it stopped after one iteration anyway. None is within $10^{-6}$ of one and none
+is \texttt{Inf}, so neither \ref{it: boundary} nor \ref{it: negcurv} explains
+them.
+
+The cause is \ref{it: forcing}. \texttt{z1\_ratio} models the boundary exit and
+nothing else, while the recurrence has three exits. Those eight iterations
+stopped \emph{inside} the region because the residual met the forcing condition,
+which \eqref{eqn: z1} cannot see.
+
+\begin{remark}[the prediction is one-sided, and that is what to rely on]
+\label{rem: onesided}
+  There is no disagreement in the other direction. Over all $17763$
+  \texttt{ExactHessian} iterations, \texttt{z1\_ratio} $\geq 1$ never occurs with
+  $c_k \geq 2$. So $\norm{z_1}/\Delta_k \geq 1$ is \emph{sufficient} for
+  truncation and not necessary, which is what \eqref{eqn: trunc condition}
+  asserts and all that Section~\ref{sec: table one} needs from it.
+\end{remark}
+
+\subsection{What the four tables say together}\label{sec: together}
+
+The cap controls the radius, the radius controls the truncation through
+\eqref{eqn: trunc condition}, and the truncation controls whether the model
+Hessian influences the step at all. Table~\ref{tab: one} measures the last of
+those three, Table~\ref{tab: three} confirms the middle one to a rate of five in
+ten thousand, and Tables~\ref{tab: two} and \ref{tab: four} account for every
+iteration where the diagnostics disagree.
+
+Two of the eight columns are load bearing and the rest corroborate.
+\texttt{trunc} identifies gradient descent in disguise, because it is the only
+class in which neither the direction nor the length came from the model.
+\texttt{cos\_min} says whether that held throughout the run or only on average.
+\texttt{cauchy}, \texttt{cg1}, \texttt{inside} and \texttt{krylov} are consistent
+with those two by \eqref{eqn: cg1} and Proposition~\ref{prop: inclusion}, and
+where they part company the reason is arithmetic rather than algorithmic.
+
+\end{document}

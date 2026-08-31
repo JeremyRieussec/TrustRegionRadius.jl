@@ -23,12 +23,26 @@
 # consistent, and which set the paper adopts is the author's to settle.
 # =============================================================================
 
-using PyPlot   # the four-panel figure is written against PyPlot's subplot API
-
 using TrustRegionRadius
 using ADNLPModels, NLPModels
 using LinearAlgebra, Printf, Statistics
 using Plots, LaTeXStrings
+
+# `import`, not `using`, and after Plots. Two separate reasons, both checked.
+#
+# ORDER. PyPlot loads a Python whose Qt6 libraries shadow the ones GR_jll binds
+# to, so `using PyPlot` ahead of `using Plots` aborts the include with
+#     InitError: could not load library "...Qt6Concurrent.dll"
+#     during initialization of module Qt6Base_jll
+# Both orders were tried in this environment and only this one loads.
+#
+# IMPORT. PyPlot and Plots both export `plot`, `savefig`, `contour`, `scatter`
+# and more. Under `using` both, every unqualified use in Main becomes ambiguous
+# and throws `UndefVarError: plot not defined`, which is what broke
+# `mu_cap_gradient_descent_v1.ipynb`. `import` binds the module name alone and
+# exports nothing, and `plot_run` already qualifies every PyPlot call it makes,
+# so the notebooks keep Plots' unqualified names.
+import PyPlot
 
 gr()
 default(fontfamily = "Computer Modern", framestyle = :box, grid = true,
@@ -59,14 +73,12 @@ const X0_DEFAULT = [-0.5, 0.6]
 const CRITPTS = [("origin",  ORIGIN), ("saddle", SADDLE),
                  ("min+",    MINP),   ("min-",   MINM)]
 
-println("Critical points of f\n")
-@printf("%-8s %-22s %12s %12s %22s\n", "name", "x", "f(x)", "||grad||", "eig(hess)")
-println("-"^80)
-for (nm, p) in CRITPTS
-    w = eigvals(Symmetric(hess(p)))
-    @printf("%-8s (%+.6f, %+.6f) %12.8f %12.2e   (%+.5f, %+.5f)\n",
-            nm, p[1], p[2], f(p), norm(grad(p)), w[1], w[2])
-end
+# The printed table of critical points used to stand here, ahead of the
+# definitions of `f`, `grad` and `hess`, so the include died on its first call
+# to `hess`. It is `critical_points_table()` below, defined after them and
+# called by whoever wants it, which is what the header of this file already
+# claimed. Four notebooks include this file and none of them wants the table
+# printed at them on load.
 
 # ---------------------------------------------------------------- test function
 f(p) = p[1]^4 - p[1]^3 + (0.25 - p[1]/2)*p[2]^2 + p[2]^4/4
@@ -79,6 +91,123 @@ hess(p) = [6p[1]*(2p[1]-1)   -p[2];
 
 # the same f, as the model the solver actually sees
 make_nlp(x0 = X0_DEFAULT) = ADNLPModel(f, collect(float.(x0)), name = "quartic")
+
+"""
+    critical_points_table(io = stdout)
+
+Print `f`, `‖grad‖` and the two eigenvalues of the Hessian at each of the four
+critical points. A display, called by a notebook that wants it rather than run on
+include.
+"""
+function critical_points_table(io::IO = stdout)
+    println(io, "Critical points of f\n")
+    @printf(io, "%-8s %-22s %12s %12s %22s\n",
+            "name", "x", "f(x)", "||grad||", "eig(hess)")
+    println(io, "-"^80)
+    for (nm, p) in CRITPTS
+        w = eigvals(Symmetric(hess(p)))
+        @printf(io, "%-8s (%+.6f, %+.6f) %12.8f %12.2e   (%+.5f, %+.5f)\n",
+                nm, p[1], p[2], f(p), norm(grad(p)), w[1], w[2])
+    end
+    return nothing
+end
+
+# =============================================================================
+# Step diagnostics
+#
+# Migrated verbatim from `mu_cap_gradient_descent_v1.ipynb`, where they were
+# defined locally, because four notebooks need them. That notebook now takes them
+# from here.
+# =============================================================================
+
+"""
+    step_classes(ss) -> (truncated, inside, krylov)
+
+The three classes of step, as fractions of the iterations that happened.
+
+1. truncated at the boundary, `cg_iters == 1` and the step active: the Hessian
+   touched neither the direction nor the length;
+2. stopped inside after one CG iteration: the direction is `-g_k` and the Hessian
+   sets the length through the exact line search on the model;
+3. two or more CG iterations.
+
+Only the first is gradient descent in disguise. `ExactMS` reports
+`cg_iters == 0` throughout, so the classes do not apply and `(NaN, NaN, NaN)` is
+returned. Read the angle instead.
+"""
+function step_classes(ss)
+    cg, ac = ss[:cg_iters_trajectory], ss[:active_trajectory]
+    n = length(cg)
+    (n == 0 || all(==(0), cg)) && return (NaN, NaN, NaN)
+    return (count(i -> cg[i] == 1 &&  ac[i], 1:n) / n,
+            count(i -> cg[i] == 1 && !ac[i], 1:n) / n,
+            count(i -> cg[i] >= 2,           1:n) / n)
+end
+
+"`sin` of the angle between `Hg` and `g`. Zero exactly when `g` is an eigenvector."
+function eig_deviation(x)
+    g = grad(x); H = hess(x); Hg = H * g
+    ng, nHg = norm(g), norm(Hg)
+    (ng == 0 || nHg == 0) && return NaN
+    return sqrt(max(0.0, 1 - clamp(abs(dot(Hg, g)) / (nHg * ng), 0.0, 1.0)^2))
+end
+
+"""
+    z1_ratio(x, Δ) -> Float64
+
+`‖z₁‖ / Δ`, where `z₁` is the first Steihaug iterate, the exact minimiser of the
+model along `-g`. Steihaug truncates at the first iteration when this reaches
+one, and continues to a second when it does not.
+
+Returns `Inf` when `gᵀHg ≤ 0`, where CG goes straight to the boundary.
+"""
+function z1_ratio(x, Δ)
+    g = grad(x); H = hess(x); gHg = dot(g, H * g)
+    gHg <= 0 && return Inf
+    return (dot(g, g) / gHg) * norm(g) / Δ
+end
+
+"The g-weighted variance of the spectrum of `H(x)`, which sets the ExactMS angle."
+function spectrum_variance(x)
+    g = grad(x); ng = norm(g)
+    ng == 0 && return NaN
+    F = eigen(Symmetric(hess(x)))
+    w = (transpose(F.vectors) * g) .^ 2 ./ ng^2
+    return sum(w .* F.values .^ 2) - sum(w .* F.values)^2
+end
+
+"""
+    loglog_fit(x, y; ymin = 0.0) -> (slope, inter, r2, n)
+
+Least squares slope of `log10(y)` on `log10(x)`, with intercept, `R²` and the
+number of usable points. Returns `NaN` below five usable points, so a fit is never
+quoted from a handful of iterations. Report `n` and `r2` beside every slope taken
+from this.
+"""
+function loglog_fit(x, y; ymin = 0.0)
+    idx = [i for i in eachindex(y) if isfinite(x[i]) && isfinite(y[i]) &&
+                                      x[i] > 0 && y[i] > ymin]
+    length(idx) < 5 && return (slope = NaN, inter = NaN, r2 = NaN, n = length(idx))
+    X, Y = log10.(x[idx]), log10.(y[idx])
+    X̄, Ȳ = mean(X), mean(Y)
+    sxx = sum(abs2, X .- X̄)
+    sxx == 0 && return (slope = NaN, inter = NaN, r2 = NaN, n = length(idx))
+    b = sum((X .- X̄) .* (Y .- Ȳ)) / sxx
+    a = Ȳ - b * X̄
+    ss = sum(abs2, Y .- Ȳ)
+    return (slope = b, inter = a,
+            r2 = ss == 0 ? NaN : 1 - sum(abs2, Y .- (a .+ b .* X)) / ss,
+            n = length(idx))
+end
+
+"Distance to the nearest of the four critical points, and its name."
+function nearest_crit(x)
+    best, bd = "other", Inf
+    for (nm, p) in CRITPTS
+        d = norm(x .- p); d < bd && (bd = d; best = nm)
+    end
+    return (name = best, dist = bd)
+end
 
 # ------------------------------------------------------------------ runners
 
@@ -109,13 +238,18 @@ function solve_path(; x0 = X0_DEFAULT, kwargs...)
     return st, xs
 end
 
-"Classify a limit point by distance to the four known critical points."
+"""
+    which_crit(x; tol = 1e-4) -> String
+
+Classify a limit point by distance to the four known critical points, or
+`"other"` when the nearest one is further than `tol`.
+
+One distance computation, `nearest_crit`, serves both. The signature and the
+`tol` behaviour are unchanged, so the existing notebooks are unaffected.
+"""
 function which_crit(x; tol = 1e-4)
-    best, bd = "other", Inf
-    for (nm, p) in CRITPTS
-        d = norm(x .- p); d < bd && (bd = d; best = nm)
-    end
-    return bd < tol ? best : "other"
+    nc = nearest_crit(x)
+    return nc.dist < tol ? nc.name : "other"
 end
 
 # `tail_active` used to be defined here, hand-rolled, with
