@@ -268,8 +268,10 @@ mutable struct TRCore{T, V <: AbstractVector{T}, R <: RadiusRule,
     x_ref::Union{Nothing, V}
     want_true_curv::Bool
     want_paired::Bool
+    want_opvar::Bool
     paired_δ::Float64
     paired_σ²::Float64
+    paired_σ²op::Float64
     want_hnorm::Bool
 end
 
@@ -306,6 +308,10 @@ function TRCore(nlp::AbstractNLPModel{T, V}, rule, model, subsolver,
     # The paired decrease statistic is computed only when a sampling rule reads
     # it. A deterministic run has no batch to pair over and pays nothing.
     want_paired = nlp isa SampledNLP && needs_paired(nlp.rule)
+    # The outer-product variance is recorded alongside the empirical one whenever
+    # the problem can supply it, so the estimate the rule did not use is auditable.
+    # It costs one score matrix over the objective batch; see `paired_op_variance`.
+    want_opvar  = want_paired && has_scores(underlying_problem(nlp))
 
     retro     = needs_retrospective(rule_c)
     want_vec  = needs_eigenvector(sub_c)
@@ -332,7 +338,7 @@ function TRCore(nlp::AbstractNLPModel{T, V}, rule, model, subsolver,
         similar(x0), similar(x0), similar(x0), similar(x0), similar(x0),
         similar(x0), similar(x0), Hs_new, SubWorkspace(x0),
         rule_c, mod_c, sub_c, params, retro, want_curv, want_vec, sub_hs, Float64[],
-        xr, true_curvature, want_paired, NaN, NaN, hessian_norm)
+        xr, true_curvature, want_paired, want_opvar, NaN, NaN, NaN, hessian_norm)
 end
 
 """
@@ -509,7 +515,13 @@ function _tr_step!(c::TRCore{T}, nlp, st::TRState{T}) where {T}
     # the consumer, so the statistic is handed straight to it.
     if c.want_paired
         c.paired_δ, c.paired_σ², N_paired = paired_decrease_stats(nlp, c.x, c.x_cand)
-        record_paired!(nlp.rule, c.paired_δ, c.paired_σ², N_paired)
+        c.paired_σ²op = c.want_opvar ? paired_op_variance(nlp, c.x, c.x_cand) : NaN
+        # The rule states which estimate of Var(Dᵢ) it wants; the default is the
+        # empirical one, and a rule asking for the outer product on a problem
+        # without scores was rejected at construction.
+        σ²_rule = paired_variance_kind(nlp.rule) === :outer_product ?
+                 c.paired_σ²op : c.paired_σ²
+        record_paired!(nlp.rule, c.paired_δ, σ²_rule, N_paired)
     end
     # CG accumulated B·s while building the step; only a subsolver that did not
     # declare `returns_hprod` needs it computed here.
@@ -797,10 +809,12 @@ mutable struct SampleTrace
     σf²::Vector{Float64}
     δ::Vector{Float64}
     σ²D::Vector{Float64}
+    σ²op::Vector{Float64}
 end
 
 SampleTrace(on::Bool, truth::Bool) =
-    SampleTrace(on, truth, Float64[], Float64[], Float64[], Float64[], Float64[])
+    SampleTrace(on, truth, Float64[], Float64[], Float64[], Float64[], Float64[],
+                Float64[])
 
 function sample_pre!(sr::SampleTrace, truth_val)
     sr.on || return nothing
@@ -813,6 +827,7 @@ function sample_post!(sr::SampleTrace, c::TRCore, nlp, truth_val)
     sample_pre!(sr, truth_val)
     push!(sr.σg², Float64(nlp.σg²)); push!(sr.σf², Float64(nlp.σf²))
     push!(sr.δ, c.paired_δ); push!(sr.σ²D, c.paired_σ²)
+    push!(sr.σ²op, c.paired_σ²op)
     return nothing
 end
 
@@ -826,6 +841,7 @@ end
 | `:sigma_f2_trajectory` | `k` | `σ̂_f²` likewise |
 | `:paired_decrease_trajectory` | `k` | `δ̂_N`, the mean paired decrease |
 | `:paired_variance_trajectory` | `k` | `σ̂_N²`, its sample variance |
+| `:paired_op_variance_trajectory` | `k` | `sᵀB̃s − (g̃ᵀs)²`, the outer-product estimate of the same |
 
 The last two are attached only under a rule that asked for them, so their
 absence means the statistic was never formed rather than that it was zero.
@@ -838,6 +854,10 @@ function attach_sample_trace!(stats, sr::SampleTrace)
     if any(isfinite, sr.δ)
         set_solver_specific!(stats, :paired_decrease_trajectory, sr.δ)
         set_solver_specific!(stats, :paired_variance_trajectory, sr.σ²D)
+        # Attached only when the problem supplied scores, so its absence means the
+        # estimate was never formed rather than that it was zero.
+        any(isfinite, sr.σ²op) &&
+            set_solver_specific!(stats, :paired_op_variance_trajectory, sr.σ²op)
     end
     return nothing
 end

@@ -147,6 +147,8 @@ mutable struct ExpectationNLP{P <: ExpectationProblem, S <: SamplingRule} <:
     H_cache::Matrix{Float64}
     H_x::Vector{Float64}
     H_ok::Bool
+    scheme::Symbol
+    pool::Any
 end
 
 """
@@ -191,12 +193,16 @@ mutable struct FiniteSumNLP{P <: FiniteSumProblem, S <: SamplingRule} <:
     H_cache::Matrix{Float64}
     H_x::Vector{Float64}
     H_ok::Bool
+    scheme::Symbol
+    pool::Any
 end
 
 function ExpectationNLP(prob::ExpectationProblem, rule::SamplingRule;
                         x0::AbstractVector = zeros(prob.n), seed::Int = 0,
-                        N_init::Int = 8, budget::Int = 1_000_000)
+                        N_init::Int = 8, budget::Int = 1_000_000,
+                        scheme::Symbol = :independent)
     check_rule_problem(rule, prob)
+    _check_scheme(scheme, false)
     requires_finite_population(rule) && throw(ArgumentError(
         "$(nameof(typeof(rule))) needs a finite population; " *
         "$(nameof(typeof(prob))) is an expectation. Use FixedSample, " *
@@ -209,26 +215,30 @@ function ExpectationNLP(prob::ExpectationProblem, rule::SamplingRule;
     return ExpectationNLP{typeof(prob), typeof(rule)}(
         meta, Counters(), prob, rule, rng, seed, N0, b, b, N0, N0, 0, 0, 0,
         Int[], Int[], 1.0, 1.0, 0.0, 0.0, NaN, 0, budget,
-        zeros(0, 0), Float64[], false)
+        zeros(0, 0), Float64[], false, scheme, scheme === :nested ? b : nothing)
 end
 
 function FiniteSumNLP(prob::FiniteSumProblem, rule::SamplingRule;
                       x0::AbstractVector = zeros(prob.n), seed::Int = 0,
                       replace::Bool = true, N_init::Int = 8,
-                      budget::Union{Int, Nothing} = nothing)
+                      budget::Union{Int, Nothing} = nothing,
+                      scheme::Symbol = :independent)
     check_rule_problem(rule, prob)
     check_population_cap(rule, prob)
+    _check_scheme(scheme, true)
     M = population(prob)
     cap = budget === nothing ? M : min(budget, M)
     cap > 0 || throw(ArgumentError("FiniteSumNLP: need budget > 0"))
     meta = NLPModelMeta(prob.n; x0 = Vector{Float64}(x0), name = "FiniteSumNLP")
     rng = MersenneTwister(seed)
     N0 = min(N_init, cap)
-    b = draw_batch(prob, rng, N0; replace = replace)
+    # `:prefix` never draws: the batch is the first N_k individuals from the start.
+    b = scheme === :prefix ? collect(1:N0) : draw_batch(prob, rng, N0; replace = replace)
     return FiniteSumNLP{typeof(prob), typeof(rule)}(
         meta, Counters(), prob, rule, rng, seed, replace, N0, copy(b), copy(b),
         N0, N0, 0, 0, 0, Int[], Int[], Bool[], 1.0, 1.0, 0.0, 0.0, NaN, 0, cap,
-        zeros(0, 0), Float64[], false)
+        zeros(0, 0), Float64[], false, scheme,
+        scheme === :nested ? copy(b) : nothing)
 end
 
 underlying_problem(m::SampledNLP) = m.prob
@@ -329,16 +339,42 @@ end
 _pop(m::ExpectationNLP) = typemax(Int)
 _pop(m::FiniteSumNLP)   = population(m.prob)
 
+"""
+    _draw!(m, Ng, Nf) -> nothing
+
+Install the batches for this iteration, under the oracle's [`sample_scheme`](@ref).
+
+Objective and gradient share the batch when the sizes agree, which is the common
+case and gives the tightest common random numbers. When they differ, the smaller is
+a subset of the larger under `:nested` and `:prefix`, and independent under
+`:independent` — matching what each scheme does across iterations.
+"""
 function _draw!(m::ExpectationNLP, Ng::Int, Nf::Int)
+    if m.scheme === :nested
+        _resize_pool!(m, max(Ng, Nf))
+        m.batch_g = _take(m.pool, Ng)
+        m.batch_f = Ng == Nf ? m.batch_g : _take(m.pool, Nf)
+        return nothing
+    end
     m.batch_g = draw_batch(m.prob, m.rng, Ng)
     m.batch_f = Ng == Nf ? m.batch_g : draw_batch(m.prob, m.rng, Nf)
     return nothing
 end
 
 function _draw!(m::FiniteSumNLP, Ng::Int, Nf::Int)
+    if m.scheme === :prefix
+        # 𝒩_k = {1, …, N_k}: the first N_k individuals, no random numbers consumed.
+        M = population(m.prob)
+        m.batch_g = collect(1:min(Ng, M))
+        m.batch_f = Ng == Nf ? m.batch_g : collect(1:min(Nf, M))
+        return nothing
+    elseif m.scheme === :nested
+        _resize_pool!(m, max(Ng, Nf))
+        m.batch_g = _take(m.pool, Ng)
+        m.batch_f = Ng == Nf ? m.batch_g : _take(m.pool, Nf)
+        return nothing
+    end
     m.batch_g = draw_batch(m.prob, m.rng, Ng; replace = m.replace)
-    # Objective and gradient share the batch when the sizes agree, which is the
-    # common case and gives the tightest common random numbers.
     m.batch_f = Ng == Nf ? m.batch_g : draw_batch(m.prob, m.rng, Nf; replace = m.replace)
     return nothing
 end
@@ -530,11 +566,18 @@ function reset_sampling!(m::SampledNLP)
 end
 
 function _reset_batches!(m::ExpectationNLP, N0::Int)
-    b = draw_batch(m.prob, m.rng, N0); m.batch_g = b; m.batch_f = b; return nothing
+    b = draw_batch(m.prob, m.rng, N0); m.batch_g = b; m.batch_f = b
+    m.pool = m.scheme === :nested ? b : nothing
+    return nothing
 end
 function _reset_batches!(m::FiniteSumNLP, N0::Int)
-    b = draw_batch(m.prob, m.rng, N0; replace = m.replace)
-    m.batch_g = copy(b); m.batch_f = copy(b); return nothing
+    # `:prefix` is deterministic and must not consume the stream on a reset either,
+    # or two runs of the same oracle would not see the same realisations.
+    b = m.scheme === :prefix ? collect(1:min(N0, population(m.prob))) :
+        draw_batch(m.prob, m.rng, N0; replace = m.replace)
+    m.batch_g = copy(b); m.batch_f = copy(b)
+    m.pool = m.scheme === :nested ? copy(b) : nothing
+    return nothing
 end
 
 # -----------------------------------------------------------------------------
@@ -555,3 +598,229 @@ Base.show(io::IO, m::ExpectationNLP) =
 Base.show(io::IO, m::FiniteSumNLP) =
     print(io, "FiniteSumNLP(", nameof(typeof(m.prob)), ", M=", population(m.prob),
           ", ", m.rule, ")")
+
+# -----------------------------------------------------------------------------
+# Sample management schemes
+# -----------------------------------------------------------------------------
+
+"""
+    sample_schemes() -> NTuple{3, Symbol}
+
+The three ways a batch may be carried from one iteration to the next.
+
+Within an iteration the batch is fixed and every evaluation shares it; that is the
+common random numbers the whole design rests on and no scheme touches it. What the
+scheme decides is what happens **between** iterations, and the three answers are
+the ones the PreDoc states.
+
+| scheme | there | what it does |
+|:--|:--|:--|
+| `:independent` | IRV, plotted as VAI | draw `N_k` afresh, independently of the last batch |
+| `:nested` | I/CRV, plotted as VAI/VAC | grow by appending new draws, shrink by subsampling the current batch |
+| `:prefix` | CRV, plotted as VAC | the first `N_k` of the population, `{ξ_1, …, ξ_{N_k}}` |
+
+# `:independent`
+
+`𝒩_k` and `𝒩_{k+1}` are independent. The estimate `f̃_k` then moves between
+iterations for two reasons at once — the iterate moved, and the sample changed —
+and early on, when `N_k` is small and the variance is large, the second dominates.
+
+# `:nested`
+
+`𝒩_k ⊆ 𝒩_{k+1}` on a growth: the previous batch is kept and `N_{k+1} − N_k` fresh
+realisations are appended. On a shrink the survivors are drawn **uniformly from the
+previous batch**, so `𝒩_{k+1} ⊂ 𝒩_k` and nesting holds in that direction too.
+Consecutive estimates are then positively correlated and `f̃` moves mostly because
+the iterate moved.
+
+Growth without replacement draws from the complement of the current batch, which
+costs `O(M)` per growth; with replacement it appends `rand(1:M, ·)` and duplicates
+are allowed, as they are in the initial draw.
+
+# `:prefix`
+
+`𝒩_k = {1, …, N_k}`: literally the first `N_k` individuals, in population order.
+Every batch is a prefix of every larger one, so this is the most correlated scheme
+there is, and it is the only one that needs no random numbers at all after
+construction.
+
+It requires a finite population. On an [`ExpectationProblem`](@ref) there is no
+first individual to take, and the constructor rejects it.
+
+!!! warning "`:prefix` optimises the wrong problem"
+    Under `:prefix` the run minimises `(1/N_k) Σ_{i≤N_k} F(x, ξ_i)`, and while `N_k`
+    is small that function has its own minimiser, some distance from the one being
+    sought. A run can converge to it, report a small gradient, then grow the batch
+    and discover it is far from the solution of the full problem — the sample size
+    falls again, and the cycle can repeat.
+
+    This is not a defect of the implementation. It is the overfitting hazard the
+    PreDoc describes for CRV, and reproducing it is a reason to have the scheme.
+    Compare against `:independent` on the same seed before drawing any conclusion
+    about iteration counts.
+"""
+sample_schemes() = (:independent, :nested, :prefix)
+
+function _check_scheme(scheme::Symbol, finite::Bool)
+    scheme in sample_schemes() || throw(ArgumentError(
+        "scheme must be one of $(sample_schemes()), got :$scheme"))
+    (scheme === :prefix && !finite) && throw(ArgumentError(
+        "scheme = :prefix takes the first N_k individuals of the population, and " *
+        "an ExpectationProblem has none. Use :independent or :nested, or move to " *
+        "a FiniteSumProblem."))
+    return nothing
+end
+
+"""
+    sample_scheme(m::SampledNLP) -> Symbol
+
+Which of [`sample_schemes`](@ref) this oracle is carrying its batch under.
+"""
+sample_scheme(m::SampledNLP) = m.scheme
+
+"""
+    _extend_draw(prob, rng, pool, n_new; replace) -> pool′
+
+Append `n_new` fresh realisations to `pool`, for `:nested`.
+
+Two methods ship: index vectors for a finite sum, and [`GaussianDraw`](@ref) for a
+`PerturbedExpectation`. A problem whose `draw_batch` returns anything else has to
+add one, and the fallback says so rather than silently drawing an independent batch
+and calling it nested.
+"""
+function _extend_draw(p::FiniteSumProblem, rng, pool::Vector{Int}, n_new::Int;
+                      replace::Bool = true)
+    n_new <= 0 && return pool
+    M = population(p)
+    if replace
+        return vcat(pool, rand(rng, 1:M, n_new))
+    end
+    # Without replacement the new draws must miss everything already held, so they
+    # come from the complement. `O(M)` per growth, which is the price of nesting.
+    seen = falses(M)
+    @inbounds for i in pool
+        seen[i] = true
+    end
+    avail = findall(!, seen)
+    n_new >= length(avail) && return vcat(pool, avail)
+    return vcat(pool, avail[randperm(rng, length(avail))[1:n_new]])
+end
+
+function _extend_draw(p::PerturbedExpectation, rng, pool::GaussianDraw, n_new::Int;
+                      replace::Bool = true)
+    n_new <= 0 && return pool
+    fresh = draw_batch(p, rng, n_new)
+    C = if pool.C === nothing && fresh.C === nothing
+        nothing
+    else
+        vcat(something(pool.C, Matrix{Float64}[]),
+             something(fresh.C, Matrix{Float64}[]))
+    end
+    return GaussianDraw(hcat(pool.b, fresh.b), C)
+end
+
+_extend_draw(p, ::Any, pool, ::Int; replace::Bool = true) = throw(ArgumentError(
+    "scheme = :nested needs to append realisations to an existing batch, and " *
+    "$(nameof(typeof(p))) draws $(typeof(pool)), for which no `_extend_draw` " *
+    "method exists. Add one, or use scheme = :independent."))
+
+"""
+    _shrink_draw(rng, pool, n) -> pool′
+
+Keep `n` of the current batch, drawn uniformly from it: the PreDoc's rule for a
+decreasing sample under I/CRV, which is what makes `𝒩_{k+1} ⊂ 𝒩_k` hold on a fall
+as well as on a rise.
+"""
+function _shrink_draw(rng, pool::Vector{Int}, n::Int)
+    n >= length(pool) && return pool
+    return pool[randperm(rng, length(pool))[1:n]]
+end
+
+function _shrink_draw(rng, pool::GaussianDraw, n::Int)
+    N = length(pool)
+    n >= N && return pool
+    keep = randperm(rng, N)[1:n]
+    return GaussianDraw(pool.b[:, keep], pool.C === nothing ? nothing : pool.C[keep])
+end
+
+"Resize the nested pool to `n`, growing or shrinking as the PreDoc's I/CRV asks."
+function _resize_pool!(m::SampledNLP, n::Int)
+    len = m.pool === nothing ? 0 : length(m.pool)
+    if len == 0
+        m.pool = _fresh_draw(m, n)
+    elseif n > len
+        m.pool = _extend_draw(m.prob, m.rng, m.pool, n - len; replace = _replace(m))
+    elseif n < len
+        m.pool = _shrink_draw(m.rng, m.pool, n)
+    end
+    return m.pool
+end
+
+_fresh_draw(m::ExpectationNLP, n::Int) = draw_batch(m.prob, m.rng, n)
+_fresh_draw(m::FiniteSumNLP, n::Int)   = draw_batch(m.prob, m.rng, n; replace = m.replace)
+_replace(::ExpectationNLP) = true
+_replace(m::FiniteSumNLP)  = m.replace
+
+"Take the first `n` of a pool, without consuming random numbers."
+_take(pool::Vector{Int}, n::Int)   = n >= length(pool) ? pool : pool[1:n]
+_take(pool::GaussianDraw, n::Int)  = n >= length(pool) ? pool :
+    GaussianDraw(pool.b[:, 1:n], pool.C === nothing ? nothing : pool.C[1:n])
+
+"""
+    paired_op_variance(m::SampledNLP, x, x_cand) -> Float64
+
+The **outer-product approximation** to `Var(D_i)`, where
+`D_i = F(x, ξ_i) − F(x_cand, ξ_i)`, over the objective batch of the current
+iteration.
+
+With `s = x_cand − x`, a first-order expansion of `F(·, ξ)` about `x` gives
+`D_i ≈ −∇F(x, ξ_i)ᵀ s`, so
+
+```math
+\\mathrm{Var}(D_i) \\approx s^\\top \\mathrm{Var}[\\nabla F(x, \\xi)] s
+                  \\approx s^\\top \\tilde B s - (\\tilde g^\\top s)^2 ,
+```
+
+with `B̃ = (1/N) Σ ∇F_i ∇F_iᵀ` the outer-product matrix and `g̃` the batch gradient,
+both over `batch_f` at `x`. The right-hand side is the sample variance of the
+scalars `∇F_iᵀs`, and that is how it is computed here: one pass over the score
+matrix, forming `Var({sᵀ∇F_i})` directly rather than materialising `B̃`. So the
+result is **never negative**, which the difference of the two quadratic forms can
+be in floating point when the two nearly cancel.
+
+# What it costs, and what it assumes
+
+One score matrix over `batch_f` at `x`: `O(n·N)` storage and whatever the problem
+charges for `scores`. No new realisation is drawn, so like
+[`paired_decrease_stats`](@ref) it is not charged to [`samples_used`](@ref) — the
+comparison it enables is between two estimates of one quantity on one batch.
+
+Two approximations, and they fail in different places. The Taylor step needs
+`‖s‖` small relative to the curvature of `F(·, ξ)` along `s`, so it degrades on a
+large step, which is where the radius is large and the batch is small. The outer
+product is used here as an estimate of `Var[∇F]` alone: it does **not** need the
+information identity, and it is legitimate on a misspecified model where BHHH as a
+Hessian is not. Those are separate questions and conflating them is the standard
+error.
+
+Returns `NaN` when the batch is too small for a sample variance, matching
+[`paired_decrease_stats`](@ref), and when the problem supplies no scores.
+"""
+function paired_op_variance(m::SampledNLP, x::AbstractVector, x_cand::AbstractVector)
+    has_scores(m.prob) || return NaN
+    b = m.batch_f
+    S = scores(m.prob, x, b)                     # n × N
+    N = size(S, 2)
+    N < 2 && return NaN
+    s = x_cand .- x
+    # w_i = ∇F_iᵀ s. Var(D_i) ≈ Var(w_i), and the sample variance of the w_i is
+    # exactly sᵀB̃s − (g̃ᵀs)² up to the 1/(N−1) against 1/N convention.
+    w = transpose(S) * s
+    μ = sum(w) / N
+    acc = 0.0
+    @inbounds for i in 1:N
+        d = w[i] - μ
+        acc += d * d
+    end
+    return acc / (N - 1)
+end

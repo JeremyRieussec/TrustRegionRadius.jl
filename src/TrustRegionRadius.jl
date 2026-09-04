@@ -78,8 +78,9 @@ export solve_subproblem!, cg_step_info, returns_hprod, needs_eigenvector
 export SamplingRule, SamplingState, SampleStats, batch_stats
 export FullBatch, FixedSample, RadiusProportional, NormTest, GeometricSample
 export InnerProductTest, OrthogonalityTest, AugmentedInnerProduct
-export SequentialEstimation, CertifiedDecrease
+export SequentialEstimation, CertifiedDecrease, SmoothedSize
 export needs_paired, record_paired!, paired_decrease_stats
+export paired_variance_kind, paired_op_variance
 export obs_objective, supports_paired
 export grad_sample_size, obj_sample_size, couples_to_radius, needs_scores
 export sample_cap, requires_finite_population, reset_sampling_rule!
@@ -92,10 +93,12 @@ export SampledNLP, ExpectationNLP, FiniteSumNLP, FullBatchNLP, LikelihoodNLP
 export resample!, update_variances!, record_prediction!, samples_used
 export confirm_gradient_norm!, grad_standard_error
 export reset_sampling!, population_cap, true_objective, true_gradient
+export sample_schemes, sample_scheme
 
 # likelihood and least-squares problems
 export residuals, jacobian, information_identity_error
-export LogisticRegression, MLPClassifier, init_params, accuracy, β_true
+export LogisticRegression, MultinomialLogit, MLPClassifier
+export init_params, accuracy, β_true
 export LeastSquares, linear_least_squares, exponential_fit, x_true, gauss_newton_error
 
 # ---- The three solvers ------------------------------------------------------

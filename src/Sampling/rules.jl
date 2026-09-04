@@ -234,6 +234,31 @@ the way [`SequentialEstimation`](@ref) carries the predicted reduction.
 record_paired!(::SamplingRule, ::Real, ::Real, ::Integer) = nothing
 
 """
+    paired_variance_kind(rule) -> Symbol
+
+Which estimate of `Var(D_i)` the rule wants handed to [`record_paired!`](@ref),
+where `D_i = F(x_k, ξ_i) − F(x_k + s_k, ξ_i)`.
+
+- `:empirical` — the sample variance of the `D_i` themselves, computed by
+  [`paired_decrease_stats`](@ref). Assumption-free, and it costs one pass over the
+  per-observation objective values at both ends of the step.
+- `:outer_product` — `s_kᵀ B̃_k s_k − (g̃_kᵀ s_k)²`, computed by
+  [`paired_op_variance`](@ref) from the score matrix. This is the first-order
+  Taylor approximation: `D_i ≈ −∇F(x_k, ξ_i)ᵀ s_k`, whose variance is
+  `s_kᵀ Var[∇F] s_k` with `Var[∇F]` replaced by the outer-product estimate
+  `B̃_k − g̃_k g̃_kᵀ`.
+
+The two are different quantities and a rule may prefer either. The approximation
+is exact only in the limit of a vanishing step, and it inherits whatever error the
+outer product carries as an estimate of `Var[∇F]` — which is a *different*
+requirement from the information identity, since it does not ask `B̃` to
+approximate the Hessian, only the score covariance.
+
+Default `:empirical`. Only rules that declare [`needs_paired`](@ref) are asked.
+"""
+paired_variance_kind(::SamplingRule) = :empirical
+
+"""
     requires_finite_population(rule) -> Bool
 
 Whether the rule is meaningful only on a [`FiniteSumProblem`](@ref).
@@ -623,7 +648,7 @@ reset_sampling_rule!(r::SequentialEstimation) =
 
 """
     CertifiedDecrease(; p = 0.9, N_min = 2, N_max = nothing, N_start = 8,
-                        monotone = false, growth = 4.0)
+                        monotone = false, growth = 4.0, variance = :empirical)
 
 Sample until the achieved decrease is **certified** against the noise in the
 estimate of that decrease, using paired differences under common random numbers.
@@ -679,6 +704,24 @@ rule ignoring `s_k`.
 `monotone = false` by default, unlike [`SequentialEstimation`](@ref): the
 certified size is meaningful on its own at every iteration, and forcing it upward
 hides the `‖g_k‖^{-2}` growth this rule exists to exhibit.
+
+`monotone = true` is the special case `a = 1` of [`SmoothedSize`](@ref), which is
+where a two-sided bound `a N_k ≤ N_{k+1} ≤ b N_k` with `a < 1` belongs; wrap this
+rule rather than adding a floor to it.
+
+# Which variance
+
+`variance = :empirical` (default) sizes the batch from the sample variance of the
+`D_i`. `variance = :outer_product` uses `s_kᵀB̃_ks_k − (g̃_kᵀs_k)²` instead, the
+first-order Taylor approximation formed from the score matrix; see
+[`paired_variance_kind`](@ref) for what separates them and
+[`paired_op_variance`](@ref) for the computation. The outer-product form needs
+per-observation scores, so `needs_scores` becomes `true` and the rule is then
+rejected on a problem that has none.
+
+Both estimates are recorded on the trace whenever the problem supplies scores,
+under `:paired_variance_trajectory` and `:paired_op_variance_trajectory`, so the
+choice can be audited against the one not taken.
 """
 mutable struct CertifiedDecrease <: SamplingRule
     p::Float64
@@ -693,23 +736,30 @@ mutable struct CertifiedDecrease <: SamplingRule
     N_last::Int
     k_cached::Int
     N_cached::Int
+    variance::Symbol
     function CertifiedDecrease(; p::Real = 0.9, N_min::Int = 2,
                                  N_max::Union{Int, Nothing} = nothing,
                                  N_start::Int = 8, monotone::Bool = false,
-                                 growth::Real = 4.0)
+                                 growth::Real = 4.0,
+                                 variance::Symbol = :empirical)
         0.5 < p < 1 || throw(ArgumentError("CertifiedDecrease: need 0.5 < p < 1, got $p"))
         growth > 1 || throw(ArgumentError("CertifiedDecrease: need growth > 1"))
         N_start > 0 || throw(ArgumentError("CertifiedDecrease: need N_start > 0"))
+        variance in (:empirical, :outer_product) || throw(ArgumentError(
+            "CertifiedDecrease: variance must be :empirical or :outer_product, " *
+            "got :$variance"))
         _check_nmax(:CertifiedDecrease, N_min, N_max)
         # One-sided level p, so the two-sided quantile is taken at α = 2(1−p).
         new(float(p), _z_quantile(2 * (1 - p)), N_min, N_max, N_start,
-            float(growth), monotone, NaN, NaN, 0, -1, 0)
+            float(growth), monotone, NaN, NaN, 0, -1, 0, variance)
     end
 end
 
 needs_paired(::CertifiedDecrease)      = true
 couples_to_radius(::CertifiedDecrease) = true
 user_cap(r::CertifiedDecrease)         = r.N_max
+needs_scores(r::CertifiedDecrease)     = r.variance === :outer_product
+paired_variance_kind(r::CertifiedDecrease) = r.variance
 
 function record_paired!(r::CertifiedDecrease, δ::Real, σ²::Real, ::Integer)
     r.δ = Float64(δ); r.σ² = Float64(σ²)
@@ -783,3 +833,157 @@ end
 Base.show(io::IO, r::SamplingRule) =
     print(io, nameof(typeof(r)), "(",
           join(("$(f)=$(getfield(r,f))" for f in fieldnames(typeof(r))), ", "), ")")
+
+# -----------------------------------------------------------------------------
+# Sample size update functions: smoothing a rule's requirement
+# -----------------------------------------------------------------------------
+
+"""
+    SmoothedSize(rule; a = 0.75, b = 2.0, N_floor = 1, N_incr = 0, N_start = 8)
+
+Wrap a [`SamplingRule`](@ref) and bound how fast the size it asks for may move.
+
+The inner rule proposes a candidate `N⁺_{k+1}`; this reports
+
+```math
+N_{k+1} = \\min\\bigl\\{ b N_k , \\; \\max\\{ a N_k , \\; N^{\\min}_k , \\; N^{+}_{k+1} \\} \\bigr\\} ,
+\\qquad N^{\\min}_{k+1} = N^{\\min}_k + N_{incr} ,
+```
+
+with `0 < a ≤ 1` and `b > 1`. The two-sided bound is the *naive smoothing* of the
+PreDoc, written there as `Naive(a, b)`; `N_floor` and `N_incr` are the growing floor
+`N^{min}_k` of its sample-size update step.
+
+# Why it exists
+
+[`CertifiedDecrease`](@ref) already offers `monotone = true`, which is `a = 1`: the
+size may never fall. That is a strong assumption, and it is not the one the PreDoc
+makes. It also hides what the certified formula does, since a size that can only
+rise tells you nothing about the iterations at which the formula asked for less.
+
+`monotone = false` is the other extreme, `a = 0` and `b = ∞`, and there the raw
+requirement swings over orders of magnitude between consecutive iterations. `a` and
+`b` interpolate, and the interesting settings are strictly between the two.
+
+# What it does not do
+
+It does not change the inner rule's statistic, only the size read off it. A run under
+`SmoothedSize` and a run under the bare rule see the same estimates of the same
+quantities; they differ in what they do with them. In particular the smoothing is
+**not** a variance reduction and should never be described as one.
+
+# When the floor and the ceiling conflict
+
+`N_incr > 0` makes the floor grow linearly while `b N_k` grows geometrically from
+whatever `N_k` happens to be, so the floor can exceed the ceiling — most easily
+right after a sharp fall. **The floor wins**, and `N_{k+1} = N^{min}_k`. It is a
+requirement the caller stated outright, whereas the ceiling is a smoothing
+preference; and the alternative would let a run sit below its own stated floor for
+as long as it took `b` to catch up.
+
+# Composition
+
+Every trait is forwarded, so the wrapper is transparent to
+[`check_rule_problem`](@ref), to the oracle's cap logic and to the solver:
+[`needs_paired`](@ref), [`needs_scores`](@ref), [`couples_to_radius`](@ref),
+[`requires_finite_population`](@ref), [`user_cap`](@ref) and
+[`paired_variance_kind`](@ref) all read through to `rule`, and
+[`record_paired!`](@ref) is passed straight down.
+
+The gradient and objective channels are smoothed **separately**, each against its
+own previous size, so a rule that distinguishes them — [`RadiusProportional`](@ref)
+asks for `Δ^{-2}` and `Δ^{-4}` — keeps the distinction. A rule that returns one size
+for both, which is every rule that pairs, is unaffected: the two channels then carry
+identical state.
+
+# Example
+
+The PreDoc's setting, a certified size smoothed by `Naive(0.75, 2)` with a floor
+starting at 10 and rising by 10 each iteration:
+
+```julia
+rule = SmoothedSize(CertifiedDecrease(p = 0.95, N_min = 10);
+                    a = 0.75, b = 2.0, N_floor = 10, N_incr = 10, N_start = 100)
+```
+"""
+mutable struct SmoothedSize{R <: SamplingRule} <: SamplingRule
+    rule::R
+    a::Float64
+    b::Float64
+    N_floor::Int
+    N_incr::Int
+    N_start::Int
+    g_last::Int
+    g_k::Int
+    g_N::Int
+    f_last::Int
+    f_k::Int
+    f_N::Int
+    function SmoothedSize(rule::R; a::Real = 0.75, b::Real = 2.0,
+                          N_floor::Int = 1, N_incr::Int = 0,
+                          N_start::Int = 8) where {R <: SamplingRule}
+        0 < a <= 1 || throw(ArgumentError("SmoothedSize: need 0 < a ≤ 1, got $a"))
+        b > 1 || throw(ArgumentError("SmoothedSize: need b > 1, got $b"))
+        N_floor > 0 || throw(ArgumentError("SmoothedSize: need N_floor > 0, got $N_floor"))
+        N_incr >= 0 || throw(ArgumentError("SmoothedSize: need N_incr ≥ 0, got $N_incr"))
+        N_start > 0 || throw(ArgumentError("SmoothedSize: need N_start > 0, got $N_start"))
+        new{R}(rule, float(a), float(b), N_floor, N_incr, N_start,
+               0, -1, 0, 0, -1, 0)
+    end
+end
+
+needs_paired(r::SmoothedSize)               = needs_paired(r.rule)
+needs_scores(r::SmoothedSize)               = needs_scores(r.rule)
+couples_to_radius(r::SmoothedSize)          = couples_to_radius(r.rule)
+requires_finite_population(r::SmoothedSize) = requires_finite_population(r.rule)
+user_cap(r::SmoothedSize)                   = user_cap(r.rule)
+paired_variance_kind(r::SmoothedSize)       = paired_variance_kind(r.rule)
+
+record_paired!(r::SmoothedSize, δ::Real, σ²::Real, N::Integer) =
+    record_paired!(r.rule, δ, σ², N)
+
+"""
+    _floor_at(r::SmoothedSize, k) -> Int
+
+`N_floor + k·N_incr`, **saturating**.
+
+The product overflows for a long run with a large increment, and a wrapped `Int`
+would hand back a negative floor that `max` then ignores in silence.
+"""
+@inline function _floor_at(r::SmoothedSize, k::Int)
+    (r.N_incr == 0 || k <= 0) && return r.N_floor
+    inc = widemul(r.N_incr, k)
+    return inc > typemax(Int) - r.N_floor ? typemax(Int) : r.N_floor + Int(inc)
+end
+
+"The smoothing itself: bound `N⁺` between `a·prev` (or the floor) and `b·prev`."
+@inline function _smooth(r::SmoothedSize, k::Int, prev::Int, N⁺::Int, cap::Int)
+    lo = max(_sample_size(r.a * prev, 1, cap), min(_floor_at(r, k), cap))
+    hi = _sample_size(r.b * prev, 1, cap)
+    return clamp(N⁺, lo, max(lo, hi))          # the floor wins a conflict
+end
+
+function grad_sample_size(r::SmoothedSize, st::SamplingState)
+    st.k == r.g_k && return r.g_N
+    cap  = sample_cap(r)
+    prev = r.g_last > 0 ? r.g_last : (st.N_prev > 0 ? st.N_prev : r.N_start)
+    N    = _smooth(r, st.k, prev, grad_sample_size(r.rule, st), cap)
+    r.g_last = N; r.g_k = st.k; r.g_N = N
+    return N
+end
+
+function obj_sample_size(r::SmoothedSize, st::SamplingState)
+    st.k == r.f_k && return r.f_N
+    cap  = sample_cap(r)
+    prev = r.f_last > 0 ? r.f_last : (st.N_prev > 0 ? st.N_prev : r.N_start)
+    N    = _smooth(r, st.k, prev, obj_sample_size(r.rule, st), cap)
+    r.f_last = N; r.f_k = st.k; r.f_N = N
+    return N
+end
+
+function reset_sampling_rule!(r::SmoothedSize)
+    reset_sampling_rule!(r.rule)
+    r.g_last = 0; r.g_k = -1; r.g_N = 0
+    r.f_last = 0; r.f_k = -1; r.f_N = 0
+    return nothing
+end
