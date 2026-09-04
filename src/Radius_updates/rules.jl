@@ -717,11 +717,13 @@ function validate_thresholds(::RAdaptiveStep, ::Real, η1::Real, ::Real)
 end
 
 """
-    RAdaptiveGrad(; μ = 1.0, γ1, γ2, γ3, λ1, λ2, Δmin = 0.0, Δmax = Inf)
+    RAdaptiveGrad(; μ = 1.0, γ1, γ2, γ3, M, λ1, λ2, Δmin = 0.0, Δmax = Inf)
 
 Hei factor driving a Fan-Yuan multiplier, **accumulated**:
 
-    μ_{k+1} = μ_k · R_{η1}(ρ_k),    Δ_{k+1} = μ_{k+1} · crit_{k+1}
+    ρ ≥ η2 and ‖s_k‖ ≤ ½Δ_k  →  μ unchanged
+    otherwise                →  μ ← μ · R_{η1}(ρ_k)
+    Δ_{k+1} = μ_{k+1} · crit_{k+1}
 
 Combines the smooth factor of the Hei family with the ratio-tracking of
 [`RGrad`](@ref): μ is again the radius-to-criticality ratio, but it is scaled
@@ -729,8 +731,17 @@ continuously in ρ rather than by one of three constants. Because the scaling is
 multiplicative and `R ≤ γ2 < 1` below `η1`, contraction on unsuccessful
 iterations holds without a guard.
 
-Since μ accumulates, it is unbounded above and the rule inherits `RGrad`'s
-unconditional eventual inactivity.
+The hold branch is the one the appendix of Part III states, and it is not
+optional: without it μ grows on every very successful iteration whatever the
+step did, which is a different rule. It is the same ½Δ guard as in `RGrad`, and
+it is what converts "μ grows" into "‖s_k‖ is comparable to μ_k·crit_k".
+
+μ carries no cap, so it crosses any threshold eventually, and the argument for
+`RGrad`'s unconditional eventual inactivity transfers unchanged. See
+[`RAdaptiveGradCapped`](@ref) for the bounded variant.
+
+A non-finite `R` also holds μ rather than reaching it: μ is carried across
+iterations, so one `NaN` would poison the rule for the rest of the run.
 """
 mutable struct RAdaptiveGrad <: RadiusRule
     μ::Float64
@@ -1010,21 +1021,28 @@ function update_radius!(r::RRTR, Δ::Float64, ρ̃::Float64, accepted::Bool,
 end
 
 """
-    RRTRGrad(; γ1 = 0.25, γ3 = 2.0, μ = 1.0, η̃₁ = 0.05, η̃₂ = 0.9,
-               half_test = true, Δmin = 0.0, Δmax = Inf)
+    RRTRGrad(; γ1 = 0.25, γ2 = 0.5, γ3 = 2.0, μ = 1.0, μ_max = Inf,
+               η̃₁ = 0.05, η̃₂ = 0.9, half_test = true, Δmin = 0.0, Δmax = Inf)
 
 Retrospective gradient-scaled rule of Fan, Pan & Song (2016):
 
-    μ_{k+1} = γ1 μ_k     if the step was rejected, or ρ̃ < η̃₁
-              γ3 μ_k     if ρ̃ ≥ η̃₂ and ‖s_k‖ > ½Δ_k
-              μ_k        otherwise
+    μ_{k+1} = γ1 μ_k              if the step was rejected, or ρ̃ < η̃₁
+              γ2 μ_k              if η̃₁ ≤ ρ̃ < η̃₂
+              min(γ3 μ_k, μ_max)  if ρ̃ ≥ η̃₂ and ‖s_k‖ > ½Δ_k
+              μ_k                 otherwise
     Δ_{k+1} = μ_{k+1} · crit_{k+1}
 
-Structurally [`RGrad`](@ref) with ρ replaced by ρ̃ and no intermediate
-contraction, so `γ2` is absent from this rule. The argument that μ cannot
+Structurally [`RGrad`](@ref) with ρ replaced by ρ̃, including the intermediate
+branch: a mildly successful retrospective ratio shrinks the multiplier rather
+than holding it, which is the form the appendix of Part III states and the form
+the boundedness argument for μ is stated about. The argument that μ cannot
 diverge is *ratio-agnostic* — it uses only the monotone decrease of `f`, the
 local quadratic bounds, and the ½Δ test — so it transfers unchanged from `RGrad`
 to this rule. All the ratio has to supply is convergence to 1.
+
+`μ_max = Inf` is the uncapped rule. A finite `μ_max` caps the expansion and
+reports `:expand_capped` on the iterations where the cap refused the growth,
+which is the regime in which eventual inactivity requires `μ_max > κ̄`.
 
 The explicit rejected branch matters for the same reason as in [`RRTR`](@ref):
 on a rejected step `crit_{k+1} = crit_k`, so leaving μ untouched returns exactly

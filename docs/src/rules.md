@@ -10,17 +10,22 @@ thresholds `η₁` and `η₂` and none reads the acceptance threshold `η`; see
 |---|---|---|---|
 | [`RDelta`](@ref) | nothing | `:bounded_below` | no |
 | [`RStep`](@ref) | `‖sₖ‖` | `:step_summable` | no |
+| [`RDeltaStep`](@ref) | `Δₖ`, and `‖sₖ‖` on failure | `:bounded_below` | no |
 | [`RDFO`](@ref) | `‖gₖ‖` via `ζ` | `:vanishing` | **yes** (`ζ > κ̄`) |
 | [`RGrad`](@ref) | `‖gₖ‖` via `μₖ`, uncapped | `:vanishing` | **no** |
 | [`RGradCapped`](@ref) | `‖gₖ‖` via `μₖ ≤ μ_max` | `:vanishing` | **yes** (`μ_max > κ̄`) |
 | [`RAdaptiveStep`](@ref) | `‖sₖ‖`, smooth factor | `:step_summable` | no |
 | [`RAdaptiveGrad`](@ref) | `‖gₖ₊₁‖` via `μₖ`, accumulated | `:vanishing` | no |
+| [`RAdaptiveGradCapped`](@ref) | `‖gₖ₊₁‖` via `μₖ ≤ μ_max`, accumulated | `:vanishing` | **yes** (`μ_max > κ̄`) |
 | [`RRTR`](@ref) | `‖sₖ‖`, driven by ρ̃ | `:step_summable` | no |
 | [`RRTRGrad`](@ref) | `‖gₖ₊₁‖` via `μₖ`, driven by ρ̃ | `:vanishing` | no |
 
 `κ̄ = 8/λ*_min(∇²f(x*))` is a property of the *solution*, so a rule whose guarantee depends
 on exceeding it cannot be configured reliably in advance. That is the single most useful fact
-in the table.
+in the table. This is the `:neighbourhood` convention, which is what `kappa_bar` returns by
+default and what Part III states throughout; `convention = :eigenvalue` writes the same
+threshold as `4/λ*_min`, and the two differ by a factor of two, so report which one produced a
+number.
 
 `RAdaptiveGrad` accumulates its multiplier, and so climbs past any threshold as `RGrad`
 does. 
@@ -90,7 +95,7 @@ the safeguard factor `max[γ₁, θₖ]` of Part I, held at a constant here.
     rejection, and the run continues to `max_iterations` making no progress. It also violates
     the contraction condition, so the convergence theorem of Part I does not cover it. A rule
     added outside the package must contract on every unsuccessful iteration;
-    `test/test_thresholds.jl` checks this for all nine rules at five values of ρ below `η`,
+    `test/test_thresholds.jl` checks this for all eleven rules at five values of ρ below `η`,
 including `-Inf` — which is what the solver passes whenever the predicted reduction is
 non-positive.
 
@@ -167,7 +172,7 @@ family is directly comparable with the three-case rules under one `(η, η₁, �
 
 ## The catalogue, executed
 
-The nine first-order rules, with the two traits that decide where each one belongs in
+The eleven first-order rules, with the two traits that decide where each one belongs in
 the theory. `is_criticality_anchored` says whether the radius is tied to a criticality
 measure; `asymptotic_regime` says what the radius does in the limit; and
 `needs_retrospective` marks the two rules that score an iteration with the *new* model
@@ -176,15 +181,17 @@ rather than the old one.
 ```@example rules
 using TrustRegionRadius, ADNLPModels, Printf
 
-catalogue = ["RDelta"        => RDelta(),
-             "RStep"         => RStep(),
-             "RDFO"          => RDFO(),
-             "RGrad"         => RGrad(),
-             "RGradCapped"   => RGradCapped(),
-             "RAdaptiveStep" => RAdaptiveStep(),
-             "RAdaptiveGrad" => RAdaptiveGrad(),
-             "RRTR"          => RRTR(),
-             "RRTRGrad"      => RRTRGrad()]
+catalogue = ["RDelta"               => RDelta(),
+             "RStep"                => RStep(),
+             "RDeltaStep"           => RDeltaStep(),
+             "RDFO"                 => RDFO(),
+             "RGrad"                => RGrad(),
+             "RGradCapped"          => RGradCapped(),
+             "RAdaptiveStep"        => RAdaptiveStep(),
+             "RAdaptiveGrad"        => RAdaptiveGrad(),
+             "RAdaptiveGradCapped"  => RAdaptiveGradCapped(),
+             "RRTR"                 => RRTR(),
+             "RRTRGrad"             => RRTRGrad()]
 
 for (name, r) in catalogue
     @printf("%-15s anchored=%-6s regime=%-15s retrospective=%s
@@ -193,7 +200,7 @@ for (name, r) in catalogue
 end
 ```
 
-The three regimes partition the nine: `:bounded_below` keeps the radius away from zero,
+The three regimes partition the eleven: `:bounded_below` keeps the radius away from zero,
 `:step_summable` makes `Σ Δ_k` finite in the local phase, and `:vanishing` drives
 `Δ_k → 0`. Every anchored rule is `:vanishing`, and that is not a coincidence: anchoring
 the radius to a criticality measure that tends to zero is what makes it tend to zero.

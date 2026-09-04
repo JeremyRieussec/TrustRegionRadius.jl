@@ -20,11 +20,13 @@
     RULES = [
         ("RDelta",           RDelta()),
         ("RStep",            RStep()),
+        ("RDeltaStep",       RDeltaStep()),
         ("RDFO",             RDFO()),
         ("RGrad",            RGrad()),
         ("RGradCapped",      RGradCapped(μ_max = 8.0)),
         ("RAdaptiveStep",    RAdaptiveStep()),
         ("RAdaptiveGrad",    RAdaptiveGrad()),
+        ("RAdaptiveGradCapped", RAdaptiveGradCapped(μ_max = 8.0)),
         ("RRTR",             RRTR()),
         ("RRTRGrad",         RRTRGrad()),
     ]

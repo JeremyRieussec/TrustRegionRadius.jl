@@ -19,14 +19,15 @@ interacts with. Four orthogonal axes:
 
 | axis | choices |
 |---|---|
-| **radius rule** | `RDelta`, `RStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RRTR`, `RRTRGrad` |
+| **radius rule** | `RDelta`, `RStep`, `RDeltaStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RAdaptiveGradCapped`, `RRTR`, `RRTRGrad` |
 | **model Hessian** | `ExactHessian`, `LBFGSModel`, `SR1Model`, `ScaledIdentity`, `SPDTarget`, `BHHHModel`, `BHHH2Model`, `GaussNewtonModel` |
 | **subproblem solver** | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCR`, `EigenPoint` |
 | **sampling rule** | `FullBatch`, `FixedSample`, `RadiusProportional`, `NormTest`, `GeometricSample`, `InnerProductTest`, `OrthogonalityTest`, `AugmentedInnerProduct`, `SequentialEstimation`, `CertifiedDecrease` |
 
-The nine radius rules are the first-order ones; `SecondOrder(inner)` wraps any
-criticality-anchored rule, with the aliases `RGradTau`, `RGradCappedTau`, `RDFOTau`,
-`RAdaptiveGradTau` and `RRTRGradTau`.
+The eleven radius rules are the first-order ones, and they are exactly the eleven updates
+stated in the appendix of Part III, one type each. `SecondOrder(inner)` wraps any of the six
+criticality-anchored ones, with the aliases `RGradTau`, `RGradCappedTau`, `RDFOTau`,
+`RAdaptiveGradTau`, `RAdaptiveGradCappedTau` and `RRTRGradTau`.
 
 The sampling rule belongs to the *oracle*, not to `tr_solve`: build a `FiniteSumNLP`
 or an `ExpectationNLP` around it and pass that. There is no `sampling` keyword.
@@ -142,8 +143,12 @@ benchmark/results/exp_2026-04-16_02-08-34_zeta_sweep/
 **`RGrad` is uncapped; `RGradCapped` is not.** For `RGrad` the multiplier μ is exactly the
 ratio Δ/‖g‖, and it grows geometrically past any threshold, so the trust-region constraint
 eventually stops binding with no side condition. The capped variant supplies the bound the
-asymptotic theory assumes, at the cost of needing `μ_max > κ̄ = 4/λ*_min` — a constant that
-depends on the solution and so cannot be chosen in advance.
+asymptotic theory assumes, at the cost of needing `μ_max > κ̄ = 8/λ*_min` — a constant that
+depends on the solution and so cannot be chosen in advance. Part II writes that threshold as
+`4/m`, with `m` the lower curvature bound it works with on a neighbourhood of the minimiser,
+and `m = λ*_min/2` turns `4/m` into the form above. This is `kappa_bar`'s default
+`:neighbourhood` convention; `convention = :eigenvalue` writes the same threshold as
+`4/λ*_min`, so report which one produced a number.
 
 **The activity flag is the interesting observable.** Whether the constraint eventually stops
 binding separates mechanisms whose first-order behaviour is indistinguishable: both drive
