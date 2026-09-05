@@ -32,17 +32,17 @@ function inactivity()
     arch = ExperimentArchive(tag = "inactivity")
 
     # Rules spanning both families, plus a deliberately-too-small parameter.
-    rules = [
-        ("RDelta",       () -> RDelta()),
-        ("RStep",        () -> RStep()),
-        ("RDFO(z=1)",    () -> RDFO(ζ = 1.0)),
-        ("RDFO(z=0.01)", () -> RDFO(ζ = 0.01)),
-        ("RGrad",        () -> RGrad()),
-        ("RGradCapped",  () -> RGradCapped(μ = 0.05, μ_max = 0.05)),
-    ]
-    configs = rule_configs(rules)
+    # rules = [
+    #     ("RDelta",       () -> RDelta()),
+    #     ("RStep",        () -> RStep()),
+    #     ("RDFO(z=1)",    () -> RDFO(ζ = 1.0)),
+    #     ("RDFO(z=0.01)", () -> RDFO(ζ = 0.01)),
+    #     ("RGrad",        () -> RGrad()),
+    #     ("RGradCapped",  () -> RGradCapped(μ = 0.05, μ_max = 0.05)),
+    # ]
+    configs = rule_configs(RULES)
 
-    save_config(arch; rules = rules, configs = configs, params = SOLVER_PARAMS,
+    save_config(arch; rules = RULES, configs = configs, params = SOLVER_PARAMS,
                 problem_selection = PROBLEM_SELECTION,
                 extra = Dict("experiment" => "exp5_inactivity"))
 

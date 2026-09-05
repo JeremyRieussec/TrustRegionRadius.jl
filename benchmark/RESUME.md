@@ -15,6 +15,12 @@ Before starting Julia, the shell creates
 ```bash
 TRR_RESUME = "benchmark/results/exp_2026-07-29_02-15-23_comparison"
 ```
+TRR_RESUME=benchmark/results/exp_2026-08-29_07-14-47_inactivity \
+julia --project=benchmark -e 'include("benchmark/initialisation.jl"); inactivity()'
+
+TRR_RESUME=benchmark/results/exp_2026-08-29_07-14-47_inactivity \
+  julia --project=benchmark benchmark/experiments/exp5_inactivity.jl
+
 This variable exists only in the environment of the process that is about to be launched.
 
 It then executes
