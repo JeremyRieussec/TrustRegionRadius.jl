@@ -146,6 +146,7 @@ LikelihoodNLP
 residuals
 jacobian
 LogisticRegression
+MultinomialLogit
 MLPClassifier
 LeastSquares
 linear_least_squares

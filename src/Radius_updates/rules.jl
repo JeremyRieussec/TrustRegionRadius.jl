@@ -166,7 +166,7 @@ needs_retrospective(::RadiusRule) = false
 
 `true` if the radius is tied to a criticality measure, so that `Δ_k → 0` along
 a convergent run. For these rules eventual inactivity of the trust region
-requires a parameter above the problem-dependent threshold κ̄ = 4/λ*_min.
+requires a parameter above the problem-dependent threshold κ̄ = 8/λ*_min.
 
 The complement is not a single regime: `RDelta` keeps `liminf Δ_k > 0`, while
 the step-anchored rules drive `Δ_k → 0` in the local regime with the stronger
@@ -408,7 +408,7 @@ Uses the criticality measure *before* the accept/reject decision — ‖g_k‖ f
 bare rule, τ_k under a [`SecondOrder`](@ref) wrapper.
 
 Drives `Δ_k → 0`, so eventual inactivity of the trust region requires
-`ζ > κ̄ = 4/λ*_min(∇²f(x*))`. That constant is a property of the solution and
+`ζ > κ̄ = 8/λ*_min(∇²f(x*))`. That constant is a property of the solution and
 cannot be checked in advance; below the threshold the constraint can bind at
 every iteration, the method converges only linearly, and no first-order
 diagnostic shows anything wrong. Choose `ζ` generously: on a heterogeneous test
@@ -539,7 +539,7 @@ end
 [`RGrad`](@ref) with an explicit cap `μ_k ≤ μ_max`.
 
 The cap is what the asymptotic results requiring `Δ_k → 0` assume, and it is
-not free. Eventual inactivity now needs `μ_max > κ̄ = 4/λ*_min`; below that the
+not free. Eventual inactivity now needs `μ_max > κ̄ = 8/λ*_min`; below that the
 trust region binds at every iteration and the method degrades to linear
 convergence while ρ stays healthy and ‖g‖ keeps falling.
 

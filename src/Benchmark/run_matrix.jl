@@ -278,7 +278,7 @@ T, _    = run_matrix(problems, configs)
 ```
 
 A sweep of this kind is the right way to study `ζ` or `μ_max`: the survey's
-thresholds involve `κ̄ = 4/λ*_min`, which is a property of the solution and so
+thresholds involve `κ̄ = 8/λ*_min`, which is a property of the solution and so
 cannot be chosen a priori, and only a sweep reveals where the transition sits
 on a given family of problems.
 

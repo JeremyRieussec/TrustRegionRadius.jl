@@ -250,6 +250,7 @@ AugmentedInnerProduct
 GeometricSample
 SequentialEstimation
 CertifiedDecrease
+SmoothedSize
 record_prediction!
 reset_sampling_rule!
 couples_to_radius
@@ -263,11 +264,15 @@ update_variances!
 samples_used
 reset_sampling!
 draw_batch
+sample_schemes
+sample_scheme
 true_objective
 true_gradient
 needs_paired
 record_paired!
 paired_decrease_stats
+paired_variance_kind
+paired_op_variance
 supports_paired
 obs_objective
 confirm_gradient_norm!

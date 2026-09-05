@@ -18,7 +18,7 @@ thresholds `η₁` and `η₂` and none reads the acceptance threshold `η`; see
 | [`RRTR`](@ref) | `‖sₖ‖`, driven by ρ̃ | `:step_summable` | no |
 | [`RRTRGrad`](@ref) | `‖gₖ₊₁‖` via `μₖ`, driven by ρ̃ | `:vanishing` | no |
 
-`κ̄ = 4/λ*_min(∇²f(x*))` is a property of the *solution*, so a rule whose guarantee depends
+`κ̄ = 8/λ*_min(∇²f(x*))` is a property of the *solution*, so a rule whose guarantee depends
 on exceeding it cannot be configured reliably in advance. That is the single most useful fact
 in the table.
 
