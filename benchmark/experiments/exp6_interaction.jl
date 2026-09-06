@@ -12,10 +12,12 @@
 # =============================================================================
 
 const GRID_RULES = [
-    ("RDelta", () -> RDelta()),
-    ("RStep",  () -> RStep()),
-    ("RDFO",   () -> RDFO(ζ = 1.0)),
-    ("RGrad",  () -> RGrad()),
+    ("RDelta",        () -> RDelta(       γ1 = G1, γ2 = G2, γ3 = G3, Δmin = 0.0)),
+    ("RStep",         () -> RStep(        γ1 = G1, γ2 = G2, γ3 = G3, Δmin = 0.0)),
+    ("RDFO",          () -> RDFO(         γ1 = G1, γ2 = G2, γ3 = G3, ζ = 100.0,
+                                          Δmin = 0.0)),
+    ("RGrad",         () -> RGrad(        γ1 = G1, γ2 = G2, γ3 = G3, μ = 1.0,
+                                          Δmin = 0.0)),
 ]
 
 const GRID_MODELS = [
