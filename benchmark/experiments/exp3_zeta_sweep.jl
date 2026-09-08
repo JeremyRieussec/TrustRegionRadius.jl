@@ -3,7 +3,9 @@
 #
 # EXPERIMENT 3 -- the criticality parameter ζ of RDFO.
 #
-# Part II: eventual inactivity of the trust region needs ζ > κ̄ = 4/λ*_min,
+# Part II: eventual inactivity of the trust region needs ζ > κ̄, which is
+# 4/λ*_min in the :eigenvalue convention and 8/λ*_min in :neighbourhood, the
+# default of `kappa_bar` and the convention Part III quotes throughout,
 # a constant that depends on the solution and so cannot be chosen a priori.
 # Below the threshold the constraint binds at every iteration and convergence
 # degrades to linear.
@@ -16,14 +18,9 @@
 #   julia --project=benchmark benchmark/experiments/exp3_zeta_sweep.jl
 # =============================================================================
 
-using Plots
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
+const ZETAS = [0.001, 0.01, 0.1, 1.0,  10.0, 100.0]
 
-const ZETAS = [0.01, 0.1, 0.5, 1.0, 2.0, 10.0, 100.0]
-
-function main()
+function zeta_sweep()
     arch = ExperimentArchive(tag = "zeta_sweep")
     configs = [(@sprintf("zeta=%g", ζ),
                 () -> (rule = RDFO(ζ = ζ),  model = DEFAULT_MODEL(),
@@ -31,6 +28,7 @@ function main()
                for ζ in ZETAS]
 
     save_config(arch; rules = [(c[1], () -> RDFO(ζ = ζ)) for (c, ζ) in zip(configs, ZETAS)],
+                configs = configs,
                 params = SOLVER_PARAMS, problem_selection = PROBLEM_SELECTION,
                 extra = Dict("experiment" => "exp3_zeta_sweep",
                              "zeta_values" => ZETAS))
@@ -94,5 +92,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    zeta_sweep()
 end

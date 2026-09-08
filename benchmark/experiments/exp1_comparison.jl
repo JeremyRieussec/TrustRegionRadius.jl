@@ -9,19 +9,14 @@
 #   julia --project=benchmark benchmark/experiments/exp1_comparison.jl
 # =============================================================================
 
-using Plots
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
-
-function main()
+function comparison()
     arch = ExperimentArchive(tag = "comparison")
-    save_config(arch; rules = RULES, params = SOLVER_PARAMS,
+    configs  = rule_configs()
+    save_config(arch; rules = RULES, configs = configs, params = SOLVER_PARAMS,
                 problem_selection = PROBLEM_SELECTION,
                 extra = Dict("experiment" => "exp1_comparison"))
 
     problems = default_problems()
-    configs  = rule_configs()
 
     @info "Experiment 1: $(length(problems)) problems × $(length(configs)) mechanisms"
     records = run_experiment(problems, configs;
@@ -76,5 +71,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    comparison()
 end

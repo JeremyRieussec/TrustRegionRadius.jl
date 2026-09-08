@@ -35,14 +35,15 @@ without surprises.
 Unmapped symbols fall through to `string(sym)`.
 """
 const UNICODE_TO_ASCII = Dict{Symbol, String}(
-    :η₁ => "eta1",   :η₂ => "eta2",   :η  => "eta",
+    :η1 => "eta1",   :η2 => "eta2",   :η  => "eta",
     :η̃₁ => "eta1_t", :η̃₂ => "eta2_t",
-    :γ₀ => "gamma0", :γ₁ => "gamma1", :γ₂ => "gamma2", :γ₃ => "gamma3",
-    :Δ₀ => "Delta0", :Δmax => "Delta_max", :Δmin => "Delta_min",
-    :ζ  => "zeta",   :μ  => "mu",     :μ₀ => "mu0",    :μ_max => "mu_max",
-    :β  => "beta",   :λ₁ => "lambda1", :λ₂ => "lambda2", :M => "M",
+    :γ0 => "gamma0", :γ1 => "gamma1", :γ2 => "gamma2", :γ3 => "gamma3",
+    :Δ0 => "Delta0", :Δmax => "Delta_max", :Δmin => "Delta_min",
+    :ζ  => "zeta",   :μ  => "mu",     :μ0 => "mu0",    :μ_max => "mu_max",
+    :β  => "beta",   :λ1 => "lambda1", :λ2 => "lambda2", :M => "M",
     :max_iterations => "max_iterations", :tol => "tol", :max_time => "max_time",
     :half_test => "half_test",
+    :χ  => "chi",    :θ  => "theta",
 )
 
 field_to_ascii(sym::Symbol) = get(UNICODE_TO_ASCII, sym, string(sym))
@@ -56,18 +57,77 @@ function _toml_value(v)
 end
 
 """
+    _is_component(v) -> Bool
+
+True when a field holds one of the three configured axes in its own right.
+
+Such a field is recorded as a nested table rather than flattened by
+`_toml_value`, so `EigenPoint(SteihaugCG())` records the inner solver's `χ`, `θ`
+and `max_iters` instead of the single string `"SteihaugCG(0.1, 0.0001, 1000)"`,
+and a `SecondOrder` wrapper records the rule it wraps.
+"""
+_is_component(v) = v isa Union{RadiusRule, ModelHessian, SubproblemSolver}
+
+"""
     struct_to_dict(obj) -> Dict{String, Any}
 
 Introspect any struct into an ASCII-keyed dictionary. `Inf` and `NaN` become
-strings, since TOML has no representation for them.
+strings, since TOML has no representation for them, and a field holding another
+rule, model or subsolver becomes a nested table.
 """
 function struct_to_dict(obj)::Dict{String, Any}
     d = Dict{String, Any}()
     d["type"] = string(nameof(typeof(obj)))
     for f in fieldnames(typeof(obj))
-        d[field_to_ascii(f)] = _toml_value(getfield(obj, f))
+        v = getfield(obj, f)
+        d[field_to_ascii(f)] = _is_component(v) ? struct_to_dict(v) : _toml_value(v)
     end
     return d
+end
+
+"""
+    _component_dicts(entries) -> Vector{Dict{String, Any}}
+
+Normalise a list describing one configured axis into TOML tables.
+
+An entry may be a `(name, factory)` pair, a `(name, instance)` pair, a bare
+factory, a bare instance, or a bare name. Factories are called once to capture
+the *initial* parameter values, which is what should be recorded: a mutable
+rule's μ after a run says nothing about how the run was configured.
+
+A bare name records only that name. That is weaker than an instance, but it is
+honest about being weaker: the previous code sent a bare name down the struct
+path and recorded `type = "String"` for every entry, so an archive of three
+named rules read as three identical anonymous ones.
+"""
+function _component_dicts(entries)::Vector{Dict{String, Any}}
+    out = Dict{String, Any}[]
+    for entry in entries
+        name, obj = if entry isa Tuple || entry isa Pair
+            n, r = entry
+            (String(n), r isa Function ? r() : r)
+        elseif entry isa AbstractString
+            (String(entry), nothing)
+        elseif entry isa Function
+            o = entry()
+            (string(nameof(typeof(o))), o)
+        else
+            (string(nameof(typeof(entry))), entry)
+        end
+        d = obj === nothing ? Dict{String, Any}("type" => name) : struct_to_dict(obj)
+        d["name"] = name
+        push!(out, d)
+    end
+    return out
+end
+
+"Deduplicate component tables by content, keeping first-seen order."
+function _unique_components(ds::Vector{Dict{String, Any}})
+    out = Dict{String, Any}[]
+    for d in ds
+        any(isequal(d), out) || push!(out, d)
+    end
+    return out
 end
 
 # -----------------------------------------------------------------------------
@@ -139,22 +199,133 @@ Base.show(io::IO, a::ExperimentArchive) =
 # -----------------------------------------------------------------------------
 
 """
-    save_config(archive; rules, params, problem_selection = Dict(), extra = Dict())
+    _repo_root() -> String
+
+The package root, found from this file rather than from the active project, so
+that provenance is recorded even when the benchmark is run from its own
+environment.
+"""
+_repo_root() = normpath(joinpath(@__DIR__, ".."))
+
+"""
+    _content_hash(path) -> String
+
+A short content hash of a file, or `""` when it is missing.
+
+`hash` from `Base`, not a cryptographic digest: this exists to detect that a
+`Manifest.toml` changed between two campaigns, not to defend against anyone
+forging one, and it avoids adding a dependency to record a dependency.
+"""
+function _content_hash(path::AbstractString)
+    isfile(path) || return ""
+    return string(hash(read(path, String)); base = 16)
+end
+
+"""
+    _git_state(root) -> (commit, dirty)
+
+The current commit and whether the tree is clean, or `("", false)` when `git` is
+unavailable or the directory is not a repository. Never throws: provenance that
+can fail a campaign is worse than provenance that is absent.
+"""
+function _git_state(root::AbstractString)
+    commit = try
+        readchomp(setenv(`git rev-parse HEAD`; dir = root))
+    catch
+        return ("", false)
+    end
+    dirty = try
+        !isempty(readchomp(setenv(`git status --porcelain`; dir = root)))
+    catch
+        false
+    end
+    return (commit, dirty)
+end
+
+"""
+    _package_version(root) -> String
+
+The `version` field of the package's `Project.toml`, or `""`.
+"""
+function _package_version(root::AbstractString)
+    path = joinpath(root, "Project.toml")
+    isfile(path) || return ""
+    try
+        return string(get(TOML.parsefile(path), "version", ""))
+    catch
+        return ""
+    end
+end
+
+"""
+    provenance(; seed = nothing) -> Dict{String, Any}
+
+What is needed to reproduce a campaign, beyond the parameters themselves: the
+Julia version, the package version and commit, whether the tree was dirty, a
+content hash of both `Project.toml` and `Manifest.toml`, and the master seed.
+
+Written into every `experiment_config.toml` automatically. A stochastic table
+whose seed is not recorded cannot be reproduced, only resampled, and a
+dependency set that is not pinned makes a rerun a different experiment.
+
+`git_dirty = true` is not a warning to be silenced: it says the recorded commit
+does not describe the code that ran.
+"""
+function provenance(; seed = nothing)
+    root = _repo_root()
+    commit, dirty = _git_state(root)
+    d = Dict{String, Any}(
+        "julia_version"   => string(VERSION),
+        "package_version" => _package_version(root),
+        "git_commit"      => commit,
+        "git_dirty"       => dirty,
+        "project_hash"    => _content_hash(joinpath(root, "Project.toml")),
+        "manifest_hash"   => _content_hash(joinpath(root, "Manifest.toml")),
+        "recorded_at"     => string(Dates.now()),
+        "nthreads"        => Threads.nthreads(),
+    )
+    seed === nothing || (d["seed"] = seed)
+    return d
+end
+
+"""
+    save_config(archive; rules, models, subsolvers, configs, params,
+                problem_selection = Dict(), extra = Dict())
 
 Write `experiment_config.toml` into the archive.
 
-`rules` may be a vector of `(name, factory)` pairs, of `(name, rule)` pairs, or
-of bare rules. Factories are called once to capture the *initial* parameter
-values, which is what should be recorded: a mutable rule's μ after a run says
-nothing about how the run was configured.
+A run is a triple: a radius rule, a model Hessian and a subproblem solver. Only
+the first was recorded before, which left the archive unable to answer the two
+questions a reader of the paper asks first — was that `RGradCapped` row solved
+with an exact Hessian or a quasi-Newton one, and was the step a truncated-CG one
+or an exact Moré-Sorensen one. `models` and `subsolvers` record the other two.
+
+Each of `rules`, `models` and `subsolvers` accepts `(name, factory)` pairs,
+`(name, instance)` pairs, bare factories, bare instances, or bare names; see
+[`_component_dicts`](@ref).
+
+`configs` is stronger, and is what the experiments that build a grid should
+pass: a vector of `(name, factory)` where the factory returns the
+`(rule, model, subsolver)` named tuple that `run_experiment` consumes. It
+records the combinations actually solved rather than three independent lists,
+which is the difference between experiment 6's 4×4 cross and experiment 1's
+eight rules against one fixed pair. Any of the three axis lists left empty is
+then derived from `configs`.
 """
 function save_config(a::ExperimentArchive;
                      rules = [],
+                     models = [],
+                     subsolvers = [],
+                     configs = [],
                      params = nothing,
                      problem_selection::Dict = Dict{String, Any}(),
+                     seed = nothing,
                      extra::Dict = Dict{String, Any}())
     cfg = Dict{String, Any}()
     cfg["generated_at"] = string(a.created)
+    # Always, and not through `extra`: provenance that is optional is provenance
+    # that is missing from the one campaign whose numbers end up in the paper.
+    cfg["provenance"] = provenance(seed = seed)
     isempty(a.tag) || (cfg["tag"] = a.tag)
 
     params === nothing || (cfg["solver_params"] = struct_to_dict(params))
@@ -162,19 +333,44 @@ function save_config(a::ExperimentArchive;
         (cfg["problem_selection"] = Dict{String, Any}(
             string(k) => _toml_value(v) for (k, v) in problem_selection))
 
-    rule_dicts = Dict{String, Any}[]
-    for entry in rules
+    rule_dicts      = _component_dicts(rules)
+    model_dicts     = _component_dicts(models)
+    subsolver_dicts = _component_dicts(subsolvers)
+
+    config_dicts = Dict{String, Any}[]
+    for entry in configs
         name, obj = if entry isa Tuple || entry isa Pair
-            n, r = entry
-            (String(n), r isa Function ? r() : r)
+            n, f = entry
+            (String(n), f isa Function ? f() : f)
         else
-            (string(nameof(typeof(entry))), entry)
+            ("", entry isa Function ? entry() : entry)
         end
-        d = struct_to_dict(obj)
-        d["name"] = name
-        push!(rule_dicts, d)
+        d = Dict{String, Any}("name" => name)
+        for k in (:rule, :model, :subsolver)
+            hasproperty(obj, k) || continue
+            d[string(k)] = struct_to_dict(getproperty(obj, k))
+        end
+        push!(config_dicts, d)
     end
-    isempty(rule_dicts) || (cfg["rules"] = rule_dicts)
+
+    # Derive an axis only when the caller did not state it, and copy before
+    # naming: the deduplicated table is the same object that sits inside
+    # `configurations`, and adding a `name` key there would edit the cross.
+    for (key, dicts) in (("rule", rule_dicts), ("model", model_dicts),
+                         ("subsolver", subsolver_dicts))
+        isempty(dicts) || continue
+        derived = Dict{String, Any}[d[key] for d in config_dicts if haskey(d, key)]
+        for d in _unique_components(derived)
+            e = copy(d)
+            haskey(e, "name") || (e["name"] = get(e, "type", "?"))
+            push!(dicts, e)
+        end
+    end
+
+    isempty(rule_dicts)      || (cfg["rules"]          = rule_dicts)
+    isempty(model_dicts)     || (cfg["models"]         = model_dicts)
+    isempty(subsolver_dicts) || (cfg["subsolvers"]     = subsolver_dicts)
+    isempty(config_dicts)    || (cfg["configurations"] = config_dicts)
 
     for (k, v) in extra
         cfg[string(k)] = v isa Dict ? v : _toml_value(v)
@@ -338,6 +534,32 @@ end
 # -----------------------------------------------------------------------------
 
 """
+    _describe_component(d) -> String
+
+One-line `field = value` rendering of a component table. A nested table (an
+`EigenPoint`'s inner solver, a `SecondOrder`'s rule) renders inline as
+`type(fields)` rather than as a dictionary literal.
+"""
+function _describe_component(d::AbstractDict)
+    parts = String[]
+    for k in sort(collect(keys(d)))
+        k in ("name", "type") && continue
+        v = d[k]
+        push!(parts, v isa AbstractDict ?
+              string(k, " = ", get(v, "type", "?"), "(", _describe_component(v), ")") :
+              string(k, " = ", v))
+    end
+    return join(parts, ", ")
+end
+
+"`type(fields)`, or bare `type` for a component with no parameters."
+function _component_label(d::AbstractDict)
+    t = string(get(d, "type", "?"))
+    desc = _describe_component(d)
+    return isempty(desc) ? t : string(t, "(", desc, ")")
+end
+
+"""
     finalize_archive(archive; notes = "") -> String
 
 Write `experiment_summary.md`: the configuration in tables, the inventory of
@@ -379,13 +601,33 @@ function finalize_archive(a::ExperimentArchive; notes::AbstractString = "")
         println(io)
     end
 
-    if haskey(cfg, "rules")
-        println(io, "## Radius Update Rules\n")
-        for r in cfg["rules"]
-            fields = join(("$k = $(r[k])" for k in sort(collect(keys(r)))
-                           if k ∉ ("name", "type")), ", ")
+    for (title, key) in (("Radius Update Rules", "rules"),
+                         ("Model Hessians",      "models"),
+                         ("Subproblem Solvers",  "subsolvers"))
+        haskey(cfg, key) || continue
+        println(io, "## ", title, "\n")
+        for r in cfg[key]
+            # No trailing colon for a component with no parameters: `ExactHessian`
+            # has none, and "ExactHessian (`ExactHessian`): " reads as truncated.
+            desc = _describe_component(r)
             println(io, "- **", get(r, "name", "?"), "** (`", get(r, "type", "?"),
-                    "`): ", fields)
+                    isempty(desc) ? "`)" : string("`): ", desc))
+        end
+        println(io)
+    end
+
+    # The cross, when one was run. Three separate axis lists cannot distinguish
+    # experiment 6, which crosses four rules with four models, from experiment 1,
+    # which runs eight rules against one fixed model and subsolver, and a summary
+    # that reads the same for both is not a record of what happened.
+    if haskey(cfg, "configurations")
+        println(io, "## Configurations\n")
+        println(io, "| Configuration | Rule | Model Hessian | Subsolver |")
+        println(io, "|---------------|------|---------------|-----------|")
+        for c in cfg["configurations"]
+            cell(k) = haskey(c, k) ? _component_label(c[k]) : "--"
+            println(io, "| ", get(c, "name", "?"), " | ", cell("rule"), " | ",
+                    cell("model"), " | ", cell("subsolver"), " |")
         end
         println(io)
     end

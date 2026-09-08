@@ -11,16 +11,13 @@
 #   julia --project=benchmark benchmark/experiments/exp6_interaction.jl
 # =============================================================================
 
-using Plots
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
-
 const GRID_RULES = [
-    ("RDelta", () -> RDelta()),
-    ("RStep",  () -> RStep()),
-    ("RDFO",   () -> RDFO(ζ = 1.0)),
-    ("RGrad",  () -> RGrad()),
+    ("RDelta",        () -> RDelta(       γ1 = G1, γ2 = G2, γ3 = G3, Δmin = 0.0)),
+    ("RStep",         () -> RStep(        γ1 = G1, γ2 = G2, γ3 = G3, Δmin = 0.0)),
+    ("RDFO",          () -> RDFO(         γ1 = G1, γ2 = G2, γ3 = G3, ζ = 100.0,
+                                          Δmin = 0.0)),
+    ("RGrad",         () -> RGrad(        γ1 = G1, γ2 = G2, γ3 = G3, μ = 1.0,
+                                          Δmin = 0.0)),
 ]
 
 const GRID_MODELS = [
@@ -30,19 +27,19 @@ const GRID_MODELS = [
     ("I",      () -> ScaledIdentity(c = 1.0)),
 ]
 
-function main()
+function interaction()
     arch = ExperimentArchive(tag = "interaction")
-    save_config(arch; rules = GRID_RULES, params = SOLVER_PARAMS,
-                problem_selection = PROBLEM_SELECTION,
-                extra = Dict("experiment" => "exp6_interaction",
-                             "models" => [m[1] for m in GRID_MODELS]))
-
-    problems = default_problems()
-
     configs = [("$(rn)/$(mn)",
                 () -> (rule = rf(), model = mf(), subsolver = DEFAULT_SUBSOLVER()))
                for (rn, rf) in GRID_RULES, (mn, mf) in GRID_MODELS]
     configs = vec(configs)
+
+    save_config(arch; rules = GRID_RULES, models = GRID_MODELS,
+                subsolvers = [DEFAULT_SUBSOLVER], configs = configs,
+                params = SOLVER_PARAMS, problem_selection = PROBLEM_SELECTION,
+                extra = Dict("experiment" => "exp6_interaction"))
+
+    problems = default_problems()
 
     records = run_experiment(problems, configs; params = SOLVER_PARAMS, archive = arch)
 
@@ -110,5 +107,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    interaction()
 end

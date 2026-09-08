@@ -1,0 +1,3 @@
+const PROB = make_mnl(p = 5, J = 5, M = 100_000, seed = 0, signal = 1.0)
+const ALL  = collect(1:PROB.M)
+const BSTAR = PROB.βstar

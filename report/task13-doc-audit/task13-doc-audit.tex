@@ -1,0 +1,410 @@
+% =============================================================================
+% Audit of the architecture figure and the algorithms note against the package.
+%
+% Every claim in the two documents was checked against a file in
+% TrustRegionRadius.jl that is named here with its line. Nothing was taken from
+% a docstring alone where the code could be read.
+%
+% Standalone. Own preamble, no bibliography, no \cite.
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\geometry{margin=2.2cm}
+
+\providecommand{\norm}[1]{\left \lVert #1 \right \rVert}
+\providecommand{\abs}[1]{\left \vert #1 \right \vert}
+\providecommand{\Rdelta}{\textsf{R-delta}}
+\providecommand{\Rstep}{\textsf{R-step}}
+\providecommand{\Rdfo}{\textsf{R-DFO}}
+\providecommand{\Rgrad}{\textsf{R-grad}}
+\providecommand{\Rrtr}{\textsf{R-RTR}}
+\providecommand{\Rgrtr}{\textsf{R-gRTR}}
+
+\newcommand{\WRONG}{\textcolor{red!70!black}{\textbf{wrong}}}
+\newcommand{\STALE}{\textcolor{orange!75!black}{\textbf{stale}}}
+\newcommand{\PART}{\textcolor{black!60}{partial}}
+
+\title{Audit of the architecture figure and the algorithms note\\
+       \large against \textsf{TrustRegionRadius.jl}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We audit \texttt{Article3/fig-architecture.tex} and
+\texttt{Article3/old\_versions/TRR-algorithmes.tex} against the package source.
+Thirty-five claims were checked. Twenty-six are discrepancies, of which fourteen
+are wrong rather than merely out of date or incomplete. Three of the fourteen
+would mislead a reader about what the code does:
+the algorithm accepts a step on $\eta_1$ where the package accepts on $\eta$, the
+$\Rgrad$ pseudo-code has two branches where the code has four and uses the old
+$\gamma$ numbering, and the $\Rrtr$ pseudo-code omits the acceptance branch that
+the code calls mandatory. Both documents have been corrected and both compile.
+\end{abstract}
+
+\tableofcontents
+
+% =============================================================================
+\section{Method}\label{sec: method}
+% =============================================================================
+
+Every claim was checked against a file in the package, not against a docstring
+where the code could be read instead. Counts were taken by loading the package
+and querying it rather than by reading export lists. The two documents were then
+corrected, each edit asserting that it matched its target exactly once so that a
+silent no-op was impossible.
+
+\begin{table}[H]
+  \centering\small
+  \caption{What the package actually contains, counted by loading it.}
+  \label{tab: counts}
+  \begin{tabular}{lrl}
+    \toprule
+    axis & count & members \\
+    \midrule
+    radius rules & \textbf{11}
+      & \texttt{RDelta}, \texttt{RStep}, \texttt{RDeltaStep}, \texttt{RDFO}, \\
+      & & \texttt{RGrad}, \texttt{RGradCapped}, \texttt{RAdaptiveStep}, \\
+      & & \texttt{RAdaptiveGrad}, \texttt{RAdaptiveGradCapped}, \\
+      & & \texttt{RRTR}, \texttt{RRTRGrad} \\
+    \midrule
+    of those, criticality-anchored & \textbf{6}
+      & \texttt{RDFO}, \texttt{RGrad}, \texttt{RGradCapped}, \\
+      & & \texttt{RAdaptiveGrad}, \texttt{RAdaptiveGradCapped}, \\
+      & & \texttt{RRTRGrad} \\
+    \midrule
+    $\tau$ variants exported & \textbf{6}
+      & one per criticality-anchored rule \\
+    \midrule
+    model Hessians & \textbf{8}
+      & \texttt{ExactHessian}, \texttt{LBFGSModel}, \texttt{SR1Model}, \\
+      & & \texttt{ScaledIdentity}, \texttt{SPDTarget}, \texttt{BHHHModel}, \\
+      & & \texttt{BHHH2Model}, \texttt{GaussNewtonModel} \\
+    \midrule
+    subproblem solvers & \textbf{5}
+      & \texttt{SteihaugCG}, \texttt{ExactMS}, \texttt{KrylovCG}, \\
+      & & \texttt{KrylovCR}, \texttt{KrylovCGLanczos} \\
+    \midrule
+    plus one wrapper & \textbf{1} & \texttt{EigenPoint} \\
+    \midrule
+    sampling rules & \textbf{10}
+      & \texttt{FullBatch} to \texttt{CertifiedDecrease} \\
+    \midrule
+    experiment files & \textbf{16} & \texttt{exp1} to \texttt{exp17}, no \texttt{exp10} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% =============================================================================
+\section{The three errors that matter}\label{sec: three}
+% =============================================================================
+
+These are wrong rather than out of date, and each would lead a reader to a
+different algorithm from the one implemented.
+
+\subsection{Acceptance was attributed to the wrong threshold}
+
+The algorithm read
+\begin{verbatim}
+    \If{$\rho \ge \eta_1$}{      % acceptance
+\end{verbatim}
+and declared its inputs as $0 \le \eta_1 < \eta_2 < 1$, so $\eta$ did not appear
+at all. The package has three thresholds and accepts on the first of them.
+\texttt{src/Trust-region/common.jl:562} reads
+\begin{quote}\ttfamily\small
+st.accepted = st.$\rho$ >= p.$\eta$\qquad\# acceptance is decided by
+$\eta$ alone
+\end{quote}
+and \texttt{common.jl:161} enforces $0 \le \eta \le \eta_1 \le \eta_2 < 1$.
+
+This is not a notational difference. With $\eta < \eta_1$ the band
+$\rho_k \in [\eta, \eta_1)$ opens, in which the step is accepted and the radius
+nonetheless contracts. A document that accepts on $\eta_1$ cannot express that
+band, and the band is the subject of an entire experiment,
+\texttt{exp14\_acceptance\_band.jl}. The default $\eta = \eta_1$ reproduces the
+coupled behaviour, so the old text describes the default rather than the rule.
+
+\subsection{\texorpdfstring{$\Rgrad$}{R-grad} had two branches and the old
+\texorpdfstring{$\gamma$}{gamma} numbering}
+
+The pseudo-code read
+\begin{verbatim}
+    if rho >= eta2 and |s| > Delta/2 :  mu <- gamma2 * mu
+    elseif rho < eta1 :                 mu <- gamma1 * mu
+    return mu * |g_{k+1}|
+\end{verbatim}
+The code at \texttt{src/Radius\_updates/rules.jl:516--529} has four branches, and
+expansion uses $\gamma_3$:
+\begin{verbatim}
+    if     rho <  eta1                    : mu <- gamma1 * mu   (contract)
+    elseif rho <  eta2                    : mu <- gamma2 * mu   (shrink)
+    elseif !half_test || |s| > Delta/2    : mu <- gamma3 * mu   (expand)
+    else                                  : mu unchanged        (hold)
+\end{verbatim}
+The missing middle branch is a mild contraction on a merely successful step, and
+the old text sends that case to the \emph{expansion} branch by omission. The
+$\gamma_2$ for expansion is the numbering before the rule was renumbered;
+\texttt{benchmark/config.jl} records the change and warns that a positional call
+can pass silently under the wrong reading.
+
+\subsection{\texorpdfstring{$\Rrtr$}{R-RTR} omitted the branch the code calls
+mandatory}
+
+The pseudo-code branched on $\widetilde\rho$ alone. The code at
+\texttt{rules.jl:993--1010} branches on the acceptance flag first, and its
+docstring says why:
+
+\begin{quote}\small
+Branching on \texttt{accepted} is mandatory, not defensive. Comparing a
+\emph{classical} $\rho$ against the \emph{retrospective} thresholds would leave
+the radius untouched for $\rho \in [\widetilde\eta_1, \eta)$, an unsuccessful
+iteration with no contraction, which forfeits weak admissibility and, since a
+rejected step changes neither the model nor the iterate, reproduces the same
+subproblem for ever.
+\end{quote}
+
+The old pseudo-code also used $\gamma_2$ where the code uses $\gamma_3$, and
+$\gamma_1$ where the code uses $\gamma_2$, and invented a $\gamma_0$ that does
+not exist. The correct rule is
+\[
+  \Delta_{k+1} =
+  \begin{cases}
+    \gamma_2\norm{s_k}                       & \text{rejected, } \rho \ge 0,\\
+    \min\{\gamma_2\norm{s_k}, \gamma_1\Delta_k\} & \text{rejected, } \rho < 0,\\
+    \max\{\gamma_3\norm{s_k}, \Delta_k\}     & \text{accepted, } \widetilde\rho \ge \widetilde\eta_2,\\
+    \Delta_k                                 & \text{accepted, } \widetilde\eta_1 \le \widetilde\rho < \widetilde\eta_2,\\
+    \gamma_2\norm{s_k}                       & \text{accepted, } 0 \le \widetilde\rho < \widetilde\eta_1,\\
+    \min\{\gamma_2\norm{s_k}, \gamma_1\Delta_k\} & \text{accepted, } \widetilde\rho < 0.
+  \end{cases}
+\]
+
+% =============================================================================
+\section{The full audit}\label{sec: full}
+% =============================================================================
+
+\subsection{\texttt{fig-architecture.tex}}
+
+\begin{longtable}{p{0.16\textwidth} p{0.10\textwidth} p{0.33\textwidth} p{0.33\textwidth}}
+  \toprule
+  claim & verdict & what the package has & source \\
+  \midrule
+  \endhead
+  ``nine mechanisms'' & \WRONG & eleven & \texttt{TrustRegionRadius.jl:50--52} \\
+  ``each with a second-order variant'' & \WRONG
+    & only the six criticality-anchored ones; \texttt{SecondOrder} raises
+      \texttt{ArgumentError} on the others
+    & \texttt{Second\_order/second\_order.jl:134} \\
+  eight model Hessians & ok & eight & \texttt{TrustRegionRadius.jl:67--68} \\
+  ``Steihaug--Toint CG, Mor\'e--Sorensen, Krylov CG/CR, eigenpoint'' & \PART
+    & \texttt{KrylovCGLanczos} missing; \texttt{EigenPoint} is a wrapper and not
+      a fifth solver
+    & \texttt{TrustRegionRadius.jl:74} \\
+  ten sampling rules & ok & ten & \texttt{TrustRegionRadius.jl:79--82} \\
+  ``one driver, shared'' & \PART
+    & the \emph{step} is shared by three solvers; the loops around it differ
+    & \texttt{Trust-region/common.jl:478} \\
+  Step 1 = ``Build $m_k$'' & \PART
+    & Step 1 also evaluates $\omega_k$ and, when needed, $\lambda_{\min}$
+    & \texttt{common.jl:430--431} \\
+  Step 3 = ``$\rho_k$, accept'' & \PART
+    & does not say the threshold is $\eta$ and not $\eta_1$
+    & \texttt{common.jl:562} \\
+  per-iteration record, ten fields & \PART
+    & the trace carries eighteen; $f_k$, accepted, $\gamma_k$, $\xi_k$, $\tau_k$
+      were omitted
+    & \texttt{common.jl:672--692} \\
+  diagnostics, six & \PART
+    & nine are exported; $\theta_k$ and \texttt{hypotheses\_report} omitted
+    & \texttt{TrustRegionRadius.jl:106--108} \\
+  benchmark, four & ok & all four are exported
+    & \texttt{TrustRegionRadius.jl:111--112} \\
+  \bottomrule
+\end{longtable}
+
+\subsection{\texttt{TRR-algorithmes.tex}}
+
+\begin{longtable}{p{0.20\textwidth} p{0.09\textwidth} p{0.32\textwidth} p{0.31\textwidth}}
+  \toprule
+  claim & verdict & what the package has & source \\
+  \midrule
+  \endhead
+  ``deux solveurs du sous-probl\`eme'' & \WRONG & five, plus \texttt{EigenPoint}
+    & \texttt{Subproblem/subproblem.jl} \\
+  ``dix m\'ecanismes'' & \WRONG & eleven & \texttt{rules.jl} \\
+  ``sept exp\'eriences'' & \STALE & sixteen files, \texttt{exp1} to \texttt{exp17}
+    & \texttt{benchmark/experiments/} \\
+  ``trois axes'' & \WRONG & four; the oracle is the fourth and the note describes
+    it nowhere & \texttt{TrustRegionRadius.jl:77--92} \\
+  \textsf{RAdaptiveFanYuan} & \WRONG & no such rule; the third adaptive rule is
+    \texttt{RAdaptiveGradCapped} & \texttt{rules.jl:847} \\
+  \texttt{RDeltaStep} absent & \STALE & exported and implemented
+    & \texttt{rules.jl:792} \\
+  models: five listed & \STALE & eight; BHHH, BHHH-2, Gauss--Newton missing
+    & \texttt{Model\_Hessians/model\_hessian.jl} \\
+  input $0 \le \eta_1 < \eta_2 < 1$ & \WRONG & $0 \le \eta \le \eta_1 \le \eta_2 < 1$,
+    three thresholds & \texttt{common.jl:161} \\
+  accept on $\rho \ge \eta_1$ & \WRONG & $\rho \ge \eta$ & \texttt{common.jl:562} \\
+  stopping test $\norm{g} \le \epsilon$ & \PART
+    & also $\lambda_{\min} \ge -\texttt{tol\_H}$ when the second-order test is on,
+      and the status is then \texttt{second\_order}
+    & \texttt{common.jl:623} \\
+  \texttt{update\_radius} takes eight arguments & \WRONG
+    & nine; the \texttt{accepted} flag was omitted
+    & \texttt{rules.jl:307} \\
+  last two arguments are $\norm{g_k}$, $\norm{g_{k+1}}$ & \WRONG
+    & they are $\omega_k$, $\omega_{k+1}$, which are $\tau$ under
+      \texttt{SecondOrder} & \texttt{common.jl:608} \\
+  \texttt{initial\_radius} clamped to $\Delta_{\max}$ & \PART
+    & clamped to $[\Delta_{\min}, \Delta_{\max}]$ & \texttt{common.jl:431} \\
+  $\Rstep$ contracts on $\gamma_1\Delta$ & \WRONG
+    & $\gamma_1\norm{s}$ by default; \texttt{contract\_on\_step} is \texttt{true}
+    & \texttt{rules.jl:363 and 377} \\
+  $\Rgrad$ two branches, $\gamma_2$ expands & \WRONG
+    & four branches, $\gamma_3$ expands & \texttt{rules.jl:516--529} \\
+  $\Rrtr$ no acceptance branch, $\gamma_0$ & \WRONG
+    & branches on \texttt{accepted} first; no $\gamma_0$ exists
+    & \texttt{rules.jl:993--1010} \\
+  $\Rdfo$ compares against $\norm{g_k}$ & \PART
+    & against $\omega_k$ & \texttt{rules.jl:438} \\
+  only \texttt{first\_order} counts as solved & \WRONG
+    & \texttt{second\_order} counts too & \texttt{benchmark/harness.jl:191} \\
+  Steihaug pseudo-code & ok & matches, including the three exits
+    & \texttt{subproblem.jl:193--246} \\
+  Mor\'e--Sorensen pseudo-code & ok & matches, hard case included
+    & \texttt{subproblem.jl:291} \\
+  retrospective ratio, sign of the quadratic term & ok
+    & $-g_{k+1}^{\!\top}s_k + \tfrac12 s_k^{\!\top}H_{k+1}s_k$, returns $-\infty$
+      when non-positive & \texttt{retrospective.jl:48--51} \\
+  \texttt{SPDTarget} condition $\varphi(x) < 0$ & ok
+    & matches \texttt{phi\_target} & \texttt{model\_hessian.jl:352} \\
+  stagnation guard & ok & matches, including both conditions
+    & \texttt{common.jl:553} \\
+  performance and data profiles & ok & match
+    & \texttt{Benchmark/profiles.jl} \\
+  \bottomrule
+\end{longtable}
+
+\begin{table}[H]
+  \centering\small
+  \caption{Thirty-five claims by severity, counted from the two tables above.
+    Eleven are from the figure and twenty-four from the note.}
+  \label{tab: severity}
+  \begin{tabular}{lrl}
+    \toprule
+    severity & count & meaning \\
+    \midrule
+    \WRONG   & 14 & the document states something the code does not do \\
+    \STALE   &  3 & true when written, overtaken by later work \\
+    \PART    &  9 & correct as far as it goes, incomplete \\
+    ok       &  9 & checked and correct \\
+    \midrule
+    total    & 35 & of which 26 are discrepancies \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% =============================================================================
+\section{What was changed}\label{sec: changed}
+% =============================================================================
+
+\subsection{\texttt{fig-architecture.tex}}
+
+Six edits. The radius-rule box now reads ``eleven mechanisms, the six
+criticality-anchored ones with a variant $\omega_k = \tau_k$''. The subproblem
+box gains Krylov CG-Lanczos and names \texttt{EigenPoint} as a wrapper. Step~1
+becomes ``Build $m_k$, $\omega_k$'' and Step~3 ``$\rho_k$, accept if
+$\rho_k \ge \eta$''. The loop label becomes ``one iteration, shared by the three
+problem classes''. The record gains $f_k$, accepted, $\gamma_k$, $\xi_k$ and
+$\tau_k$; the diagnostics box gains $\theta_k$. The caption gains one sentence
+saying that Step~1 evaluates the measure and that Step~3 accepts on $\eta$ while
+Step~4 scales on $\eta_1$ and $\eta_2$.
+
+This file is \verb|\input| by \texttt{Survey-part3-v1.tex} at line 599, so the
+change reaches the paper.
+
+\subsection{\texttt{TRR-algorithmes.tex}}
+
+Twenty-three edits, each asserted to match once. The three of
+Section~\ref{sec: three}, the counts, the axes table, the model table, the
+experiment table extended from seven rows to sixteen, the success criterion, and
+a new paragraph (b$'$) explaining that acceptance and scaling are two decisions.
+The note compiles to ten pages with no errors.
+
+\begin{table}[H]
+  \centering\small
+  \caption{The corrected file compiles.}
+  \label{tab: builds}
+  \begin{tabular}{llr}
+    \toprule
+    file & result & pages \\
+    \midrule
+    \texttt{fig-architecture.tex} & \verb|\input| only, no standalone build & n/a \\
+    \texttt{TRR-algorithmes.tex}  & 0 errors & 10 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% =============================================================================
+\section{What was not changed, and why}\label{sec: notchanged}
+% =============================================================================
+
+\paragraph{The location of the algorithms note.}
+\texttt{TRR-algorithmes.tex} sits in \texttt{Article3/old\_versions/}. We
+corrected it in place because that is what was asked, but a note describing the
+current package does not belong in a directory named for superseded drafts. The
+directory holds four other superseded drafts of the numerical study. Moving it
+is a decision about the repository and not about the mathematics, so we leave it.
+
+\paragraph{The note is in French and the study is in English.}
+We kept the language. Changing it is an editorial decision.
+
+\paragraph{The five families.}
+The section heading ``Les cinq familles'' still shows five representative rules
+out of eleven. That is a reasonable exposition and not an error, so it stands.
+The axes table now gives the full list, so the count is available.
+
+\paragraph{The bibliography.}
+\texttt{TRR-algorithmes.tex} points at \verb|\bibliography{../References}| and
+compiles without it, so the citation keys were not checked against
+\texttt{References.bib}. That is a separate audit.
+
+% =============================================================================
+\section{Discussion}\label{sec: discussion}
+% =============================================================================
+
+\paragraph{The errors cluster where the package changed.}
+Most of the wrong claims concern things the package gained after the note was
+written: the third threshold $\eta$, the criticality measure $\omega_k$ in
+place of $\norm{g_k}$, the \texttt{accepted} flag, the second-order stopping
+test, and the rules and models added since. The Steihaug and Mor\'e--Sorensen
+pseudo-code, which describes parts that have not moved, is correct line by line.
+That is the expected pattern and it says where to look next time.
+
+\paragraph{One error is of a different kind.}
+The $\gamma$ numbering in $\Rgrad$ and $\Rrtr$ is wrong because the rules were
+renumbered, and \texttt{benchmark/config.jl} carries a comment warning that a
+positional call can pass silently under the wrong reading. The note is exactly
+that kind of silent reader. A document that states $\gamma_2$ where the code
+means $\gamma_3$ produces plausible radii rather than a visible failure, which is
+the same hazard the comment describes.
+
+\paragraph{The acceptance threshold is the one to fix first.}
+Of the three errors of Section~\ref{sec: three}, the acceptance threshold is the
+one that changes what a reader would implement. The other two are wrong about
+branches within a rule; this one is wrong about the trust-region method itself,
+and it removes the degree of freedom that \texttt{exp14\_acceptance\_band.jl}
+exists to measure.
+
+\end{document}

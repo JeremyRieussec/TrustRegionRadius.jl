@@ -1,0 +1,1771 @@
+@article{BandScheVice14,
+  title    = {Convergence of {Trust}-{Region} {Methods} {Based} on {Probabilistic} {Models}},
+  volume   = {24},
+  doi      = {10.1137/130915984},
+  abstract = {In this paper we consider the use of probabilistic or random models within a classical trust-region framework for optimization of deterministic smooth general nonlinear functions. Our method and setting differs from many stochastic optimization approaches in two principal ways. Firstly, we assume that the value of the function itself can be computed without noise, in other words, that the function is deterministic. Second, we use random models of higher quality than those produced by the usual stochastic gradient methods. In particular, a first order model based on random approximation of the gradient is required to provide sufficient quality of approximation with probability {\textbackslash}geq 1/2. This is in contrast with stochastic gradient approaches, where the model is assumed to be "correct" only in expectation. As a result of this particular setting, we are able to prove convergence, with probability one, of a trust-region method which is almost identical to the classical method. Moreover, the new method is simpler than its deterministic counterpart as it does not require a criticality step. Hence we show that a standard optimization framework can be used in cases when models are random and may or may not provide good approximations, as long as "good" models are more likely than "bad" models. Our results are based on the use of properties of martingales. Our motivation comes from using random sample sets and interpolation models in derivative-free optimization. However, our framework is general and can be applied with any source of uncertainty in the model. We discuss various applications for our methods in the paper.},
+  number   = {3},
+  journal  = {{SIAM} Journal on Optimization},
+  author   = {Bandeira, Afonso S. and Scheinberg, Katya and Vicente, Luís Nunes},
+  year     = {2014},
+  keywords = {CV},
+  pages    = {1238--1264}
+}
+
+@article{BlanCartMeniSche19,
+  title    = {Convergence {Rate} {Analysis} of a {Stochastic} {Trust} {Region} {Method} via {Submartingales}},
+  volume   = {1},
+  doi      = {10.1287/ijoo.2019.0016},
+  abstract = {We propose a novel framework for analyzing convergence rates of stochastic optimization algorithms with adaptive step sizes. This framework is based on analyzing properties of an underlying generic stochastic process; in particular, we derive a bound on the expected stopping time of this process. We utilize this framework to analyze the expected global convergence rates of a stochastic variant of a traditional trust-region method. Although traditional trust-region methods rely on exact computations of the gradient, Hessian, and values of the objective function, this method assumes that these values are available only up to some dynamically adjusted accuracy. Moreover, this accuracy is assumed to hold only with some sufficiently large—but fixed—probability without any additional restrictions on the variance of the errors. This setting applies, for example, to standard stochastic optimization and machine learning formulations. Improving upon prior analysis, we show that the stochastic process defined by the trust-region method satisfies the assumptions of our proposed general framework. The stopping time in this setting is defined by an iterate satisfying a first-order accuracy condition. We demonstrate the first global complexity bound for a stochastic trust-region method under the assumption of sufficiently accurate stochastic gradients. Finally, we apply the same framework to derive second-order complexity bounds under additional assumptions.},
+  number   = {2},
+  journal  = {{INFORMS} Journal on Optimization},
+  author   = {Blanchet, Jose and Cartis, Coralia and Menickelly, Matt and Scheinberg, Katya},
+  year     = {2019},
+  keywords = {Convergence, TR, Complexity, DerivativeFree, ML, StochasticModel},
+  pages    = {92--119}
+}
+
+@article{Cart91,
+  title    = {On the global convergence of trust region algorithms using inexact gradient information},
+  volume   = {28},
+  doi      = {10.1137/0728014},
+  journal  = {{SIAM} Journal on Numerical Analysis},
+  author   = {Carter, Richard G.},
+  year     = {1991},
+  keywords = {Convergence, TR, SubSampling, DerivativeFree, StochasticModel},
+  pages    = {251--265}
+}
+
+@article{CartGoulToin09,
+  title    = {Trust-region and other regularisations of linear least-squares problems},
+  volume   = {49},
+  optissn  = {1572-9125},
+  doi      = {10.1007/s10543-008-0206-8},
+  abstract = {We consider methods for regularising the least-squares solution of the linear system Ax=b. In particular, we propose iterative methods for solving large problems in which a trust-region bound ‖x‖≤Δ is imposed on the size of the solution, and in which the least value of linear combinations of ‖Ax−b‖2qand a regularisation term ‖x‖2pfor various p and q=1,2 is sought. In each case, one or more “secular” equations are derived, and fast Newton-like solution procedures are suggested. The resulting algorithms are available as part of the \${\textbackslash}mathsf\{G\}\$ALAHAD optimization library.},
+  number   = {1},
+  journal  = {BIT Numerical Mathematics},
+  author   = {Cartis, Coralia and Gould, Nicholas I. M. and Toint, {Ph}ilippe L.},
+  optmonth    = mar,
+  year     = {2009},
+  pages    = {21--53}
+}
+
+@article{CartGoulToin10,
+  title    = {On the Complexity of Steepest Descent, {N}ewton's and Regularized {N}ewton's Methods for Nonconvex Unconstrained Optimization Problems},
+  volume   = {20},
+  doi      = {10.1137/090774100},
+  abstract = {It is shown that the steepest-descent and Newton's methods for unconstrained nonconvex optimization under standard assumptions may both require a number of iterations and function evaluations arbitrarily close to {\textbackslash}O({\textbackslash}epsilon{\textasciicircum}-2){\textbackslash} to drive the norm of the gradient below {\textbackslash}epsilon{\textbackslash}. This shows that the upper bound of {\textbackslash}O({\textbackslash}epsilon{\textasciicircum}-2){\textbackslash} evaluations known for the steepest descent is tight and that Newton's method may be as slow as the steepest-descent method in the worst case. The improved evaluation complexity bound of {\textbackslash}O({\textbackslash}epsilon{\textasciicircum}-3/2){\textbackslash} evaluations known for cubically regularized Newton's methods is also shown to be tight.},
+  number   = {6},
+  journal  = {SIAM Journal on Optimization},
+  author   = {Cartis, Coralia and Gould, Nicholas I. M. and Toint, {Ph}ilippe L.},
+  year     = {2010},
+  pages    = {2833--2852}
+}
+
+@article{CartGoulToin12,
+  title    = {Complexity Bounds for Second-Order Optimality in Unconstrained Optimization},
+  volume   = {28},
+  optissn  = {0885-064X},
+  doi      = {10.1016/j.jco.2011.06.001},
+  number   = {1},
+  journal  = {Journal of Complexity},
+  author   = {Cartis, Coralia and Gould, Nick I. M. and Toint, {Ph}ilippe L.},
+  year     = {2012},
+  keywords = {Complexity, NonConvex, SecondOrderOptimality},
+  pages    = {93--108}
+}
+
+
+@article{Toint13,
+	title = {Nonlinear stepsize control, trust regions and regularizations for unconstrained optimization},
+	volume = {28},
+	issn = {1055-6788},
+	doi = {10.1080/10556788.2011.610458},
+	number = {1},
+	journal = {Optimization Methods and Software},
+	publisher = {Taylor \& Francis},
+	author = {Toint, Philippe L.},
+	month = feb,
+	year = {2013},
+	pages = {82--95},
+}
+
+
+@article{DolanMore2002,
+	title = {Benchmarking optimization software with performance profiles},
+	volume = {91},
+	issn = {1436-4646},
+	doi = {10.1007/s101070100263},
+	abstract = {We propose performance profiles — distribution functions for a performance metric — as a tool for benchmarking and comparing optimization software. We show that performance profiles combine the best features of other tools for performance evaluation.},
+	number = {2},
+	journal = {Mathematical Programming},
+	author = {Dolan, Elizabeth D. and Moré, Jorge J.},
+	month = jan,
+	year = {2002},
+	pages = {201--213},
+}
+
+
+@article{MoreWild2009,
+	title = {Benchmarking {Derivative}-{Free} {Optimization} {Algorithms}},
+	volume = {20},
+	doi = {10.1137/080724083},
+	abstract = {We propose data profiles as a tool for analyzing the performance of derivative-free optimization solvers when there are constraints on the computational budget. We use performance and data profiles, together with a convergence test that measures the decrease in function value, to analyze the performance of three solvers on sets of smooth, noisy, and piecewise-smooth problems. Our results provide estimates for the performance difference between these solvers, and show that on these problems, the model-based solver tested performs better than the two direct search solvers tested.},
+	number = {1},
+	journal = {SIAM Journal on Optimization},
+	author = {Moré, Jorge J. and Wild, Stefan M.},
+	year = {2009},
+	pages = {172--191},
+}
+
+
+@article{CartisGouldToint11-composite,
+	title = {On the {Evaluation} {Complexity} of {Composite} {Function} {Minimization} with {Applications} to {Nonconvex} {Nonlinear} {Programming}},
+	volume = {21},
+	doi = {10.1137/11082381X},
+	number = {4},
+	journal = {SIAM Journal on Optimization},
+	author = {Cartis, Coralia and Gould, Nicholas I. M. and Toint, Philippe L.},
+	year = {2011},
+	pages = {1721--1739},
+}
+
+@article{GarmanjaniJudiceVicente16,
+	title = {Trust-{Region} {Methods} {Without} {Using} {Derivatives}: {Worst} {Case} {Complexity} and the {NonSmooth} {Case}},
+	volume = {26},
+	doi = {10.1137/151005683},
+	abstract = {Trust-region methods are a broad class of methods for continuous optimization that found application in a variety of problems and contexts. In particular, they have been studied and applied for problems without using derivatives. The analysis of trust-region derivative-free methods has focused on global convergence, and they have been proven to generate a sequence of iterates converging to stationarity independently of the starting point. Most of such an analysis is carried out in the smooth case, and, moreover, little is known about the complexity or global rate of these methods. In this paper, we start by analyzing the worst case complexity of general trust-region derivative-free methods for smooth functions. For the nonsmooth case, we propose a smoothing approach, for which we prove global convergence and bound the worst case complexity effort. For the special case of nonsmooth functions that result from the composition of smooth and nonsmooth/convex components, we show how to improve the existing results of the literature and make them applicable to the general methodology.},
+	number = {4},
+	journal = {SIAM Journal on Optimization},
+	author = {Garmanjani, R. and Júdice, D. and Vicente, L. N.},
+	year = {2016},
+	pages = {1987--2011},
+}
+
+@book{CartGoulToin22,
+  address   = {Philadelphia, PA},
+  title     = {Evaluation Complexity of Algorithms for Nonconvex Optimization: Theory, Computation and Perspectives},
+  optisbn   = {978-1-61197-698-4},
+  doi       = {10.1137/1.9781611976991},
+  publisher = {Society for Industrial and Applied Mathematics},
+  author    = {Cartis, Coralia and Gould, Nicholas I. M. and Toint, {Ph}ilippe L.},
+  year      = {2022}
+}
+
+@article{CartGoulToin11,
+	title = {Adaptive cubic regularisation methods for unconstrained optimization. {Part} {I}: motivation, convergence and numerical results},
+	volume = {127},
+	optissn = {1436-4646},
+	doi = {10.1007/s10107-009-0286-5},
+	abstract = {An Adaptive Regularisation algorithm using Cubics (ARC) is proposed for unconstrained optimization, generalizing at the same time an unpublished method due to Griewank (Technical Report NA/12, 1981, DAMTP, University of Cambridge), an algorithm by Nesterov and Polyak (Math Program 108(1):177–205, 2006) and a proposal by Weiser et al. (Optim Methods Softw 22(3):413-431, 2007). At each iteration of our approach, an approximate global minimizer of a local cubic regularisation of the objective function is determined, and this ensures a significant improvement in the objective so long as the Hessian of the objective is locally Lipschitz continuous. The new method uses an adaptive estimation of the local Lipschitz constant and approximations to the global model-minimizer which remain computationally-viable even for large-scale problems. We show that the excellent global and local convergence properties obtained by Nesterov and Polyak are retained, and sometimes extended to a wider class of problems, by our ARC approach. Preliminary numerical experiments with small-scale test problems from the CUTEr set show encouraging performance of the ARC algorithm when compared to a basic trust-region implementation.},
+	number = {2},
+	journal = {Mathematical Programming},
+	author = {Cartis, Coralia and Gould, Nicholas I. M. and Toint, Philippe L.},
+	optmonth = apr,
+	year = {2011},
+	pages = {245--295},
+}
+
+@article{CartSche18,
+  title    = {Global convergence rate analysis of unconstrained optimization methods based on probabilistic models},
+  volume   = {169},
+  optissn  = {1436-4646},
+  abstract = {We present global convergence rates for a line-search method which is based on random first-order models and directions whose quality is ensured only with certain probability. We show that in terms of the order of the accuracy, the evaluation complexity of such a method is the same as its counterparts that use deterministic accurate models; the use of probabilistic models only increases the complexity by a constant, which depends on the probability of the models being good. We particularize and improve these results in the convex and strongly convex case. We also analyze a probabilistic cubic regularization variant that allows approximate probabilistic second-order models and show improved complexity bounds compared to probabilistic first-order methods; again, as a function of the accuracy, the probabilistic cubic regularization bounds are of the same (optimal) order as for the deterministic case.},
+  number   = {2},
+  journal  = {Mathematical Programming},
+  author   = {Cartis, Coralia and Scheinberg, Katya},
+  year     = {2018},
+  keywords = {Convergence, DerivativeFree, StochasticModel, LineSearch},
+  pages    = {337--375}
+}
+
+@article{ChenMeniSche18,
+  title    = {Stochastic optimization using a trust-region method and random models},
+  volume   = {169},
+  doi      = {10.1007/s10107-017-1141-8},
+  abstract = {In this paper, we propose and analyze a trust-region model-based algorithm for solving unconstrained stochastic optimization problems. Our framework utilizes random models of an objective function f(x), obtained from stochastic observations of the function or its gradient. Our method also utilizes estimates of function values to gauge progress that is being made. The convergence analysis relies on requirements that these models and these estimates are sufficiently accurate with high enough, but fixed, probability. Beyond these conditions, no assumptions are made on how these models and estimates are generated. Under these general conditions we show an almost sure global convergence of the method to a first order stationary point. In the second part of the paper, we present examples of generating sufficiently accurate random models under biased or unbiased noise assumptions. Lastly, we present some computational results showing the benefits of the proposed method compared to existing approaches that are based on sample averaging or stochastic gradients.},
+  number   = {2},
+  journal  = {Mathematical Programming},
+  author   = {Chen, Ruobing and Menickelly, Matt and Scheinberg, Katya},
+  year     = {2018},
+  keywords = {Convergence, TR, Complexity, DerivativeFree, StochasticModel},
+  pages    = {447--487}
+}
+
+@book{ConnGoulToin00,
+  address   = {Philadelphia, PA, USA},
+  series    = {{MOS}-{SIAM} {Series} on {Optimization}},
+  title     = {Trust-{Region} {Methods}},
+  optisbn   = {978-0-89871-460-9},
+  doi       = {10.1137/1.9780898719857},
+  publisher = {{SIAM}},
+  author    = {Conn, Andrew R. and Gould, Nicholas I. M. and Toint, {Ph}ilippe L.},
+  year      = {2000},
+  keywords  = {TR}
+}
+
+@article{Powell2002,
+	title = {{UOBYQA}: unconstrained optimization by quadratic approximation},
+	volume = {92},
+	optissn = {1436-4646},
+	doi = {10.1007/s101070100290},
+	number = {3},
+	journal = {Mathematical Programming},
+	author = {Powell, M.J.D.},
+	optmonth = may,
+	year = {2002},
+	pages = {555--582},
+}
+
+@article{ConnScheVice09,
+  title    = {Global {Convergence} of {General} {Derivative}-{Free} {Trust}-{Region} {Algorithms} to {First}- and {Second}-{Order} {Critical} {Points}},
+  volume   = {20},
+  doi      = {10.1137/060673424},
+  abstract = {In this paper we prove global convergence for first- and second-order stationary points of a class of derivative-free trust-region methods for unconstrained optimization. These methods are based on the sequential minimization of quadratic (or linear) models built from evaluating the objective function at sample sets. The derivative-free models are required to satisfy Taylor-type bounds, but, apart from that, the analysis is independent of the sampling techniques. A number of new issues are addressed, including global convergence when acceptance of iterates is based on simple decrease of the objective function, trust-region radius maintenance at the criticality step, and global convergence for second-order critical points.},
+  number   = {1},
+  journal  = {{SIAM} Journal on Optimization},
+  author   = {Conn, Andrew R. and Scheinberg, Katya and Vicente, Luís Nunes},
+  year     = {2009},
+  keywords = {CV},
+  pages    = {387--415}
+}
+
+@book{ConnScheVice09_introduction,
+  address   = {USA},
+  title     = {Introduction to {Derivative}-{Free} {Optimization}},
+  optisbn   = {0-89871-668-3},
+  abstract  = {The absence of derivatives, often combined with the presence of noise or lack of smoothness, is a major challenge for optimization. This book explains how sampling and model techniques are used in derivative-free methods and how these methods are designed to efficiently and rigorously solve optimization problems. Although readily accessible to readers with a modest background in computational mathematics, it is also intended to be of interest to researchers in the field. Introduction to Derivative-Free Optimization is the first contemporary comprehensive treatment of optimization without derivatives. This book covers most of the relevant classes of algorithms from direct search to model-based approaches. It contains a comprehensive description of the sampling and modeling tools needed for derivative-free optimization; these tools allow the reader to better understand the convergent properties of the algorithms and identify their differences and similarities. Introduction to Derivative-Free Optimization also contains analysis of convergence for modified Nelder Mead and implicit-filtering methods, as well as for model-based methods such as wedge methods and methods based on minimum-norm Frobenius models. Audience: The book is intended for anyone interested in using optimization on problems where derivatives are difficult or impossible to obtain. Such audiences include chemical, mechanical, aeronautical, and electrical engineers, as well as economists, statisticians, operations researchers, management scientists, biological and medical researchers, and computer scientists. It is also appropriate for use in an advanced undergraduate or early graduate-level course on optimization for students having a background in calculus, linear algebra, and numerical analysis. Contents: Preface; Chapter 1: Introduction; Part I: Sampling and modeling; Chapter 2: Sampling and linear models; Chapter 3: Interpolating nonlinear models; Chapter 4: Regression nonlinear models; Chapter 5: Underdetermined interpolating models; Chapter 6: Ensuring well poisedness and suitable derivative-free models; Part II: Frameworks and algorithms; Chapter 7: Directional direct-search methods; Chapter 8: Simplicial direct-search methods; Chapter 9: Line-search methods based on simplex derivatives; Chapter 10: Trust-region methods based on derivative-free models; Chapter 11: Trust-region interpolation-based methods; Part III: Review of other topics; Chapter 12: Review of surrogate model management; Chapter 13: Review of constrained and other extensions to derivative-free optimization; Appendix: Software for derivative-free optimization; Bibliography; Index.},
+  publisher = {Society for Industrial and Applied Mathematics},
+  author    = {Conn, Andrew R. and Scheinberg, Katya and Vicente, Luis N.},
+  year      = {2009}
+}
+
+@article{CurtisLubbertsRobinson2018,
+  title    = {Concise complexity analyses for trust region methods},
+  volume   = {12},
+  optissn  = {1862-4480},
+  doi      = {10.1007/s11590-018-1286-2},
+  abstract = {Concise complexity analyses are presented for simple trust region algorithms for solving unconstrained optimization problems. In contrast to a traditional trust region algorithm, the algorithms considered in this paper require certain control over the choice of trust region radius after any successful iteration. The analyses highlight the essential algorithm components required to obtain certain complexity bounds. In addition, a new update strategy for the trust region radius is proposed that offers a second-order complexity bound.},
+  number   = {8},
+  journal  = {Optimization Letters},
+  author   = {Curtis, Frank E. and Lubberts, Zachary and Robinson, Daniel P.},
+  optmonth    = dec,
+  year     = {2018},
+  pages    = {1713--1724}
+}
+
+@article{CurtisRobinsonRoyerWright2021,
+  title    = {Trust-{Region} {Newton}-{CG} with {Strong} {Second}-{Order} {Complexity} {Guarantees} for {Nonconvex} {Optimization}},
+  volume   = {31},
+  doi      = {10.1137/19M130563X},
+  abstract = {Worst-case complexity guarantees for nonconvex optimization algorithms have been a topic of growing interest. Multiple frameworks that achieve the best known complexity bounds among a broad class of first- and second-order strategies have been proposed. These methods have often been designed primarily with complexity guarantees in mind and, as a result, represent a departure from the algorithms that have proved to be the most effective in practice. In this paper, we consider trust-region Newton methods, one of the most popular classes of algorithms for solving nonconvex optimization problems. By introducing slight modifications to the original scheme, we obtain two methods—one based on exact subproblem solves and one exploiting inexact subproblem solves as in the popular “trust-region Newton-conjugate gradient” (trust-region Newton-CG) method—with iteration and operation complexity bounds that match the best known bounds for the aforementioned class of first- and second-order methods. The resulting trust-region Newton-CG method also retains the attractive practical behavior of classical trust-region Newton-CG, which we demonstrate with numerical comparisons on a standard benchmark test set.},
+  number   = {1},
+  journal  = {{SIAM} Journal on Optimization},
+  author   = {Curtis, Frank E. and Robinson, Daniel P. and Royer, Clément W. and Wright, Stephen J.},
+  year     = {2021},
+  pages    = {518--544}
+}
+
+@article{CurtisRobinsonSamadi2017,
+  title    = {A {Trust} {Region} {Algorithm} with a {Worst}-{Case} {Iteration} {Complexity} of $\mathcal{O}(\epsilon^{-3/2})$ for {Nonconvex} {Optimization}},
+  volume   = {162},
+  optissn  = {0025-5610},
+  doi      = {10.1007/s10107-016-1026-2},
+  number   = {1–2},
+  journal  = {Mathematical Programming},
+  author   = {Curtis, Frank E. and Robinson, Daniel P. and Samadi, Mohammadreza},
+  year     = {2017},
+  keywords = {Complexity},
+  pages    = {1--32}
+}
+
+@article{CurtSche20,
+  title    = {Adaptive {Stochastic} {Optimization}: {A} {Framework} for {Analyzing} {Stochastic} {Optimization} {Algorithms}},
+  volume   = {37},
+  doi      = {10.1109/MSP.2020.3003539},
+  number   = {5},
+  journal  = {IEEE Signal Processing Magazine},
+  author   = {Curtis, Frank E. and Scheinberg, Katya},
+  year     = {2020},
+  keywords = {CV},
+  pages    = {32--42}
+}
+
+@article{DembEiseStei82,
+  title    = {Inexact {Newton} {Methods}},
+  volume   = {19},
+  doi      = {10.1137/0719025},
+  number   = {2},
+  journal  = {SIAM Journal on Numerical Analysis},
+  author   = {Dembo, Ron and Eisenstat, Stanley and Steihaug, Trond},
+  year     = {1982},
+  keywords = {SecondOrder},
+  pages    = {400--408}
+}
+
+@article{DennMore74,
+  title    = {A {Characterization} of {Superlinear} {Convergence} and {Its} {Application} to {Quasi}-{Newton} {Methods}},
+  volume   = {28},
+  optissn  = {00255718, 10886842},
+  doi      = {10.2307/2005926},
+  abstract = {[Let \$F\$ be a mapping from real \$n\$-dimensional Euclidean space into itself. Most practical algorithms for finding a zero of \$F\$ are of the form \$\$x\_\{k+1\} = x\_k - B\_k{\textasciicircum}\{-1\}Fx\_k,\$\$ where \${\textbackslash}\{B\_k{\textbackslash}\}\$ is a sequence of nonsingular matrices. The main result of this paper is a characterization theorem for the superlinear convergence to a zero of \$F\$ of sequences of the above form. This result is then used to give a unified treatment of the results on the superlinear convergence of the Davidon-Fletcher-Powell method obtained by Powell for the case in which exact line searches are used, and by Broyden, Dennis, and Moré for the case without line searches. As a by-product, several results on the asymptotic behavior of the sequence \${\textbackslash}\{B\_k{\textbackslash}\}\$ are obtained. An interesting aspect of these results is that superlinear convergence is obtained without any consistency conditions; i.e., without requiring that the sequence \${\textbackslash}\{B\_k{\textbackslash}\}\$ converge to the Jacobian matrix of \$F\$ at the zero. In fact, a modification of an example due to Powell shows that most of the known quasi-Newton methods are not, in general, consistent. Finally, it is pointed out that the above-mentioned characterization theorem applies to other single and double rank quasi-Newton methods, and that the results of this paper can be used to obtain their superlinear convergence.]},
+  number   = {126},
+  journal  = {Mathematics of Computation},
+  author   = {Dennis, John E. and Moré, Jorge J.},
+  year     = {1974},
+  note     = {Publisher: American Mathematical Society},
+  pages    = {549--560}
+}
+
+@article{DennMore77,
+  title    = {Quasi-{Newton} {Methods}, {Motivation} and {Theory}},
+  volume   = {19},
+  optissn  = {0036-1445},
+  doi      = {10.1137/1019005},
+  abstract = {This paper is an attempt to motivate and justify quasi-Newton methods as useful modifications of Newton?s method for general and gradient nonlinear systems of equations. References are given to ample numerical justification; here we give an overview of many of the important theoretical results and each is accompanied by sufficient discussion to make the results and hence the methods plausible.},
+  number   = {1},
+  journal  = {{SIAM} Review},
+  author   = {Dennis, John E. and Moré, Jorge J.},
+  optmonth    = jan,
+  year     = {1977},
+  note     = {Publisher: Society for Industrial and Applied Mathematics},
+  pages    = {46--89}
+}
+
+@article{Fan06,
+  title    = {Convergence {Rate} of {The} {Trust} {Region} {Method} for {Nonlinear} {Equations} {Under} {Local} {Error} {Bound} {Condition}},
+  volume   = {34},
+  optissn  = {1573-2894},
+  doi      = {10.1007/s10589-005-3078-8},
+  abstract = {In this paper, we present the new trust region method for nonlinear equations with the trust region converging to zero. The new method preserves the global convergence of the traditional trust region methods in which the trust region radius will be larger than a positive constant. We study the convergence rate of the new method under the local error bound condition which is weaker than the nonsingularity. An example given by Y.X. Yuan shows that the convergence rate can not be quadratic. Finally, some numerical results are given.},
+  number   = {2},
+  journal  = {Computational Optimization and Applications},
+  author   = {Fan, Jinyan},
+  optmonth    = jun,
+  year     = {2006},
+  pages    = {215--227}
+}
+
+@article{FanAiZhan04,
+  title    = {A {Line} {Search} and {Trust} {Region} algorithm with trust region radius converging to zero},
+  volume   = {22},
+  optissn  = {02549409, 19917139},
+  opturl   = {http://www.jstor.org/stable/43693212},
+  abstract = {[In this paper, we present a new line search and trust region algorithm for unconstrained optimization problem with the trust region radius converging to zero. The new trust region algorithm performs a backtracking line search from the failed, point instead of resolving the subproblem when the trial step results in an increase in the objective function. We show that the algorithm preserves the convergence properties of the traditional trust region algorithms. Numerical results are also given.]},
+  number   = {6},
+  journal  = {Journal of Computational Mathematics},
+  author   = {Fan, Jinyan and Ai, Wen-bao and Zhang, Qun-ying},
+  year     = {2004},
+  note     = {Publisher: Institute of Computational Mathematics and Scientific/Engineering Computing},
+  pages    = {865--872}
+}
+
+@article{FanLu15,
+  title   = {On the modified trust region algorithm for nonlinear equations},
+  volume  = {30},
+  optissn = {1055-6788},
+  doi     = {10.1080/10556788.2014.932943},
+  number  = {3},
+  journal = {Optimization Methods and Software},
+  author  = {Fan, Jinyan and Lu, Na},
+  optmonth   = may,
+  year    = {2015},
+  note    = {Publisher: Taylor \& Francis},
+  pages   = {478--491}
+}
+
+@article{FanPan06,
+  title    = {Convergence {Properties} of a {Self}-adaptive {Levenberg}-{Marquardt} {Algorithm} {Under} {Local} {Error} {Bound} {Condition}},
+  volume   = {34},
+  optissn  = {1573-2894},
+  doi      = {10.1007/s10589-005-3074-z},
+  abstract = {We propose a new self-adaptive Levenberg-Marquardt algorithm for the system of nonlinear equations F(x) = 0. The Levenberg-Marquardt parameter is chosen as the product of ‖Fk‖δ with δ being a positive constant, and some function of the ratio between the actual reduction and predicted reduction of the merit function. Under the local error bound condition which is weaker than the nonsingularity, we show that the Levenberg-Marquardt method converges superlinearly to the solution for δ∈ (0, 1), while quadratically for δ∈ [1, 2]. Numerical results show that the new algorithm performs very well for the nonlinear equations with high rank deficiency.},
+  number   = {1},
+  journal  = {Computational Optimization and Applications},
+  author   = {Fan, Jinyan and Pan, Jianyu},
+  optmonth    = may,
+  year     = {2006},
+  pages    = {47--62}
+}
+
+@article{FanPan10,
+  title    = {A modified trust region algorithm for nonlinear equations with new updating rule of trust region radius},
+  volume   = {87},
+  optissn  = {0020-7160},
+  doi      = {10.1080/00207160802691645},
+  abstract = {In this article, we present a trust region algorithm for the nonlinear equations with a new updating rule of the trust region radius, which takes some function of the residual. We show that under the local error bound condition which is weaker than the non-singularity, the new algorithm converges quadratically to some solution of the nonlinear equations. Numerical results show that the new algorithm performs very well for some singular nonlinear equations.},
+  number   = {14},
+  journal  = {International Journal of Computer Mathematics},
+  author   = {Fan, Jinyan and Pan, Jianyu},
+  optmonth    = nov,
+  year     = {2010},
+  note     = {Publisher: Taylor \& Francis},
+  pages    = {3186--3195}
+}
+
+@article{FanPan11,
+  title    = {An improved trust region algorithm for nonlinear equations},
+  volume   = {48},
+  optissn  = {1573-2894},
+  doi      = {10.1007/s10589-009-9236-7},
+  abstract = {In this paper, we present a new trust region algorithm for the system of singular nonlinear equations with the regularized trust region subproblem. The new algorithm preserves the global convergence of the traditional trust region algorithm, and has the quadratic convergence under some suitable conditions. Finally, some numerical results are given.},
+  number   = {1},
+  journal  = {Computational Optimization and Applications},
+  author   = {Fan, Jinyan and Pan, Jianyu},
+  optmonth    = jan,
+  year     = {2011},
+  pages    = {59--70}
+}
+
+@article{GouldOrbanSartenaerToint05,
+  title    = {Sensitivity of trust-region algorithms to their parameters},
+  volume   = {3},
+  optissn  = {1614-2411},
+  doi      = {10.1007/s10288-005-0065-y},
+  abstract = {In this paper, we examine the sensitivity of trust-region algorithms on the parameters related to the step acceptance and update of the trust region. We show, in the context of unconstrained programming, that the numerical efficiency of these algorithms can easily be improved by choosing appropriate parameters. Recommended ranges of values for these parameters are exhibited on the basis of extensive numerical tests.},
+  number   = {3},
+  journal  = {4OR},
+  author   = {Gould, Nicholas I. M. and Orban, Dominique and Sartenaer, Annick and Toint, {Ph}ilippe L.},
+  optmonth    = sep,
+  year     = {2005},
+  pages    = {227--241}
+}
+
+@article{GrapigliaYuanYuan15,
+  title    = {On the convergence and worst-case complexity of trust-region and regularization methods for unconstrained optimization},
+  volume   = {152},
+  optissn  = {1436-4646},
+  doi      = {10.1007/s10107-014-0794-9},
+  abstract = {A nonlinear stepsize control framework for unconstrained optimization was recently proposed by Toint (Optim Methods Softw 28:82–95, 2013), providing a unified setting in which the global convergence can be proved for trust-region algorithms and regularization schemes. The original analysis assumes that the Hessians of the models are uniformly bounded. In this paper, the global convergence of the nonlinear stepsize control algorithm is proved under the assumption that the norm of the Hessians can grow by a constant amount at each iteration. The worst-case complexity is also investigated. The results obtained for unconstrained smooth optimization are extended to some algorithms for composite nonsmooth optimization and unconstrained multiobjective optimization as well.},
+  number   = {1},
+  journal  = {Mathematical Programming},
+  author   = {Grapiglia, Geovani N. and Yuan, Jinyun and Yuan, Ya-xiang},
+  optmonth    = aug,
+  year     = {2015},
+  pages    = {491--520}
+}
+@article{Jeremy2026,
+      title={A survey of trust-region radius update mechanisms. Part {I}: First-order analysis}, 
+      author={Rieussec, Jérémy and 
+              Bastin Fabian },
+      year={2026},
+      journal = {ArXiv preprint: 2606.30202 [math.OC]},
+      eprint={2606.30202},
+      archivePrefix={arXiv},
+      primaryClass={math.OC},
+      doi={10.48550/arXiv.2606.30202},
+      opturl={https://arxiv.org/abs/2606.30202}, 
+}
+
+@article{Jeremy2026-II,
+  author = {Rieussec, Jeremy 
+  and Bastin, Fabian},
+  journal = {arXiv preprint},
+  number = {},
+  title = {A survey of trust-region radius update mechanisms.  {P}art {II}: radius asymptotic behaviour},
+  volume = {},
+  year = {2026}
+}
+
+@article{WangYuan2022,
+  title    = {Stochastic Trust-Region Methods with Trust-Region Radius Depending on Probabilistic Models},
+  author   = {Wang, Xiaoyu and Yuan, Yaxiang},
+  journal  = {Journal of Computational Mathematics},
+  volume   = {40},
+  number   = {2},
+  pages    = {294--334},
+  year     = {2022},
+  optmonth    = {Oct.},
+  doi      = {10.4208/jcm.2012-m2020-0144},
+  abstract = {We present a stochastic trust-region model-based framework in which its radius is related to the probabilistic models. Especially, we propose a specific algorithm termed STRME, in which the trust-region radius depends linearly on the gradient used to define the latest model. The complexity results of the STRME method in nonconvex, convex and strongly convex settings are presented, which match those of the existing algorithms based on probabilistic properties. In addition, several numerical experiments are carried out to reveal the benefits of the proposed methods compared to the existing stochastic trust-region methods and other relevant stochastic gradient methods.}
+}
+
+@article{GrapigliaYuanYuan16,
+  title    = {Nonlinear {Stepsize} {Control} {Algorithms}: {Complexity} {Bounds} for {First}- and {Second}-{Order} {Optimality}},
+  volume   = {171},
+  optissn  = {1573-2878},
+  doi      = {10.1007/s10957-016-1007-x},
+  abstract = {A nonlinear stepsize control (NSC) framework has been proposed by Toint (Optim Methods Softw 28:82–95, 2013) for unconstrained optimization, generalizing several trust-region and regularization algorithms. More recently, worst-case complexity bounds to achieve approximate first-order optimality were proved by Grapiglia, Yuan and Yuan (Math Program 152:491–520, 2015) for the generic NSC framework. In this paper, improved complexity bounds for first-order optimality are obtained. Furthermore, complexity bounds for second-order optimality are also provided.},
+  number   = {3},
+  journal  = {Journal of Optimization Theory and Applications},
+  author   = {Grapiglia, Geovani Nunes and Yuan, Jinyun and Yuan, Ya-xiang},
+  optmonth    = dec,
+  year     = {2016},
+  pages    = {980--997}
+}
+
+@article{GratRoyeViceZhan17,
+  title    = {Complexity and global rates of trust-region methods based on probabilistic models},
+  volume   = {38},
+  optissn  = {0272-4979},
+  doi      = {10.1093/imanum/drx043},
+  abstract = {Trust-region algorithms have been proved to globally converge with probability 1 when the accuracy of the trust-region models is imposed with a certain probability conditioning on the iteration history. In this article, we study the complexity of such methods, providing global rates and worst-case complexity bounds on the number of iterations (with overwhelmingly high probability), for both first- and second-order measures of optimality. Such results are essentially the same as the ones known for trust-region methods based on deterministic models. The derivation of the global rates and worst-case complexity bounds follows closely from a study of direct search methods based on the companion notion of probabilistic descent.},
+  number   = {3},
+  journal  = {IMA Journal of Numerical Analysis},
+  author   = {Gratton, Serge and Royer, Clément and Vicente, Luís Nunes and Zhang, Zaikun},
+  year     = {2017},
+  note     = {eprint: https://academic.oup.com/imajna/article-pdf/38/3/1579/25170882/drx043.pdf},
+  keywords = {Complexity},
+  pages    = {1579--1597}
+}
+
+@article{GrattonSartenaerToint08,
+  title    = {Recursive {Trust}-{Region} {Methods} for {Multiscale} {Nonlinear} {Optimization}},
+  volume   = {19},
+  doi      = {10.1137/050623012},
+  abstract = {A class of trust-region methods is presented for solving unconstrained nonlinear and possibly nonconvex discretized optimization problems, like those arising in systems governed by partial differential equations. The algorithms in this class make use of the discretization level as a means of speeding up the computation of the step. This use is recursive, leading to true multilevel/multiscale optimization methods reminiscent of multigrid methods in linear algebra and the solution of partial differential equations. A simple algorithm of the class is then described and its numerical performance is shown to be numerically promising. This observation then motivates a proof of global convergence to first-order stationary points on the fine grid that is valid for all algorithms in the class.},
+  number   = {1},
+  journal  = {{SIAM} Journal on Optimization},
+  author   = {Gratton, Serge and Sartenaer, Annick and Toint, {Ph}ilippe L.},
+  year     = {2008},
+  pages    = {414--444}
+}
+
+@article{Hei03,
+  title    = {A self-adaptive trust region algorithm},
+  volume   = {21},
+  optissn  = {02549409, 19917139},
+  opturl   = {http://www.jstor.org/stable/43693061},
+  abstract = {[In this paper we propose a self-adaptive trust region algorithm. The trust region radius is updated at a variable rate according to the ratio between the actual reduction and the predicted reduction of the objective function, rather than by simply enlarging or reducing the original trust region radius at a constant rate. We show that this new algorithm preserves the strong convergence property of traditional trust region methods. Numerical results are also presented.]},
+  number   = {2},
+  journal  = {Journal of Computational Mathematics},
+  author   = {Hei, Long},
+  year     = {2003},
+  note     = {Publisher: Institute of Computational Mathematics and Scientific/Engineering Computing},
+  pages    = {229--236}
+}
+
+@article{Levenberg_1944,
+  title   = {A method for the solution of certain non-linear problems in least squares},
+  volume  = {2},
+  optissn = {0033569X, 15524485},
+  opturl  = {http://www.jstor.org/stable/43633451},
+  number  = {2},
+  journal = {Quarterly of Applied Mathematics},
+  author  = {Levenberg, Kenneth},
+  year    = {1944},
+  note    = {Publisher: Brown University},
+  pages   = {164--168}
+}
+
+@article{LiuNoce89,
+  title    = {On the limited memory {BFGS} method for large scale optimization},
+  volume   = {45},
+  optissn  = {1436-4646},
+  doi      = {10.1007/BF01589116},
+  abstract = {We study the numerical performance of a limited memory quasi-Newton method for large scale optimization, which we call the L-BFGS method. We compare its performance with that of the method developed by Buckley and LeNir (1985), which combines cycles of BFGS steps and conjugate direction steps. Our numerical tests indicate that the L-BFGS method is faster than the method of Buckley and LeNir, and is better able to use additional storage to accelerate convergence. We show that the L-BFGS method can be greatly accelerated by means of a simple scaling. We then compare the L-BFGS method with the partitioned quasi-Newton method of Griewank and Toint (1982a). The results show that, for some problems, the partitioned quasi-Newton method is clearly superior to the L-BFGS method. However we find that for other problems the L-BFGS method is very competitive due to its low iteration cost. We also study the convergence properties of the L-BFGS method, and prove global convergence on uniformly convex problems.},
+  number   = {1},
+  journal  = {Mathematical Programming},
+  author   = {Liu, Dong C. and Nocedal, Jorge},
+  optmonth    = aug,
+  year     = {1989},
+  pages    = {503--528}
+}
+
+@article{Marquardt_1963,
+  title   = {An {Algorithm} for {Least}-{Squares} {Estimation} of {Nonlinear} {Parameters}},
+  volume  = {11},
+  doi     = {10.1137/0111030},
+  number  = {2},
+  journal = {Journal of the Society for Industrial and Applied Mathematics},
+  author  = {Marquardt, Donald W.},
+  year    = {1963},
+  pages   = {431--441}
+}
+
+@inproceedings{More78,
+  address   = {Berlin, Heidelberg},
+  title     = {The {Levenberg}-{Marquardt} algorithm: {Implementation} and theory},
+  optisbn   = {978-3-540-35972-2},
+  doi       = {10.1007/BFb0067700},
+  booktitle = {Numerical {Analysis}},
+  publisher = {Springer Berlin Heidelberg},
+  author    = {Moré, Jorge J.},
+  editor    = {Watson, G. A.},
+  year      = {1978},
+  pages     = {105--116}
+}
+
+@book{DennSchn96,
+  title     = {Numerical Methods for Unconstrained Optimization and Nonlinear Equations},
+  author    = {{Dennis, Jr.}, John E. and Robert B. Schnabel},
+  year      = 1996,
+  publisher = {SIAM},
+  address   = {Philadelphia, PA, USA},
+  series    = {Classics in Applied Mathematics},
+  volume    = 16,
+  keywords  = {LS}
+}
+
+@incollection{More83,
+  address   = {Berlin, Heidelberg},
+  title     = {Recent {Developments} in {Algorithms} and {Software} for {Trust} {Region} {Methods}},
+  optisbn   = {978-3-642-68874-4},
+  doi       = {10.1007/978-3-642-68874-4_11},
+  abstract  = {Trust region methods are an important class of iterative methods for the solution of nonlinear optimization problems. Algorithms in this class have been proposed for the solution of systems of nonlinear equations, nonlinear estimation problems, unconstrained and constrained optimization, nondifferentiable optimization, and large scale optimization. Interest in trust region methods derives, in part, from the availability of strong convergence results and from the development of software for these methods which is reliable, efficient, and amazingly free of ad-hoc decisions. In this paper we survey the theoretical and practical results available for trust region methods and discuss the relevance of these results to the implementation of trust region methods.},
+  booktitle = {Mathematical {Programming} {The} {State} of the {Art}: {Bonn} 1982},
+  publisher = {Springer Berlin Heidelberg},
+  author    = {Moré, Jorge J.},
+  editor    = {Bachem, Achim and Korte, Bernhard and Grötschel, Martin},
+  year      = {1983},
+  pages     = {258--287}
+}
+
+@book{NoceWrig06,
+  address   = {New York, NY, USA},
+  edition   = {Second},
+  series    = {Springer {Series} in {Operations} {Research} and {Financial} {Engineering}},
+  title     = {Numerical {Optimization}},
+  optisbn   = {978-0-387-30303-1},
+  doi       = {10.1007/978-0-387-40065-5},
+  publisher = {Springer New York, NY},
+  author    = {Nocedal, Jorge and Wright, Stephen J.},
+  year      = {2006},
+  keywords  = {OptReview}
+}
+
+@incollection{NoceYuan98,
+  address   = {Boston, MA},
+  title     = {Combining {Trust} {Region} and {Line} {Search} {Techniques}},
+  optisbn   = {978-1-4613-3335-7},
+  doi       = {10.1007/978-1-4613-3335-7_7},
+  abstract  = {We propose an algorithm for nonlinear optimization that employs both trust region techniques and line searches. Unlike traditional trust region methods, our algorithm does not resolve the subproblem if the trial step results in an increase in the objective function, but instead performs a backtracking line search from the failed point. Backtracking can be done along a straight line or along a curved path. We show that the new algorithm preserves the strong convergence properties of trust region methods. Numerical results are also presented.},
+  booktitle = {Advances in {Nonlinear} {Programming}: {Proceedings} of the 96 {International} {Conference} on {Nonlinear} {Programming}},
+  publisher = {Springer US},
+  author    = {Nocedal, Jorge and Yuan, Ya-xiang},
+  editor    = {Yuan, Ya-xiang},
+  year      = {1998},
+  pages     = {153--175}
+}
+
+@book{Polyak1987,
+	address = {New York},
+	edition = {1st},
+	series = {Translations series in mathematics and engineering},
+	title = {Introduction to optimization},
+	isbn = {0-911575-14-6 978-0-911575-14-9},
+	language = {English},
+	publisher = {Optimization Software, Inc.},
+	author = {Polyak, Boris T.},
+	year = {1987},
+}
+
+@incollection{Powe70,
+  title     = {A {New} {Algorithm} for {Unconstrained} {Optimization}},
+  optisbn   = {978-0-12-597050-1},
+  doi       = {10.1016/B978-0-12-597050-1.50006-3},
+  abstract  = {ABSTRACT
+               A new algorithm is described for calculating the least value of a given differentiable function of several variables. The user must program the evaluation of the function and its first derivatives. Some convergence theorems are given that impose very mild conditions on the objective function. These theorems, together with some numerical results, indicate that the new method may be preferable to current algorithms for solving many unconstrained minimization problems.},
+  booktitle = {Nonlinear {Programming}},
+  publisher = {Academic Press},
+  author    = {Powell, Michael James David},
+  editor    = {Rosen, J.B. and Mangasarian, O.L. and Ritter, K.},
+  month     = jan,
+  year      = {1970},
+  pages     = {31--65}
+}
+
+@incollection{Powe75,
+  title     = {Convergence properties of a class of minization algorithms},
+  optisbn   = {978-0-12-468650-2},
+  doi       = {10.1016/B978-0-12-468650-2.50005-5},
+  abstract  = {ABSTRACT
+               Many iterative algorithms for minimizing a function F (x) = F (x1, x2, …, xn) require first derivatives of F(x) to be calculated, but they maintain an approximation to the second derivative matrix automatically. In order that the approximation is useful, the change in x made by each iteration is subject to a bound that is also revised automatically. Some convergence theorems for a class of minimization algorithms of this type are presented, which apply to methods proposed by Powell (1970) and by Fletcher (1972). This theory has the following three valuable features which are rather uncommon. There is no need for the starting vector x(1) to be close to the solution. The function F(x) need not be convex. Superlinear convergence is proved even though the second derivative approximations may not converge to the true second derivatives at the solution.},
+  booktitle = {Nonlinear {Programming} 2},
+  publisher = {Academic Press},
+  author    = {Powell, Michael James David},
+  editor    = {Mangasarian, O.L. and Meyer, R.R. and Robinson, S.M.},
+  month     = jan,
+  year      = {1975},
+  pages     = {1--27}
+}
+
+@article{Powe84,
+  title    = {On the global convergence of trust region algorithms for unconstrained minimization},
+  volume   = {29},
+  optissn  = {1436-4646},
+  doi      = {10.1007/BF02591998},
+  abstract = {Many trust region algorithms for unconstrained minimization have excellent global convergence properties if their second derivative approximations are not too large [2]. We consider how large these approximations have to be, if they prevent convergence when the objective function is bounded below and continuously differentiable. Thus we obtain a useful convergence result in the case when there is a bound on the second derivative approximations that depends linearly on the iteration number.},
+  number   = {3},
+  journal  = {Mathematical Programming},
+  author   = {Powell, Michael James David},
+  optmonth    = jul,
+  year     = {1984},
+  pages    = {297--303}
+}
+
+@article{Sart97,
+  title    = {Automatic Determination of an Initial Trust Region in Nonlinear Programming},
+  volume   = {18},
+  doi      = {10.1137/S1064827595286955},
+  abstract = {This paper presents a simple but efficient way to find a good initial trust region radius (ITRR) in trust region methods for nonlinear optimization. The method consists of monitoring the agreement between the model and the objective function along the steepest descent direction, computed at the starting point. Further improvements for the starting point are also derived from the information gleaned during the initializing phase. Numerical results on a large set of problems show the impact the initial trust region radius may have on trust region methods behavior and the usefulness of the proposed strategy.},
+  number   = {6},
+  journal  = {SIAM Journal on Scientific Computing},
+  author   = {Sartenaer, A.},
+  year     = {1997},
+  pages    = {1788--1803}
+}
+
+@article{Sorensen82,
+author = {Sorensen, Danny  C.},
+title = {Newton's Method with a Model Trust Region Modification},
+journal = {SIAM Journal on Numerical Analysis},
+volume = {19},
+number = {2},
+pages = {409-426},
+year = {1982},
+doi = {10.1137/0719026},
+abstract = { A modified Newton method for unconstrained minimization is presented and analyzed. The modification is based upon the model trust region approach. This report contains a thorough analysis of the locally constrained quadratic minimizations that arise as subproblems in the modified Newton iteration. Several promising alternatives are presented for solving these subproblems in ways that overcome certain theoretical difficulties exposed by this analysis. Very strong convergence results are presented concerning the minimization algorithm. In particular, the explicit use of second order information is justified by demonstrating that the iterates converge to a point which satisfies the second order necessary conditions for minimization. With the exception of very pathological cases this occurs whenever the algorithm is applied to problems with continuous second partial derivatives. }
+}
+
+@article{MoreSorensen1983,
+	title = {Computing a {Trust} {Region} {Step}},
+	volume = {4},
+	doi = {10.1137/0904038},
+	abstract = {We propose an algorithm for the problem of minimizing a quadratic function subject to an ellipsoidal constraint and show that this algorithm is guaranteed to produce a nearly optimal solution in a finite number of iterations. We also consider the use of this algorithm in a trust region Newton’s method. In particular, we prove that under reasonable assumptions the sequence generated by Newton’s method has a limit point which satisfies the first and second order necessary conditions for a minimizer of the objective function. Numerical results for GQTPAR, which is a Fortran implementaton of our algorithm, show that GQTPAR is quite successful in a trust region method. In our tests a call to GQTPAR only required 1.6 iterations on the average.},
+	number = {3},
+	journal = {SIAM Journal on Scientific and Statistical Computing},
+	author = {Moré, Jorge J. and Sorensen, D. C.},
+	year = {1983},
+	pages = {553--572},
+}
+
+@article{Stei83,
+  title    = {The {Conjugate} {Gradient} {Method} and {Trust} {Regions} in {Large} {Scale} {Optimization}},
+  volume   = {20},
+  doi      = {10.1137/0720042},
+  abstract = {Algorithms based on trust regions have been shown to be robust methods for unconstrained optimization problems. All existing methods, either based on the dogleg strategy or Hebden-More iterations, require solution of system of linear equations. In large scale optimization this may be prohibitively expensive. It is shown in this paper that an approximate solution of the trust region problem may be found by the preconditioned conjugate gradient method. This may be regarded as a generalized dogleg technique where we asymptotically take the inexact quasi-Newton step. We also show that we have the same convergence properties as existing methods based on the dogleg strategy using an approximate Hessian.},
+  number   = {3},
+  journal  = {{SIAM} Journal on Numerical Analysis},
+  author   = {Steihaug, Trond},
+  year     = {1983},
+  pages    = {626--637}
+}
+
+@article{Toin13,
+  title   = {Nonlinear stepsize control, trust regions and regularizations for unconstrained optimization},
+  volume  = {28},
+  optissn = {1055-6788},
+  doi     = {10.1080/10556788.2011.610458},
+  number  = {1},
+  journal = {Optimization Methods and Software},
+  author  = {Toint, {Ph}ilippe L.},
+  optmonth   = feb,
+  year    = {2013},
+  note    = {Publisher: Taylor \& Francis},
+  pages   = {82--95}
+}
+
+@article{Toin79,
+  title    = {On the {Superlinear} {Convergence} of an {Algorithm} for {Solving} a {Sparse} {Minimization} {Problem}},
+  volume   = {16},
+  doi      = {10.1137/0716076},
+  abstract = {This paper is concerned with the proof of some convergence properties of a newly developed algorithm for unconstrained optimization that takes any sparsity of the second derivative matrix into account. It is shown that the considered algorithm is a member of a class of algorithms studied by Powell. Convergence properties are then obtained as well as a Q superlinear rate of convergence. Convergence of the sequence of quasi-Newton matrices to the Hessian matrix at the optimum is also shown under more restrictive assumptions.},
+  number   = {6},
+  journal  = {SIAM Journal on Numerical Analysis},
+  author   = {Toint, {Ph}ilippe L.},
+  year     = {1979},
+  pages    = {1036--1045}
+}
+
+@article{BirgGardMartSantToin17,
+	title = {Worst-case evaluation complexity for unconstrained nonlinear optimization using high-order regularized models},
+	volume = {163},
+	optissn = {1436-4646},
+	doi = {10.1007/s10107-016-1065-8},
+	abstract = {The worst-case evaluation complexity for smooth (possibly nonconvex) unconstrained optimization is considered. It is shown that, if one is willing to use derivatives of the objective function up to order p (for \$\$p{\textbackslash}ge 1\$\$) and to assume Lipschitz continuity of the p-th derivative, then an \$\${\textbackslash}epsilon \$\$-approximate first-order critical point can be computed in at most \$\$O({\textbackslash}epsilon {\textasciicircum}\{-(p+1)/p\})\$\$evaluations of the problem’s objective function and its derivatives. This generalizes and subsumes results known for \$\$p=1\$\$and \$\$p=2\$\$.},
+	number = {1},
+	journal = {Mathematical Programming},
+	author = {Birgin, E. G. and Gardenghi, J. L. and Martínez, J. M. and Santos, S. A. and Toint, Ph. L.},
+	optmonth = may,
+	year = {2017},
+	pages = {359--368},
+}
+
+@inbook{BoydVandenberghe04,
+author = {Sapatnekar, Sachin S.},
+publisher = {John Wiley \& Sons, Ltd},
+isbn = {9780470050118},
+title = {Convex Optimization},
+booktitle = {Wiley Encyclopedia of Computer Science and Engineering},
+doi = {https://doi.org/10.1002/9780470050118.ecse383},
+year = {2007},
+abstract = {Abstract Several practical problems in computer science and computer engineering may be framed as convex optimization problems. Unlike a general optimization formulation that may be trapped in a local minimum, necessitating hill-climbing methods to crawl out of such a minimum, a convex optimization formulation has the attractive property that any local minimum is guaranteed to be a global minimum. This chapter presents an overview of the theory behind convex optimization and some illustrative examples of representative problems that are convex programs.}
+}
+
+@article{Darzentas84,
+	title = {Problem {Complexity} and {Method} {Efficiency} in {Optimization}},
+	volume = {35},
+	optissn = {1476-9360},
+	doi = {10.1057/jors.1984.92},
+	number = {5},
+	journal = {Journal of the Operational Research Society},
+	author = {Darzentas, John},
+	optmonth = may,
+	year = {1984},
+	pages = {455--455},
+}
+
+@book{SunYuan06,
+    author = {Sun, Wenyu and Yuan, Ya-Xiang},
+    title = {Optimization Theory and Methods: Nonlinear Programming},
+    journal = {Mathematical Programming},
+    series = {Springer Optimization and Its Applications},
+    doi ={10.1007/b106451},
+    publisher = {Springer New York, NY},
+    isbn = {978-0-387-24975-9},
+    issn = {1931-6828}, 
+    edition = {1st},
+    pages = {XII, 687},
+    year = {2006},
+}
+
+@article{Toint88,
+    author = {Toint, {Ph}ilippe L.},
+    title = {Global Convergence of a a of Trust-Region Methods for Nonconvex Minimization in Hilbert Space},
+    journal = {IMA Journal of Numerical Analysis},
+    volume = {8},
+    number = {2},
+    pages = {231--252},
+    year = {1988},
+    optmonth = {04},
+    abstract = {A class of trust-region methods for solving constrained optimization problems in Hilbert space is described. The algorithms of the class use, at every iteration, a local model of the objective, on which very weak conditions are imposed. Global convergence results are then derived for the class without assuming convexity of the objective functional. It is also shown that convergence of the classical projected-gradient method can be viewed as a special case of this theory. An example is finally given that points out some difficulties appearing when using active-set strategies in infinite-dimensional spaces.},
+    optissn = {0272-4979},
+    doi = {10.1093/imanum/8.2.231},
+}
+
+@inproceedings{Toint81,
+  address   = {London, England},
+  title     = {Towards an {Efficient} {Sparsity} {Exploiting} {Newton} {Method} for {Minimization}},
+  abstract  = {The paper surveys some recently proposed algorithms for unconstrained minimization when second derivative of the objective function is sparse. Updating and estimation procedures are considered from the efficiency point of view. Special attention is given to the case where the Hessian has a band structure. A new strategy for the choice of the step is also discussed and some numerical results on a specially designed test function are presented.},
+  booktitle = {Sparse {Matrices} and {Their} {Uses}},
+  publisher = {Academic Press},
+  author    = {Toint, {Ph}ilippe L.},
+  editor    = {Duff, I. S.},
+  year      = {1981},
+  keywords  = {SecondOrder},
+  pages     = {57--88}
+}
+
+@article{YaoXuRoosMaho21,
+  title    = {Inexact {Nonconvex} {Newton}-{Type} {Methods}},
+  volume   = {3},
+  abstract = {The paper aims to extend the theory and application of nonconvex Newton-type methods, namely trust region and cubic regularization, to the settings in which, in addition to the solution of subproblems, the gradient and the Hessian of the objective function are approximated. Using certain conditions on such approximations, the paper establishes optimal worst-case iteration complexities as the exact counterparts. This paper is part of a broader research program on designing, analyzing, and implementing efficient second-order optimization methods for large-scale machine learning applications. The authors were based at UC Berkeley when the idea of the project was conceived. The first two authors were PhD students, the third author was a postdoc, all supervised by the fourth author.},
+  number   = {2},
+  journal  = {INFORMS Journal on Optimization},
+  author   = {Yao, Zhewei and Xu, Peng and Roosta, Fred and Mahoney, Michael W.},
+  year     = {2021},
+  keywords = {StochasticModels},
+  pages    = {154--182}
+}
+
+@article{XuRoosMaho20,
+	title = {Newton-type methods for non-convex optimization under inexact {Hessian} information},
+	volume = {184},
+	optissn = {1436-4646},
+	abstract = {We consider variants of trust-region and adaptive cubic regularization methods for non-convex optimization, in which the Hessian matrix is approximated. Under certain condition on the inexact Hessian, and using approximate solution of the corresponding sub-problems, we provide iteration complexity to achieve \vphantom{\{}\}\vphantom{\{}\}{\textbackslash}backslashvarepsilon \vphantom{\{}\}\vphantom{\{}\}ϵ-approximate second-order optimality which have been shown to be tight. Our Hessian approximation condition offers a range of advantages as compared with the prior works and allows for direct construction of the approximate Hessian with a priori guarantees through various techniques, including randomized sampling methods. In this light, we consider the canonical problem of finite-sum minimization, provide appropriate uniform and non-uniform sub-sampling strategies to construct such Hessian approximations, and obtain optimal iteration complexity for the corresponding sub-sampled trust-region and adaptive cubic regularization methods.},
+	number = {1},
+	journal = {Mathematical Programming},
+	author = {Xu, Peng and Roosta, Fred and Mahoney, Michael W.},
+	year = {2020},
+	pages = {35--70},
+}
+
+@book{Fletcher2000,
+author = {Fletcher, R. },
+title = {Practical Methods of Optimization},
+edition = {2nd},
+year = {2000},
+doi = {10.1002/9781118723203},
+publisher = {John Wiley {\&} Sons, Ltd},
+}
+
+@incollection{Yuan00,
+  title     = {A review of trust region algorithms for optimization},
+  optisbn   = {978-0-19-850514-3},
+  doi       = {10.1093/oso/9780198505143.003.0023},
+  abstract  = {The classical methods for optimization are line search algorithms. Such an algorithm obtains a search direction in each iteration, and searches along this direction to obtain a better point. The search direction is a descent direction, normally computed by solving a subproblem that approximates the original optimization problem near the current iterate. Therefore, unless a stationary point is reached, there always exist better points along the search direction.},
+  booktitle = {{ICIAM99}: {Proceedings} of the {Fourth} {International} {Congress} on {Industrial} \& {Applied} {Mathematics} {Edinburgh}},
+  publisher = {Oxford University Press},
+  author    = {Yuan, Ya-xiang},
+  editor    = {Ball, J M and Hunt, J C R},
+  month     = dec,
+  year      = {2000},
+  pages     = {0}
+}
+
+@incollection{Yuan98,
+  address   = {Boston, MA},
+  title     = {An Example of Non-Convergence of Trust Region Algorithms},
+  optisbn   = {978-1-4613-3335-7},
+  abstract  = {It is well known that trust region algorithms have very nice convergence properties. Descent trust region algorithms can be classified into two groups. The first can be called “sufficient reduction methods” where the condition for accepting a new point is a sufficient reduction in the merit function. The other can be called “simple reduction” methods where they accept a new point as long as it reduces the merit function. In general, it can be shown that the algorithms that require sufficient reductions have strong convergence result, namely all accumulation points are stationary points. Though “simple reduction” methods have the nice property of accepting any better iterates, convegence results for these algorithms are weaker than thoes for “sufficient reduction” methods, as we are only able to show that at least one accumulation point is a stationary point.},
+  booktitle = {Advances in {Nonlinear} {Programming}: {Proceedings} of the 96 {International} {Conference} on {Nonlinear} {Programming}},
+  publisher = {Springer US},
+  author    = {Yuan, Ya-xiang},
+  editor    = {Yuan, Ya-xiang},
+  year      = {1998},
+  doi       = {10.1007/978-1-4613-3335-7\_9},
+  pages     = {205--215}
+}
+
+@article{Yuan15,
+  title    = {Recent advances in trust region algorithms},
+  volume   = {151},
+  optissn  = {1436-4646},
+  abstract = {Trust region methods are a class of numerical methods for optimization. Unlike line search type methods where a line search is carried out in each iteration, trust region methods compute a trial step by solving a trust region subproblem where a model function is minimized within a trust region. Due to the trust region constraint, nonconvex models can be used in trust region subproblems, and trust region algorithms can be applied to nonconvex and ill-conditioned problems. Normally it is easier to establish the global convergence of a trust region algorithm than that of its line search counterpart. In the paper, we review recent results on trust region methods for unconstrained optimization, constrained optimization, nonlinear equations and nonlinear least squares, nonsmooth optimization and optimization without derivatives. Results on trust region subproblems and regularization methods are also discussed.},
+  number   = {1},
+  journal  = {Mathematical Programming},
+  author   = {Yuan, Ya-xiang},
+  year     = {2015},
+  pages    = {249--281}
+}
+
+@article{Yuan2000,
+  title    = {On the truncated conjugate gradient method},
+  volume   = {87},
+  optissn  = {1436-4646},
+  doi      = {10.1007/s101070050012},
+  abstract = {In this paper, we consider the truncated conjugate gradient method for minimizing a convex quadratic function subject to a ball trust region constraint. It is shown that the reduction in the objective function by the solution obtained by the truncated CG method is at least half of the reduction by the global minimizer in the trust region.},
+  number   = {3},
+  journal  = {Mathematical Programming},
+  author   = {Yuan, Y.},
+  optmonth    = may,
+  year     = {2000},
+  pages    = {561--573}
+}
+
+@article{Yuan85,
+  title    = {Conditions for convergence of trust region algorithms for nonsmooth optimization},
+  volume   = {31},
+  optissn  = {1436-4646},
+  doi      = {10.1007/BF02591750},
+  abstract = {This paper discusses some properties of trust region algorithms for nonsmooth optimization. The problem is expressed as the minimization of a functionh(f(x), whereh(·) is convex andf is a continuously differentiable mapping from ℝ″ to ℝ‴. Bounds for the second order derivative approximation matrices are discussed. It is shown that Powel’s [7, 8] results hold for nonsmooth optimization.},
+  number   = {2},
+  journal  = {Mathematical Programming},
+  author   = {Yuan, Ya-xiang},
+  optmonth    = jun,
+  year     = {1985},
+  pages    = {220--228}
+}
+
+@article{ConnGouldToint1991,
+	title = {Convergence of quasi-{Newton} matrices generated by the symmetric rank one update},
+	volume = {50},
+	doi = {10.1007/BF01594934},
+	journal = {Mathematical Programming},
+	author = {Conn, Andrew and Gould, N. and Toint, Ph},
+	year = {1991},
+	pages = {177--195},
+}
+@article{ConnGoulToin91,
+  title    = {Convergence of Quasi-{Newton} Matrices Generated by the Symmetric Rank One Update},
+  author   = {Conn, Andrew R. and Gould, Nicholas I. M. and Toint, Philippe L.},
+  journal  = {Mathematical Programming}, 
+  volume = {50}, 
+  number = {1-3},
+  pages    = {177--195}, 
+  year = {1991}, 
+  doi = {10.1007/BF01594934}
+}
+@article{KhalfanByrdSchnabel93,
+author = {Khalfan, H. Fayez and Byrd, R. H. and Schnabel, R. B.},
+title = {A Theoretical and Experimental Study of the Symmetric Rank-One Update},
+journal = {SIAM Journal on Optimization},
+volume = {3},
+number = {1},
+pages = {1-24},
+year = {1993},
+doi = {10.1137/0803001},
+abstract = { This paper first discusses computational experience using the SRi update in conventional line search and trust region algorithms for unconstrained optimization. The experiments show that the SRi is very competitive with the widely used BFGS method. They also indicate two interesting features: the final Hessian approximations produced by the SRi method are not generally appreciably better than those produced by the BFGS, and the sequences of steps produced by the SRi do not usually seem to have the “uniform linear independence” property that is assumed in recent convergence analysis. This paper presents a new analysis that shows that the SRi method with a line search is \$( n + 1)\$-step q-superlinearly convergent without the assumption of linearly independent iterates. This analysis assumes that the Hessian approximations are positive definite and bounded asymptotically, which, from computational experience, are reasonable assumptions. }
+}
+@inproceedings{YuanFan01,
+  title     = {A new trust region algorithm with trust region radius converging to zero},
+  booktitle = {Proceedings of the 5th {International} {Conference} on {Optimization}: {Techniques} and {Applications}},
+  author    = {Yuan, Ya-xiang and Fan, Jinyan},
+  year      = {2001},
+  pages     = {786--794}
+}
+
+@article{BottCurtNoce18,
+  title    = {Optimization Methods for Large-Scale {M}achine {L}earning},
+  author   = {Bottou, Léon and Curtis, Frank E. and Nocedal, Jorge},
+  year     = 2018,
+  journal  = {SIAM Review},
+  volume   = 60,
+  number   = 2,
+  pages    = {223--311},
+  optissn     = {1095-7200},
+  doi   = {10.1137/16m1080173},
+  keywords = {ML, Review}
+}
+
+@inbook{CurtSchei2017,
+  author    = {Frank E. Curtis and Katya Scheinberg},
+  title     = {Optimization Methods for Supervised Machine Learning: From Linear Models to Deep Learning},
+  booktitle = {Leading Developments from INFORMS Communities},
+  year      = {2017},
+  publisher = {INFORMS},
+  chapter   = {5},
+  pages     = {89--114},
+  doi    = {10.1287/educ.2017.0168},
+  abstract  = { The goal of this tutorial is to introduce key models, algorithms, and open questions related to the use of optimization methods for solving problems arising in machine learning. It is written with an INFORMS audience in mind, specifically those readers who are familiar with the basics of optimization algorithms but less familiar with machine learning. We begin by deriving a formulation of a supervised learning problem and show how it leads to various optimization problems, depending on the context and underlying assumptions. We then discuss some of the distinctive features of these optimization problems, focusing on the examples of logistic regression and the training of deep neural networks. The latter half of the tutorial focuses on optimization algorithms, first for convex logistic regression, for which we discuss the use of first-order methods, the stochastic gradient method, variance reducing stochastic methods, and second-order methods. Secondly, we discuss how these approaches can be employed to the training of deep neural networks, emphasizing the difficulties that arise from the complex, nonconvex structure of these models. }
+}
+
+@article{RobbMonro51,
+  title     = {A Stochastic Approximation Method},
+  author    = {Robbins, Herbert and Monro, Sutton},
+  year      = 1951,
+  journal   = {The Annals of Mathematical Statistics},
+  publisher = {Institute of Mathematical Statistics},
+  volume    = 22,
+  number    = 3,
+  pages     = {400--407},
+  optissn      = {00034851},
+  opturl    = {http://www.jstor.org/stable/2236626},
+  abstract  = {Let {\$}M(x){\$} denote the expected value at level x of the response to a certain experiment. {\$}M(x){\$} is assumed to be a monotone function of x but is unknown to the experimenter, and it is desired to find the solution {\$}x = \theta{\$} of the equation {\$}M(x) = \alpha{\$}, where {\$}\alpha{\$} is a given constant. We give a method for making successive experiments at levels x1,x2,⋯ in such a way that xn will tend to {\$}\theta{\$} in probability.},
+}
+
+@article{Blum_approximation_1954,
+  title   = {Approximation {Methods} which {Converge} with {Probability} one},
+  volume  = {25},
+  optissn    = {00034851},
+  opturl  = {http://www.jstor.org/stable/2236739},
+  number  = {2},
+  journal = {The Annals of Mathematical Statistics},
+  author  = {Blum, Julius R.},
+  year    = {1954},
+  note    = {Publisher: Institute of Mathematical Statistics},
+  pages   = {382--386}
+}
+
+@article{Blum_multidimensional_1954,
+  title    = {Multidimensional {Stochastic} {Approximation} {Methods}},
+  volume   = {25},
+  optissn     = {00034851},
+  opturl   = {http://www.jstor.org/stable/2236657},
+  abstract = {Multidimensional stochastic approximation schemes are presented, and conditions are given for these schemes to converge a.s. (almost surely) to the solutions of k stochastic equations in k unknowns and to the point where a regression function in k variables achieves its maximum.},
+  number   = {4},
+  journal  = {The Annals of Mathematical Statistics},
+  author   = {Blum, Julius R.},
+  year     = {1954},
+  note     = {Publisher: Institute of Mathematical Statistics},
+  pages    = {737--744}
+}
+
+@article{BollByrdNoce18IMA,
+  title     = {Exact and inexact subsampled {N}ewton methods for optimization},
+  author    = {Bollapragada, Raghu and Byrd, Richard H. and Nocedal, Jorge},
+  year      = 2018,
+  journal   = {IMA Journal of Numerical Analysis},
+  publisher = {Oxford University Press (OUP)},
+  volume    = 39,
+  number    = 2,
+  pages     = {545--578},
+  optissn      = {1464-3642},
+  optmonth  = {04},
+  opturl    = {https://academic.oup.com/imajna/article/39/2/545/4959058},
+  abstract  = {The paper studies the solution of stochastic optimization problems in which approximations to the gradient and Hessian are obtained through subsampling. We first consider {N}ewton-like methods that employ these approximations and discuss how to coordinate the accuracy in the gradient and Hessian to yield a superlinear rate of convergence in expectation. The second part of the paper analyzes an inexact {N}ewton method that solves linear systems approximately using the conjugate gradient (CG) method, and that samples the Hessian and not the gradient (the gradient is assumed to be exact). We provide a complexity analysis for this method based on the properties of the CG iteration and the quality of the Hessian approximation, and compare it with a method that employs a stochastic gradient iteration instead of the CG method. We report preliminary numerical results that illustrate the performance of inexact subsampled {N}ewton methods on machine learning applications based on logistic regression.},
+  doi    = {10.1093/imanum/dry009},
+}
+
+@article{BollByrdNoce18SIAM,
+  title     = {Adaptive sampling strategies for stochastic optimization},
+  author    = {Bollapragada, Raghu and Byrd, Richard and Nocedal, Jorge},
+  year      = 2018,
+  journal   = {SIAM Journal on Optimization},
+  publisher = {Society for Industrial & Applied Mathematics (SIAM)},
+  volume    = 28,
+  number    = 4,
+  pages     = {3312--3343},
+  optissn      = {1095-7189},
+  doi    = {10.1137/17m1154679},
+}
+
+@article{Glad1965,
+  author  = {Gladyshev, E. G.},
+  title   = {On Stochastic Approximation},
+  journal = {Theory of Probability \& Its Applications},
+  volume  = {10},
+  number  = {2},
+  pages   = {275-278},
+  year    = {1965},
+  doi     = {10.1137/1110031}
+}
+
+@article{Chung1954,
+  title   = {On a Stochastic Approximation Method},
+  volume  = {25},
+  optissn    = {00034851},
+  opturl  = {http://www.jstor.org/stable/2236830},
+  number  = {3},
+  journal = {The Annals of Mathematical Statistics},
+  author  = {Chung, K. L.},
+  year    = {1954},
+  note    = {Publisher: Institute of Mathematical Statistics},
+  pages   = {463--483}
+}
+
+@book{KushnerYin2003,
+  author    = {Kushner, Harold J. and Yin, G. George},
+  editor    = {2003},
+  publisher = {Springer New York, NY},
+  title     = {Stochastic Approximation and Recursive Algorithms and Applications},
+  series    = {Stochastic Modelling and Applied Probability},
+  year      = {},
+  isbn      = {978-0-387-00894-3},
+  edition   = {2nd},
+  pages     = {XXII, 478},
+  doi    = {https://doi.org/10.1007/b97441}
+}
+
+@article{wolfowitz_stochastic_1952,
+  title   = {On the {Stochastic} {Approximation} {Method} of {Robbins} and {Monro}},
+  volume  = {23},
+  optissn    = {00034851},
+  number  = {3},
+  journal = {The Annals of Mathematical Statistics},
+  author  = {Wolfowitz, J.},
+  year    = {1952},
+  note    = {Publisher: Institute of Mathematical Statistics},
+  pages   = {457--461}
+}
+
+@article{PolyakJuditsky1992,
+  author   = {Polyak, B. T. and Juditsky, A. B.},
+  title    = {Acceleration of Stochastic Approximation by Averaging},
+  journal  = {SIAM Journal on Control and Optimization},
+  volume   = {30},
+  number   = {4},
+  pages    = {838-855},
+  year     = {1992},
+  doi   = {10.1137/0330046},
+  abstract = { A new recursive algorithm of stochastic approximation type with the averaging of trajectories is investigated. Convergence with probability one is proved for a variety of classical optimization and identification problems. It is also demonstrated for these problems that the proposed algorithm achieves the highest possible rate of convergence. }
+}
+
+@article{kiefer_stochastic_1952,
+  title    = {Stochastic {Estimation} of the {Maximum} of a {Regression} {Function}},
+  volume   = {23},
+  optissn     = {00034851},
+  opturl   = {http://www.jstor.org/stable/2236690},
+  abstract = {Let {\$}M(x){\$} be a regression function which has a maximum at the unknown point {\$}\theta{\$}. {\$}M(x){\$} is itself unknown to the statistician who, however, can take observations at any level {\$}x{\$}. This paper gives a scheme whereby, starting from an arbitrary point {\$}x_1{\$}, one obtains successively {\$}x_2, x_3, \cdots {\$} such that {\$}x_n{\$} converges to {\$}\theta{\$} in probability as {\$}n \to \infty{\$}.},
+  number   = {3},
+  journal  = {The Annals of Mathematical Statistics},
+  author   = {Kiefer, J. and Wolfowitz, J.},
+  year     = {1952},
+  note     = {Publisher: Institute of Mathematical Statistics},
+  pages    = {462--466}
+}
+
+@inbook{KimPasuHend15,
+  title     = {A {G}uide to {S}ample {A}verage {A}pproximation},
+  author    = {Kim, Sujin and Pasupathy, Raghu and Henderson, Shane G.},
+  year      = 2015,
+  publisher = {Springer Science},
+  series    = {International Series in Operations Research and Management Science 216},
+  volume    = {Handbook of Simulation Optimization},
+  chapter   = 8,
+  doi    = {10.1007/978-1-4939-1384-8},
+}
+
+@article{KingBa14,
+  title    = {Adam: A Method for Stochastic Optimization},
+  author   = {Kingma, Diederik and Ba, Jimmy},
+  year     = 2014,
+  journal  = {International Conference on Learning Representations},
+  pages    = {},
+  optmonth = 12,
+}
+
+@article{GuoXuYinJinYang2022,
+  title         = {A Novel Convergence Analysis for Algorithms of the Adam Family and Beyond},
+  author        = {Guo, Zhishuai and Xu, Yi and Yin, Wotao and Jin, Rong and Yang, Tianbao},
+  year          = {2022},
+  journal       = {ArXiv preprint: 2104.14840},
+  eprint        = {2104.14840},
+  archiveprefix = {arXiv},
+  primaryclass  = {math.OC},
+  opturl           = {https://arxiv.org/abs/2104.14840}
+}
+
+@article{FrieSchm12,
+  title     = {Hybrid Deterministic-Stochastic Methods for Data Fitting},
+  author    = {Friedlander, Michael P. and Schmidt, Mark},
+  year      = 2012,
+  journal   = {SIAM Journal on Scientific Computing},
+  publisher = {Society for Industrial and Applied Mathematics},
+  volume    = 34,
+  number    = 3,
+  pages     = {A1380--A1405},
+  optissn      = {1064-8275},
+  opturl    = {https://doi.org/10.1137/110830629},
+  optday    = {01},
+  doi    = {10.1137/110830629},
+  keywords  = {Sampling}
+}
+
+@article{FanPanHong16,
+	title = {A retrospective trust region algorithm with trust region converging to zero},
+	volume = {34},
+	optissn = {0254-9409},
+	doi = {10.4208/jcm.1601-m2015-0399},
+	number = {4},
+	journal = {Journal of Computational Mathematics},
+	author = {Fan, Jinyan and Pan, Jianyu and Hongyan, Song},
+	optmonth = jul,
+	year = {2016},
+	pages = {421--436},
+}
+
+@article{Ekeland74,
+title = {On the variational principle},
+journal = {Journal of Mathematical Analysis and Applications},
+volume = {47},
+number = {2},
+pages = {324--353},
+year = {1974},
+optissn = {0022-247X},
+doi = {10.1016/0022-247X(74)90025-0},
+author = {I. Ekeland},
+abstract = {The variational principle states that if a differentiable functional F attains its minimum at some point ū, then F′(ū) = 0; it has proved a valuable tool for studying partial differential equations. This paper shows that if a differentiable function F has a finite lower bound (although it need not attain it), then, for every ϵ > 0, there exists some point uϵ, where ∥F′(uϵ)∥∗ ⩽ ϵ, i.e., its derivative can be made arbitrarily small. Applications are given to Plateau's problem, to partial differential equations, to nonlinear eigenvalues, to geodesics on infinite-dimensional manifolds, and to control theory.}
+}
+
+@article{BastMalmMoufToinToma10,
+	title = {A retrospective trust-region method for unconstrained optimization},
+	volume = {123},
+	optissn = {1436-4646},
+	doi = {10.1007/s10107-008-0258-1},
+	abstract = {We introduce a new trust-region method for unconstrained optimization where the radius update is computed using the model information at the current iterate rather than at the preceding one. The update is then performed according to how well the current model retrospectively predicts the value of the objective function at last iterate. Global convergence to first- and second-order critical points is proved under classical assumptions and preliminary numerical experiments on CUTEr problems indicate that the new method is very competitive.},
+	number = {2},
+	journal = {Mathematical Programming},
+	author = {Bastin, Fabian and Malmedy, Vincent and Mouffe, Mélodie and Toint, Philippe L. and Tomanos, Dimitri},
+	optmonth = jun,
+	year = {2010},
+	pages = {395--418},
+}
+
+@article{BastCiriToin06,
+  title    = {Convergence theory for nonconvex stochastic programming with an application to mixed logit},
+  author   = {Bastin, Fabian and Cirillo, Cinzia and Toint, Philippe L.},
+  year     = 2006,
+  journal  = {Mathematical Programming},
+  volume   = 108,
+  number   = 2,
+  pages    = {207--234},
+  optissn     = {1436-4646},
+  opturl   = {https://doi.org/10.1007/s10107-006-0708-6},
+  abstract = {Monte Carlo methods have extensively been used and studied in the area of stochastic programming. Their convergence properties typically consider global minimizers or first-order critical points of the sample average approximation (SAA) problems and minimizers of the true problem, and show that the former converge to the latter for increasing sample size. However, the assumption of global minimization essentially restricts the scope of these results to convex problems. We review and extend these results in two directions: we allow for local SAA minimizers of possibly nonconvex problems and prove, under suitable conditions, almost sure convergence of local second-order solutions of the SAA problem to second-order critical points of the true problem. We also apply this new theory to the estimation of mixed logit models for discrete choice analysis. New useful convergence properties are derived in this context, both for the constrained and unconstrained cases, and associated estimates of the simulation bias and variance are proposed.},
+  doi   = {10.1007/s10107-006-0708-6},
+}
+
+@article{BastCiriToin06CMS,
+  title    = {An adaptive {M}onte {C}arlo algorithm for computing mixed logit estimators},
+  author   = {Bastin, Fabian and Cirillo, Cinzia and Toint, Philippe L.},
+  year     = 2006,
+  journal  = {Computational Management Science},
+  volume   = 3,
+  number   = 1,
+  pages    = {55--79},
+  optissn     = {1619-6988},
+  opturl   = {https://doi.org/10.1007/s10287-005-0044-y},
+  abstract = {Researchers and analysts are increasingly using mixed logit models for estimating responses to forecast demand and to determine the factors that affect individual choices. However the numerical cost associated to their evaluation can be prohibitive, the inherent probability choices being represented by multidimensional integrals. This cost remains high even if Monte Carlo or quasi-Monte Carlo techniques are used to estimate those integrals. This paper describes a new algorithm that uses Monte Carlo approximations in the context of modern trust-region techniques, but also exploits accuracy and bias estimators to considerably increase its computational efficiency. Numerical experiments underline the importance of the choice of an appropriate optimisation technique and indicate that the proposed algorithm allows substantial gains in time while delivering more information to the practitioner.},
+  optday   = {01},
+  doi   = {10.1007/s10287-005-0044-y},
+  keywords = {Sampling}
+}
+
+@article{BastCiriToin06Transportation,
+  title    = {Application of an adaptive Monte Carlo algorithm to mixed logit estimation},
+  author   = {Bastin, Fabian and Cirillo, Cinzia and Toint, Philippe L.},
+  year     = 2006,
+  journal  = {Transportation Research Part B},
+  volume   = 40,
+  number   = 7,
+  pages    = {577--593},
+  optissn     = {0191-2615},
+  doi   = {https://doi.org/10.1016/j.trb.2005.09.002},
+  opturl   = {http://www.sciencedirect.com/science/article/pii/S0191261505001025},
+  keywords = {Discrete choice, Mixed logit model, Trust-region methods, Adaptive Monte Carlo samplings},
+  abstract = {This paper presents the application of a new algorithm for maximizing the simulated likelihood functions appearing in the estimation of mixed multinomial logit (MMNL) models. The method uses Monte Carlo sampling to produce the approximate likelihood function and dynamically adapts the number of draws on the basis of statistical estimators of the simulation error and simulation bias. Its convergence from distant starting points is ensured by a trust-region technique, in which improvement is ensured by locally maximizing a quadratic model of the objective function. Simulated data are first used to assess the quality of the results obtained and the relative performance of several algorithmic variants. These variants involve, in particular, different techniques for approximating the model's Hessian and the substitution of the trust-region mechanism by a linesearch. The algorithm is also applied to a real case study arising in the context of a recent Belgian transportation model. The performance of the new Monte Carlo algorithm is shown to be competitive with that of existing tools using low discrepancy sequences.},
+  keywords = {Sampling}
+}
+
+@article{BellaKrejKrkl19,
+  title    = {Subsampled inexact {N}ewton methods for minimizing large sums of convex functions},
+  author   = {Bellavia, Stefania and Kreji\'{c}, Nata\v{s}a and Krklec Jerinki\'{c}, Nata\v{s}a},
+  year     = 2019,
+  journal  = {IMA Journal of Numerical Analysis},
+  volume   = 40,
+  number   = 4,
+  pages    = {2309--2341},
+  optissn     = {0272-4979},
+  opturl   = {https://doi.org/10.1093/imanum/drz027},
+  abstract = {This paper deals with the minimization of a large sum of convex functions by inexact {N}ewton (IN) methods employing subsampled functions, gradients and Hessian approximations. The conjugate gradient method is used to compute the IN step and global convergence is enforced by a nonmonotone line-search procedure. The aim is to obtain methods with affordable costs and fast convergence. Assuming strongly convex functions, R-linear convergence and worst-case iteration complexity of the procedure are investigated when functions and gradients are approximated with increasing accuracy. A set of rules for the forcing parameters and subsample Hessian sizes are derived that ensure local q-linear/q-superlinear convergence of the proposed method. The random choice of the Hessian subsample is also considered and convergence in the mean square, both for finite and infinite sums of functions, is proved. Finally, the analysis of global convergence with asymptotic R-linear rate is extended to the case of the sum of convex functions and strongly convex objective function. Numerical results on well-known binary classification problems are also given. Adaptive strategies for selecting forcing terms and Hessian subsample size, streaming out of the theoretical analysis, are employed and the numerical results show that they yield effective IN methods.},
+  doi   = {10.1093/imanum/drz027},
+  eprint   = {https://academic.oup.com/imajna/article-pdf/40/4/2309/33977025/drz027.pdf},
+  keywords = {SubSampling}
+}
+
+@article{BellaviaGurioliMoriniToint2022,
+  title    = {Trust-region algorithms: Probabilistic complexity and intrinsic noise with applications to subsampling techniques},
+  author   = {Bellavia, Stephania and Gurioli, Gianmarco and Morini, Benedetta and Toint, {Ph}ilippe L.},
+  journal  = {{EURO} Journal on Computational Optimization},
+  volume   = {10},
+  pages    = {100043},
+  year     = {2022},
+  optissn     = {2192--4406},
+  doi      = {https://doi.org/10.1016/j.ejco.2022.100043},
+  keywords = {Evaluation complexity, Trust-region methods, Inexact functions and derivatives, Probabilistic analysis, Finite-sum optimization, Subsampling methods},
+  abstract = {A trust-region algorithm is presented for finding approximate minimizers of smooth unconstrained functions whose values and derivatives are subject to random noise. It is shown that, under suitable probabilistic assumptions, the new method finds (in expectation) an ϵ-approximate minimizer of arbitrary order q≥1 in at most O(ϵ−(q+1)) inexact evaluations of the function and its derivatives, providing the first such result for general optimality orders. The impact of intrinsic noise limiting the validity of the assumptions is also discussed and it is shown that difficulties are unlikely to occur in the first-order version of the algorithm for sufficiently large gradients. Conversely, should these assumptions fail for specific realizations, then “degraded” optimality guarantees are shown to hold when failure occurs. These conclusions are then discussed and illustrated in the context of subsampling methods for finite-sum optimization.}
+}
+
+@article{BellaviaKrejicMoriniRebegoldi2023,
+  title    = {A stochastic first-order trust-region method with inexact restoration for finite-sum minimization},
+  author   = {Bellavia, Stefania and Kreji{\'c}, Nata{\v s}a and Morini, Benedetta and Rebegoldi, Simone},
+  abstract = {We propose a stochastic first-order trust-region method with
+              inexact function and gradient evaluations for solving finite-sum
+              minimization problems. Using a suitable reformulation of the
+              given problem, our method combines the inexact restoration
+              approach for constrained optimization with the trust-region
+              procedure and random models. Differently from other recent
+              stochastic trust-region schemes, our proposed algorithm improves
+              feasibility and optimality in a modular way. We provide the
+              expected number of iterations for reaching a near-stationary
+              point by imposing some probability accuracy requirements on
+              random functions and gradients which are, in general, less
+              stringent than the corresponding ones in literature. We validate
+              the proposed algorithm on some nonconvex optimization problems
+              arising in binary classification and regression, showing that it
+              performs well in terms of cost and accuracy, and allows to reduce
+              the burdensome tuning of the hyper-parameters involved.},
+  journal  = {Computational Optimization and Applications},
+  volume   = {84},
+  number   = {1},
+  pages    = {53--84},
+  year     = {2023}
+}
+
+@article{BellaviaMoriniRebegoldi2023,
+  author         = {Bellavia, Stefania and Morini, Benedetta and Rebegoldi, Simone},
+  title          = {On the Convergence Properties of a Stochastic Trust-Region Method with Inexact Restoration},
+  journal        = {Axioms},
+  volume         = {12},
+  year           = {2023},
+  number         = {1},
+  article-number = {38},
+  opturl            = {https://www.mdpi.com/2075-1680/12/1/38},
+  optissn           = {2075-1680},
+  abstract       = {We study the convergence properties of SIRTR, a stochastic inexact restoration trust-region method suited for the minimization of a finite sum of continuously differentiable functions. This method combines the trust-region methodology with random function and gradient estimates formed by subsampling. Unlike other existing schemes, it forces the decrease of a merit function by combining the function approximation with an infeasibility term, the latter of which measures the distance of the current sample size from its maximum value. In a previous work, the expected iteration complexity to satisfy an approximate first-order optimality condition was given. Here, we elaborate on the convergence analysis of SIRTR and prove its convergence in probability under suitable accuracy requirements on random function and gradient estimates. Furthermore, we report the numerical results obtained on some nonconvex classification test problems, discussing the impact of the probabilistic requirements on the selection of the sample sizes.},
+  doi            = {10.3390/axioms12010038}
+}
+
+@article{BellaviaMoriniRebegoldi2024,
+	title = {An investigation of stochastic trust-region based algorithms for finite-sum minimization},
+	volume = {39},
+	optissn = {1055-6788},
+	opturl = {https://doi.org/10.1080/10556788.2024.2346834},
+	doi = {10.1080/10556788.2024.2346834},
+	number = {5},
+	journal = {Optimization Methods and Software},
+	author = {Bellavia, Stefania and Morini, Benedetta and Rebegoldi, Simone},
+	optmonth = sep,
+	year = {2024},
+	note = {Publisher: Taylor \& Francis},
+	pages = {937--966},
+}
+
+@article{BellKrejMori20,
+  title    = {Inexact restoration with subsampled trust-region methods for finite-sum minimization},
+  author   = {Bellavia, Stefania and Kreji\'{c}, Nata\v{s}a and Morini, Benedetta},
+  year     = 2020,
+  journal  = {Computational Optimization and Applications},
+  volume   = 76,
+  number   = 3,
+  pages    = {701--736},
+  optissn     = {1573-2894},
+  opturl   = {https://doi.org/10.1007/s10589-020-00196-w},
+  abstract = {Convex and nonconvex finite-sum minimization arises in many scientific computing and machine learning applications. Recently, first-order and second-order methods where objective functions, gradients and Hessians are approximated by randomly sampling components of the sum have received great attention. We propose a new trust-region method which employs suitable approximations of the objective function, gradient and Hessian built via random subsampling techniques. The choice of the sample size is deterministic and ruled by the inexact restoration approach. We discuss local and global properties for finding approximate first- and second-order optimal points and function evaluation complexity results. Numerical experience shows that the new procedure is more efficient, in terms of overall computational cost, than the standard trust-region scheme with subsampled Hessians.},
+  doi   = {10.1007/s10589-020-00196-w},
+  keywords = {Sampling}
+}
+
+@article{BeraBollNoce20,
+  title     = {An investigation of {N}ewton-{S}ketch and subsampled {N}ewton methods},
+  author    = {Berahas, Albert S. and Bollapragada, Raghu and Nocedal, Jorge},
+  year      = 2020,
+  journal   = {Optimization Methods and Software},
+  publisher = {Informa UK Limited},
+  pages     = {1--20},
+  optissn      = {1029-4937},
+  abstract  = {Sketching, a dimensionality reduction technique, has received much attention in the statistics community. In this paper, we study sketching in the context of {N}ewton's method for solving finite-sum optimization problems in which the number of variables and data points are both large. We study two forms of sketching that perform dimensionality reduction in data space: Hessian subsampling and randomized {H}adamard transformations. Each has its own advantages, and their relative tradeoffs have not been investigated in the optimization literature. Our study focuses on practical versions of the two methods in which the resulting linear systems of equations are solved approximately, at every iteration, using an iterative solver. The advantages of using the conjugate gradient method vs. a stochastic gradient iteration are revealed through a set of numerical experiments, and a complexity analysis of the Hessian subsampling method is presented.},
+  doi    = {10.1080/10556788.2020.1725751},
+  keywords  = {SubSampling}
+}
+
+@article{ByrdChinNeveNoce11,
+  title    = {On the use of stochastic {H}essian information in optimization methods for {M}achine {L}earning},
+  author   = {Byrd, Richard H. and Chin, Gillian M. and Neveitt, Will and Nocedal, Jorge},
+  year     = 2011,
+  journal  = {SIAM Journal on Optimization},
+  volume   = 10,
+  number   = 3,
+  pages    = {977--995},
+  abstract = {This paper describes how to incorporate sampled curvature information in a {N}ewton-CG method and in a limited memory quasi-{N}ewton method for statistical learning. The motivation for this work stems from supervised machine learning applications involving a very large number of training points. We follow a batch approach, also known in the stochastic optimization literature as a sample average approximation approach. Curvature information is incorporated in two subsampled Hessian algorithms, one based on a matrix-free inexact {N}ewton iteration and one on a preconditioned limited memory BFGS iteration. A crucial feature of our technique is that Hessian-vector multiplications are carried out with a significantly smaller sample size than is used for the function and gradient. The efficiency of the proposed methods is illustrated using a machine learning application involving speech recognition.},
+  doi   = {10.1137/10079923X},
+  keywords = {SecondOrder, ML, Newton}
+}
+
+@article{ByrdChinNoceWu12,
+  title    = {Sample size selection in optimization methods for {M}achine {L}earning},
+  author   = {Byrd, Richard H. and Chin, Gillian M. and Nocedal, Jorge and Wu, Yuchen},
+  year     = 2012,
+  journal  = {Mathematical Programming},
+  volume   = 134,
+  number   = 1,
+  pages    = {127--155},
+  optissn     = {1436-4646},
+  abstract = {This paper presents a methodology for using varying sample sizes in batch-type optimization methods for large-scale machine learning problems. The first part of the paper deals with the delicate issue of dynamic sample selection in the evaluation of the function and gradient. We propose a criterion for increasing the sample size based on variance estimates obtained during the computation of a batch gradient. We establish an {\$}{\$}{\{}O(1/{\backslash}epsilon){\}}{\$}{\$}complexity bound on the total cost of a gradient method. The second part of the paper describes a practical {N}ewton method that uses a smaller sample to compute Hessian vector-products than to evaluate the function and the gradient, and that also employs a dynamic sampling technique. The focus of the paper shifts in the third part of the paper to L1-regularized problems designed to produce sparse solutions. We propose a {N}ewton-like method that consists of two phases: a (minimalistic) gradient projection phase that identifies zero variables, and subspace phase that applies a subsampled Hessian {N}ewton iteration in the free variables. Numerical tests on speech recognition problems illustrate the performance of the algorithms.},
+  optday   = {01},
+  doi   = {10.1007/s10107-012-0572-5},
+  keywords = {Sampling, SubSampling, ML}
+}
+
+@article{CaoBerahasScheinberg2023,
+  title = {First- and second-order high probability complexity bounds for trust-region methods with noisy oracles},
+	volume = {207},
+	optissn = {1436-4646},
+	opturl = {https://doi.org/10.1007/s10107-023-01999-5},
+	doi = {10.1007/s10107-023-01999-5},
+	abstract = {In this paper, we present convergence guarantees for a modified trust-region method designed for minimizing objective functions whose value and gradient and Hessian estimates are computed with noise. These estimates are produced by generic stochastic oracles, which are not assumed to be unbiased or consistent. We introduce these oracles and show that they are more general and have more relaxed assumptions than the stochastic oracles used in prior literature on stochastic trust-region methods. Our method utilizes a relaxed step acceptance criterion and a cautious trust-region radius updating strategy which allows us to derive exponentially decaying tail bounds on the iteration complexity for convergence to points that satisfy approximate first- and second-order optimality conditions. Finally, we present two sets of numerical results. We first explore the tightness of our theoretical results on an example with adversarial zeroth- and first-order oracles. We then investigate the performance of the modified trust-region algorithm on standard noisy derivative-free optimization problems.},
+	number = {1},
+	journal = {Mathematical Programming},
+	author = {Cao, Liyuan and Berahas, Albert S. and Scheinberg, Katya},
+	optmonth = sep,
+	year = {2024},
+	pages = {55--106},
+}
+
+@book{ShapRusz03,
+  title     = {Stochastic programming},
+  year      = 2003,
+  publisher = {Elsevier},
+  address   = {Amsterdam Boston},
+  series    = {Handbooks in Operations Research and Management Science},
+  volume    = 10,
+  isbn      = 9780444508546,
+  editor    = {Shapiro, Alexander and Ruszczy\'nski, Andrzej},
+  keywords  = {SAA}
+}
+
+@article{ShapiroHomem2000,
+  author    = {Shapiro, Alexander and Homem-de-Mello, Tito},
+  title     = {On the Rate of Convergence of Optimal Solutions of Monte Carlo Approximations of Stochastic Programs},
+  journal   = {SIAM Journal on Optimization},
+  volume    = {11},
+  number    = {1},
+  pages     = {70-86},
+  year      = {2000},
+  doi    = {10.1137/S1052623498349541},
+  publisher = {Society for Industrial and Applied Mathematics},
+  abstract  = { In this paper we discuss Monte Carlo simulation based approximations of astochastic programming problem. We show that if the corresponding random functions are convex piecewise linear and the distribution is discrete, then an optimal solution of the approximating problem provides an exact optimal solution of the true problem with probability one for sufficiently large sample size. Moreover, by using the theory of large deviations, we show that the probability of such an event approaches one exponentially fast with increase of the sample size. In particular, this happens in the case of linear two- (or multi-) stage stochastic programming with recourse if the corresponding distributions are discrete. The obtained results suggest that, in such cases, Monte Carlo simulation based methods could be very efficient. We present some numerical examples to illustrate the ideas involved. }
+}
+
+@article{ShapiroHomem2002,
+  title    = {Conditioning of convex piecewise linear stochastic programs},
+  volume   = {94},
+  optissn     = {1436-4646},
+  opturl   = {https://doi.org/10.1007/s10107-002-0313-2},
+  doi   = {10.1007/s10107-002-0313-2},
+  abstract = {In this paper we consider stochastic programming problems where the objective function is given as an expected value of a convex piecewise linear random function. With an optimal solution of such a problem we associate a condition number which characterizes well or ill conditioning of the problem. Using theory of Large Deviations we show that the sample size needed to calculate the optimal solution of such problem with a given probability is approximately proportional to the condition number.},
+  number   = {1},
+  journal  = {Mathematical Programming},
+  author   = {Shapiro, Alexander and Homem-de-Mello, Tito and Kim, Joocheol},
+  optmonth    = dec,
+  year     = {2002},
+  pages    = {1--19}
+}
+
+@inproceedings{HashGhosPasu14,
+  title     = {On adaptive sampling rules for stochastic recursions},
+  author    = {Hashemi, Fatemeh S. and Ghosh, Soumyadip and Pasupathy, Raghu},
+  year      = 2014,
+  booktitle = {Proceedings of the 2014 Winter Simulation Conference},
+  publisher = {IEEE},
+  address   = {Piscataway, NJ},
+  editor    = {A. Tolk and S. Y. Diallo and I. O. Ryzhov and L. Yilmaz and S. Buckley and J. A. Miller},
+  abstract  = {We consider the problem of finding a zero of an unknown function, or optimizing an unknown function, with only a stochastic simulation that outputs noise-corrupted observations. A convenient paradigm to solve such problems takes a deterministic recursion, e.g., {N}ewton-type or trust-region, and replaces function values and derivatives appearing in the recursion with their sampled counterparts. While such a paradigm is convenient, there is as yet no clear guidance on how much simulation effort should be expended as the resulting recursion evolves through the search space. In this paper, we take the first steps towards answering this question. We propose using a fully sequential Monte Carlo sampling method to adaptively decide how much to sample at each point visited by the stochastic recursion. The termination criterion for such sampling is based on a certain relative width confidence interval constructed to ensure that the resulting iterates are consistent, and efficient in a rigorous (Monte Carlo canonical) sense. The methods presented here are adaptive in the sense that they learn to sample according to the algorithm trajectory. In this sense, our methods should be seen as refining recent methods in a similar context that use a predetermined sequence of sample sizes.},
+  doi    = {10.1109/WSC.2014.7020221},
+  keywords  = {Sampling}
+}
+
+@inproceedings{PasuSchm10,
+  title     = {Root finding via DARTS - Dynamic Adaptive Random Target Shooting},
+  author    = {Pasupathy, Raghu and Schmeiser, Bruce W.},
+  year      = 2010,
+  booktitle = {Proceedings of the 2010 Winter Simulation Conference},
+  pages     = {1255--1262},
+  doi    = {10.1109/WSC.2010.5679065},
+  keywords  = {Sampling}
+}
+
+@article{Pasu10,
+author = {Pasupathy, Raghu},
+title = {On Choosing Parameters in Retrospective-Approximation Algorithms for Stochastic Root Finding and Simulation Optimization},
+journal = {Operations Research},
+volume = {58},
+number = {4-part-1},
+pages = {889-901},
+year = {2010},
+doi = {10.1287/opre.1090.0773},
+opturl = {https://doi.org/10.1287/opre.1090.0773},
+abstract = { The stochastic root-finding problem is that of finding a zero of a vector-valued function known only through a stochastic simulation. The simulation-optimization problem is that of locating a real-valued function's minimum, again with only a stochastic simulation that generates function estimates. Retrospective approximation (RA) is a sample-path technique for solving such problems, where the solution to the underlying problem is approached via solutions to a sequence of approximate deterministic problems, each of which is generated using a specified sample size, and solved to a specified error tolerance. Our primary focus, in this paper, is providing guidance on choosing the sequence of sample sizes and error tolerances in RA algorithms. We first present an overview of the conditions that guarantee the correct convergence of RA's iterates. Then we characterize a class of error-tolerance and sample-size sequences that are superior to others in a certain precisely defined sense. We also identify and recommend members of this class and provide a numerical example illustrating the key results. }
+}
+
+@article{PasuGlynGhosHash18,
+  title    = {On Sampling Rates in Simulation-Based Recursions},
+  author   = {Pasupathy, Raghu and Glynn, Peter and Ghosh, Soumyadip and Hashemi, Fatemeh S.},
+  year     = 2018,
+  journal  = {{SIAM} {J}ournal on {O}ptimization},
+  volume   = 28,
+  number   = 1,
+  pages    = {45--73},
+  abstract = {We consider the context of "simulation-based recursions", that is, recursions that involve quantities needing to be estimated using a stochastic simulation. Examples include stochastic adaptations of fixed-point and gradient descent recursions obtained by replacing function and derivative values appearing within the recursion by their Monte Carlo counterparts. The primary motivating settings are simulation optimization and stochastic root finding problems, where the low point and the zero of a function are sought, respectively, with only Monte Carlo estimates of the functions appearing within the problem. We ask how much Monte Carlo sampling needs to be performed within simulation-based recursions in order that the resulting iterates remain consistent and, more importantly, efficient, where “efficient” implies convergence at the fastest possible rate. Answering these questions involves trading off two types of error inherent in the iterates: the deterministic error due to recursion and the “stochastic” error due to sampling. As we demonstrate through a characterization of the relationship between sample sizing and convergence rates, efficiency and consistency are intimately coupled with the speed of the underlying recursion, with faster recursions yielding a wider regime of “optimal” sampling rates. The implications of our results for practical implementation are immediate since they provide specific guidance on optimal simulation expenditure within a variety of stochastic recursions.},
+  doi   = {10.1137/140951679},
+  opturl   = {https://doi.org/10.1137/140951679},
+  keywords = {Sampling}
+}
+
+@article{PasuKim11,
+  title    = {The stochastic root-finding problem: overview, solutions, and open questions},
+  author   = {Pasupathy , Raghu and Kim , Sujin},
+  year     = 2011,
+  journal  = {ACM TOMACS},
+  volume   = 21,
+  number   = 3,
+  abstract = {The stochastic root-finding problem (SRFP) is that of finding the zero(s) of a vector function, that is, solving a nonlinear system of equations when the function is expressed implicitly through a stochastic simulation. SRFPs are equivalently expressed as stochastic fixed-point problems, where the underlying function is expressed implicitly via a noisy simulation. After motivating SRFPs using a few examples, we review available methods to solve such problems on constrained Euclidean spaces. We present the current literature as three broad categories, and detail the basic theoretical results that are currently known in each of the categories. With a view towards helping the practitioner, we discuss specific variations in their implementable form, and provide references to computer code when easily available. Finally, we list a few questions that are worthwhile research pursuits from the standpoint of advancing our knowledge of the theoretical underpinnings and the implementation aspects of solutions to SRFPs.},
+  article  = 19,
+  doi   = {10.1145/1921598.1921603},
+  pages = 23
+}
+
+@article{XuRoosMaho20MP,
+  title    = {{N}ewton-type methods for non-convex optimization under inexact {H}essian information},
+  author   = {Xu, Peng and Roosta, Fred and Mahoney, Michael W.},
+  year     = 2020,
+  journal  = {Mathematical Programming},
+  volume   = 184,
+  number   = 1,
+  pages    = {35--70},
+  optissn     = {1436-4646},
+  abstract = {We consider variants of trust-region and adaptive cubic regularization methods for non-convex optimization, in which the Hessian matrix is approximated. Under certain condition on the inexact Hessian, and using approximate solution of the corresponding sub-problems, we provide iteration complexity to achieve {\$}{\$}{\backslash}varepsilon {\$}{\$}$\epsilon$-approximate second-order optimality which have been shown to be tight. Our Hessian approximation condition offers a range of advantages as compared with the prior works and allows for direct construction of the approximate Hessian with a priori guarantees through various techniques, including randomized sampling methods. In this light, we consider the canonical problem of finite-sum minimization, provide appropriate uniform and non-uniform sub-sampling strategies to construct such Hessian approximations, and obtain optimal iteration complexity for the corresponding sub-sampled trust-region and adaptive cubic regularization methods.},
+  doi   = {10.1007/s10107-019-01405-z},
+  keywords = {SubSampling}
+}
+
+@inbook{XuRoosMaho20SIAM,
+  title     = {Second-order {O}ptimization for {N}on-convex {M}achine {L}earning: an {E}mpirical {S}tudy},
+  author    = {Xu, Pengand and Roosta, Fredand and Mahoney, Michael W.},
+  year      = 2020,
+  publisher = {SIAM},
+  series    = {Proceedings of the 2020 SIAM International Conference on Data Mining (SDM)},
+  pages     = {199--207},
+  doi    = {10.1137/1.9781611976236.23},
+  opturl    = {https://doi.org/10.1137/1.9781611976236.23},
+  keywords  = {SecondOrder}
+}
+
+@incollection{XuYangRoosFardReMahoMich16,
+  title     = {Sub-sampled {N}ewton Methods with Non-uniform Sampling},
+  author    = {Xu, Peng and Yang, Jiyan and Roosta, Fred and R\'{e}, Christopher and Mahoney, Michael W},
+  year      = 2016,
+  booktitle = {Advances in Neural Information Processing Systems 29},
+  publisher = {Curran Associates, Inc.},
+  pages     = {3000--3008},
+  editor    = {D. D. Lee and M. Sugiyama and U. V. Luxburg and I. Guyon and R. Garnett},
+  opturl    = {http://papers.nips.cc/paper/6037-sub-sampled-newton-methods-with-non-uniform-sampling.pdf},
+  keywords  = {SubSampling}
+}
+
+@article{YaoXuRoostaMahoney2021,
+  author   = {Yao, Zhewei and Xu, Peng and Roosta, Fred and Mahoney, Michael W.},
+  title    = {Inexact Nonconvex {N}ewton-Type Methods},
+  journal  = {INFORMS Journal on Optimization},
+  volume   = {3},
+  number   = {2},
+  pages    = {154--182},
+  year     = {2021},
+  doi      = {10.1287/ijoo.2019.0043},
+  abstract = { The paper aims to extend the theory and application of nonconvex {N}ewton-type methods, namely trust region and cubic regularization, to the settings in which, in addition to the solution of subproblems, the gradient and the Hessian of the objective function are approximated. Using certain conditions on such approximations, the paper establishes optimal worst-case iteration complexities as the exact counterparts. This paper is part of a broader research program on designing, analyzing, and implementing efficient second-order optimization methods for large-scale machine learning applications. The authors were based at UC Berkeley when the idea of the project was conceived. The first two authors were PhD students, the third author was a postdoc, all supervised by the fourth author. }
+}
+
+@article{RoosMaho19,
+  title    = {Sub-sampled {N}ewton methods},
+  author   = {Roosta-Khorasani, Farbod and Mahoney, Michael W.},
+  year     = 2019,
+  journal  = {Mathematical Programming},
+  volume   = 174,
+  number   = 1,
+  pages    = {293--326},
+  optissn     = {1436-4646},
+  abstract = {For large-scale finite-sum minimization problems, we study non-asymptotic and high-probability global as well as local convergence properties of variants of {N}ewton's method where the Hessian and/or gradients are randomly sub-sampled. For Hessian sub-sampling, using random matrix concentration inequalities, one can sub-sample in a way that second-order information, i.e., curvature, is suitably preserved. For gradient sub-sampling, approximate matrix multiplication results from randomized numerical linear algebra provide a way to construct the sub-sampled gradient which contains as much of the first-order information as possible. While sample sizes all depend on problem specific constants, e.g., condition number, we demonstrate that local convergence rates are problem-independent.},
+  optday   = {01},
+  doi   = {10.1007/s10107-018-1346-5},
+  keywords = {SubSampling}
+}
+
+@article{DengFerr09,
+  title    = {Variable-{N}umber {S}ample-{P}ath {O}ptimization},
+  author   = {Deng, Geng and Ferris, Michael},
+  year     = 2009,
+  journal  = {Mathematical Programming},
+  volume   = 117,
+  number   = 1,
+  pages    = {81--109},
+  optissn     = {1436-4646},
+  optmonth = {03},
+  abstract = {The sample-path method is one of the most important tools in simulation-based optimization. The basic idea of the method is to approximate the expected simulation output by the average of sample observations with a common random number sequence. In this paper, we describe a new variant of Powell's unconstrained optimization by quadratic approximation (UOBYQA) method, which integrates a Bayesian variable-number sample-path (VNSP) scheme to choose appropriate number of samples at each iteration. The statistically accurate scheme determines the number of simulation runs, and guarantees the global convergence of the algorithm. The VNSP scheme saves a significant amount of simulation operations compared to general purpose "fixed-number" sample-path methods. We present numerical results based on the new algorithm.},
+  doi   = {10.1007/s10107-007-0164-y},
+  keywords = {Sampling}
+}
+
+@article{Roys09,
+  title    = {On Sample Size Control in Sample Average Approximations for Solving Smooth Stochastic Programs},
+  author   = {Royset, Johannes O.},
+  year     = 2013,
+  journal  = {Computational Optimization and Applications},
+  volume   = 55,
+  pages    = {265--309},
+  doi   = {10.1007/s10589-012-9528-1},
+  keywords = {Sampling}
+}
+
+@article{ShashaaniHashemiPasupathy2018,
+  author   = {Shashaani, Sara and Hashemi, Fatemeh S. and Pasupathy, Raghu},
+  title    = {{ASTRO-DF}: A Class of Adaptive Sampling Trust-Region Algorithms for Derivative-Free Stochastic Optimization},
+  journal  = {{SIAM} Journal on Optimization},
+  volume   = {28},
+  number   = {4},
+  pages    = {3145--3176},
+  year     = {2018},
+  doi      = {10.1137/15M1042425},
+  abstract = { We consider unconstrained optimization problems where only "stochastic" estimates of the objective function are observable as replicates from a Monte Carlo oracle. The Monte Carlo oracle is assumed to provide no direct observations of the function gradient. We present ASTRO-DF---a class of derivative-free trust-region algorithms, where a stochastic local model is constructed, optimized, and updated iteratively. Function estimation and model construction within ASTRO-DF is adaptive in the sense that the extent of Monte Carlo sampling is determined by continuously monitoring and balancing measures of sampling error (or variance) and structural error (or model bias) within ASTRO-DF. Such balancing of errors is designed to ensure that Monte Carlo effort within ASTRO-DF is sensitive to algorithm trajectory: sampling is higher whenever an iterate is inferred to be close to a critical point and lower when far away. We demonstrate the almost sure convergence of ASTRO-DF's iterates to first-order critical points when using stochastic polynomial interpolation models. The question of using more complicated models, e.g., regression or stochastic kriging, in combination with adaptive sampling is worth further investigation and will benefit from the methods of proof presented here. We speculate that ASTRO-DF's iterates achieve the canonical Monte Carlo convergence rate, although a proof remains elusive. }
+}
+
+@article{JinScheinbergXie2025,
+	title = {Sample complexity analysis for adaptive optimization algorithms with stochastic oracles},
+	volume = {209},
+	optissn = {1436-4646},
+	opturl = {https://doi.org/10.1007/s10107-024-02078-z},
+	doi = {10.1007/s10107-024-02078-z},
+	abstract = {Several classical adaptive optimization algorithms, such as line search and trust-region methods, have been recently extended to stochastic settings where function values, gradients, and Hessians in some cases, are estimated via stochastic oracles. Unlike the majority of stochastic methods, these methods do not use a pre-specified sequence of step size parameters, but adapt the step size parameter according to the estimated progress of the algorithm and use it to dictate the accuracy required from the stochastic oracles. The requirements on the stochastic oracles are, thus, also adaptive and the oracle costs can vary from iteration to iteration. The step size parameters in these methods can increase and decrease based on the perceived progress, but unlike the deterministic case they are not bounded away from zero due to possible oracle failures, and bounds on the step size parameter have not been previously derived. This creates obstacles in the total complexity analysis of such methods, because the oracle costs are typically decreasing in the step size parameter, and could be arbitrarily large as the step size parameter goes to 0. Thus, until now only the total iteration complexity of these methods has been analyzed. In this paper, we derive a lower bound on the step size parameter that holds with high probability for a large class of adaptive stochastic methods. We then use this lower bound to derive a framework for analyzing the expected and high probability total oracle complexity of any method in this class. Finally, we apply this framework to analyze the total sample complexity of two particular algorithms, STORM (Blanchet et al. in INFORMS J Optim 1(2):92–119, 2019) and SASS (Jin et al. in High probability complexity bounds for adaptive step search based on stochastic oracles, 2021. https://doi.org/10.48550/ARXIV.2106.06454), in the expected risk minimization problem.},
+	number = {1},
+	journal = {Mathematical Programming},
+	author = {Jin, Billy and Scheinberg, Katya and Xie, Miaolan},
+	optmonth = jan,
+	year = {2025},
+	pages = {651--679},
+}
+
+@incollection{ShiIyengar2020,
+	address = {Cham},
+	title = {Gradient {Descent} Converges to Minimizers: Optimal and Adaptive Step-Size Rules},
+	author = {Shi, Bin and Iyengar, S. S.},
+	isbn = {978-3-030-17076-9},
+	opturl = {https://doi.org/10.1007/978-3-030-17076-9_7},
+	booktitle = {Mathematical {Theories} of {Machine} {Learning} - {Theory} and {Applications}},
+	publisher = {Springer International Publishing},
+	editor = {Shi, Bin and Iyengar, S. S.},
+	year = {2020},
+	doi = {10.1007/978-3-030-17076-9_7},
+	pages = {47--62},
+}
+
+@article{JinScheinbergXie2024,
+  author   = {Jin, Billy and Scheinberg, Katya and Xie, Miaolan},
+  title    = {High Probability Complexity Bounds for Adaptive Step Search Based on Stochastic Oracles},
+  journal  = {SIAM Journal on Optimization},
+  volume   = {34},
+  number   = {3},
+  pages    = {2411--2439},
+  year     = {2024},
+  doi      = {10.1137/22M1512764},
+  opturl      = {https://doi.org/10.1137/22M1512764},
+  abstract = { Abstract. We consider a step search method for continuous optimization under a stochastic setting where the function values and gradients are available only through inexact probabilistic zeroth- and first-order oracles. (We introduce the term step search for a class of methods, similar to line search, but where step direction can change during the back-tracking procedure.) Unlike the stochastic gradient method and its many variants, the algorithm does not use a prespecified sequence of step sizes but increases or decreases the step size adaptively according to the estimated progress of the algorithm. These oracles capture multiple standard settings including expected loss minimization and zeroth-order optimization. Moreover, our framework is very general and allows the function and gradient estimates to be biased. The proposed algorithm is simple to describe and easy to implement. Under fairly general conditions on the oracles, we derive a high probability tail bound on the iteration complexity of the algorithm when it is applied to nonconvex, convex, and strongly convex (more generally, those satisfying the Polyak-Łojasiewicz (PL) condition) functions. Our analysis strengthens and extends prior results for stochastic step and line search methods. }
+}
+
+@article{LindShapWrig06,
+  title    = {The empirical behavior of sampling methods for stochastic programming},
+  author   = {Linderoth, Jeff and Shapiro, Alexander and Wright, Stephen},
+  year     = 2006,
+  optmonth    = {Feb},
+  day      = {01},
+  journal  = {Annals of Operations Research},
+  volume   = 142,
+  number   = 1,
+  pages    = {215--241},
+  optissn     = {1572-9338},
+  abstract = {We investigate the quality of solutions obtained from sample-average approximations to two-stage stochastic linear programs with recourse. We use a recently developed software tool executing on a computational grid to solve many large instances of these problems, allowing us to obtain high-quality solutions and to verify optimality and near-optimality of the computed solutions in various ways.},
+  doi   = {10.1007/s10479-006-6169-8},
+  opturl   = {https://doi.org/10.1007/s10479-006-6169-8},
+  keywords = {Sampling}
+}
+
+@article{PaquSche2020,
+	title = {A Stochastic {L}ine-{S}earch Method with Expected Complexity Analysis},
+	volume = {30},
+	opturl = {https://doi.org/10.1137/18M1216250},
+	doi = {10.1137/18M1216250},
+	abstract = {For deterministic optimization, line search methods augment algorithms by providing stability and improved efficiency. Here we adapt a classical backtracking Armijo line search to the stochastic optimization setting. While traditional line search relies on exact computations of the gradient and values of the objective function, our method assumes that these values are available up to some dynamically adjusted accuracy which holds with some sufficiently large, but fixed, probability. We bound the expected number of iterations to reach a desired first-order accuracy in the nonconvex, convex, and strongly convex cases and show that this bound matches the complexity bound of deterministic gradient descent up to constants.},
+	number = {1},
+	journal = {SIAM Journal on Optimization},
+	author = {Paquette, Courtney and Scheinberg, Katya},
+	year = {2020},
+	pages = {349--376},
+}
+
+@article{NestPoly06,
+	title = {Cubic regularization of {Newton} method and its global performance},
+	volume = {108},
+	optissn = {1436-4646},
+	doi = {10.1007/s10107-006-0706-8},
+	abstract = {In this paper, we provide theoretical analysis for a cubic regularization of Newton method as applied to unconstrained minimization problem. For this scheme, we prove general local convergence results. However, the main contribution of the paper is related to global worst-case complexity bounds for different problem classes including some nonconvex cases. It is shown that the search direction can be computed by standard linear algebra technique.},
+	number = {1},
+	journal = {Mathematical Programming},
+	author = {Nesterov, Yurii and Polyak, B.T.},
+	optmonth = aug,
+	year = {2006},
+	pages = {177--205},
+}
+
+@book{Nest14,
+  title     = {Introductory Lectures on Convex Optimization: A Basic Course},
+  author    = {Nesterov, Yurii},
+  year      = {2014},
+  publisher = {Springer Publishing Company, Incorporated},
+  isbn      = {1461346916},
+  edition   = {1st},
+  keywords  = {ConvexOpt}
+}
+
+@book{Nest18,
+	series = {Springer {Optimization} and {Its} {Applications}},
+	title = {Lectures on {Convex} {Optimization}},
+	isbn = {978-3-319-91577-7},
+	publisher = {Springer Cham},
+	author = {Nesterov, Yurii},
+	edition = {2nd},
+	year = {2018},
+	doi = {https://doi.org/10.1007/978-3-319-91578-4},
+	issn = {1931-6828}
+}
+
+@article{FanPan16,
+  title   = {A retrospective trust region algorithm with trust region converging to zero},
+  volume  = {34},
+  optissn = {0254-9409},
+  doi     = {10.4208/jcm.1601-m2015-0399},
+  number  = {4},
+  journal = {Journal of Computational Mathematics},
+  author  = {Fan, Jinyan and Pan, Jianyu and Hongyan, Song},
+  optmonth   = jul,
+  year    = {2016},
+  pages   = {421--436}
+}

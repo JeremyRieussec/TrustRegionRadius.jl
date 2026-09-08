@@ -1,0 +1,689 @@
+% =============================================================================
+% The PreDoc logit experiment, reproduced after four additions to the package.
+%
+% Every number in this document is transcribed from the executed notebook
+% notebooks/Sampling/predoc_logit_v2.ipynb. Nothing is computed here and nothing
+% is rounded beyond the digits the notebook printed.
+%
+% Every quantity attributed to the PreDoc is transcribed from
+% _These/PreDoc/PreDoc_JeremyRieussec_2021_v2/main.tex, with the line given.
+%
+% Standalone. Own preamble, no bibliography, no \cite.
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\geometry{margin=2.2cm}
+
+\providecommand{\norm}[1]{\left \lVert #1 \right \rVert}
+\providecommand{\abs}[1]{\left \vert #1 \right \vert}
+\newcommand{\VAI}{\textsf{VAI}}
+\newcommand{\VAIVAC}{\textsf{VAI/VAC}}
+\newcommand{\VAC}{\textsf{VAC}}
+\newcommand{\NEW}{\textcolor{blue!60!black}{\textbf{new}}}
+
+\title{The PreDoc logit experiment, reproduced\\
+       \large four additions to \textsf{TrustRegionRadius.jl}, and what the runs say}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The variable-sampling experiment of the PreDoc needed four things the package did
+not have: a multiple-alternative logit, a two-sided smoothing of the sample size,
+the outer-product estimate of the paired variance, and the three sample management
+schemes. All four are now in the package, and this report gives what was added,
+why each was needed, how each was checked, and what the reproduction shows. The
+experiment is the PreDoc's: five alternatives, $p = 10$, $N = 100\,000$ individuals,
+$\lvert\mathcal{S}_0\rvert = 100$, $z_{0.95}$, and the trust-region constants
+$(\eta_1,\eta_2,\gamma_1,\gamma_2,\gamma_3) = (0.01, 0.8, 0.5, 0.9, 1.5)$. The
+central claim reproduces: the common-random-variable schemes converge in 26 and 28
+iterations where independent draws do not converge in 300. Three qualifications
+came out of the runs that the iteration counts hide. All three arms spend within
+6\% of the same number of term evaluations, so the right statement is that one arm
+converged on the budget the other spent without converging. The mechanism the
+PreDoc offers for the effect is not confirmed by the natural diagnostic, which
+ranks the schemes in the wrong order. And the overfitting hazard the PreDoc
+attaches to \VAC{} is present and measurable, at 4 of 8 sample-size falls taken
+with the true gradient rising, against 1 of 6 under \VAIVAC{}.
+\end{abstract}
+
+\tableofcontents
+
+% =============================================================================
+\section{What this supersedes}
+% =============================================================================
+
+An earlier report, \texttt{report/task14-predoc-logit/}, recorded the same
+experiment attempted under the constraint that nothing in the package be modified.
+It reported four departures from the PreDoc as gaps and reported one comparison as
+refuted rather than made. That report is a correct record of what was possible then
+and is superseded by this one on every point where the two disagree. The four gaps
+are now features; the refuted comparison is now made directly, in
+Section~\ref{sec:variance}.
+
+% =============================================================================
+\section{The experiment, reformulated}
+% =============================================================================
+
+\subsection{The problem}
+
+Individual $n$ chooses among $J$ alternatives. Alternative $j$ carries an attribute
+vector $x_{nj} \in \mathbb{R}^p$ and a representative utility linear in the
+parameters, $V_{nj} = \beta^\top x_{nj}$. Under independent Gumbel errors the
+choice probabilities take the closed form
+
+\begin{equation}
+  P_{nj} \;=\; \frac{e^{\beta^\top x_{nj}}}{\sum_{l} e^{\beta^\top x_{nl}}},
+  \label{eq:logit}
+\end{equation}
+
+and maximum likelihood over a population of $N$ individuals is the minimisation of
+
+\begin{equation}
+  f(\beta) \;=\; -\frac{1}{N}\sum_{n=1}^{N}\sum_{j=1}^{J} y_{nj}\ln P_{nj},
+  \qquad y_{nj} = 1 \text{ iff } n \text{ chose } j.
+  \label{eq:objective}
+\end{equation}
+
+The PreDoc takes $J = 5$, $p = 10$ and $N = 100\,000$, on data generated from the
+model itself so that the information identity holds and the outer-product Hessian
+is justified.
+
+\subsection{The method}
+
+The method is a trust-region algorithm on a Monte-Carlo model
+$m_k(s) = \tilde f_k + \tilde g_k^\top s + \tfrac12 s^\top \tilde B_k s$, with
+three additions to the standard loop.
+
+\paragraph{The sample size candidate.} From a confidence statement about the
+achieved decrease, the PreDoc's Step 5 asks for
+
+\begin{equation}
+  N_k^{+} \;=\; \left\lceil
+      \frac{\sigma_k^2 \bigl(\Phi^{-1}(1-\beta_k)\bigr)^2}{\tilde\mu_k^2}
+  \right\rceil,
+  \qquad \tilde\mu_k = \tilde f_k(x_k + s_k) - \tilde f_k(x_k).
+  \label{eq:step5}
+\end{equation}
+
+\paragraph{The sample update function.} Step 6 passes that candidate through
+$\Psi_k$ before it becomes $N_{k+1}$. The \emph{naive smoothing}, written
+$\mathrm{Naive}(a,b)$, is the two-sided bound
+
+\begin{equation}
+  a N_k \;\le\; N_{k+1} \;\le\; b N_k, \qquad 0 < a \le 1,\; b > 1,
+  \label{eq:naive}
+\end{equation}
+
+alongside a floor that rises by a fixed increment,
+$N^{\min}_{k+1} = N^{\min}_{k} + N_{incr}$.
+
+\paragraph{The sample management scheme.} How $\mathcal{N}_k$ becomes
+$\mathcal{N}_{k+1}$ is a separate choice from how large it is, and the PreDoc gives
+three answers. The names differ between its method section and its figures, and
+both are kept here because both appear in the source.
+
+\begin{center}
+\begin{tabular}{llp{8.4cm}}
+\toprule
+figures & method & what happens between iterations \\
+\midrule
+\VAI{}    & IRV   & redraw independently of the previous batch \\
+\VAIVAC{} & I/CRV & on a rise, keep the batch and append fresh draws,
+                    $\mathcal{N}_{k+1} = \mathcal{N}_k \cup \{\xi_{N_k+1},\dots\}$;
+                    on a fall, keep a uniform subsample,
+                    $\mathcal{N}_{k+1} \subset \mathcal{N}_k$ \\
+\VAC{}    & CRV   & the first $N_k$ individuals,
+                    $\mathcal{N}_k = \{\xi_1,\dots,\xi_{N_k}\}$; finite population only \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Which variance.} Equation~\eqref{eq:step5} needs $\sigma_k^2$, and the
+PreDoc offers two, labelling its runs \emph{tv} and \emph{sHs}. The first is the
+empirical variance of the individual decreases. The second comes from a first-order
+expansion of $F(\cdot,\xi)$ about $x_k$, under which
+$\mathrm{Var}[F(x_k+s_k,\xi) - F(x_k,\xi)] \approx
+ s_k^\top \mathrm{Var}[\nabla F(x_k,\xi)]\, s_k$, and replacing
+$\mathrm{Var}[\nabla F]$ by $\tilde B_k - \tilde g_k \tilde g_k^\top$ gives
+
+\begin{equation}
+  \hat\sigma_{N_k}^2 \;\approx\; s_k^\top \tilde B_k s_k - \bigl(\tilde g_k^\top s_k\bigr)^2 .
+  \label{eq:opvar}
+\end{equation}
+
+Its appeal is that both terms are already formed: $s_k^\top\tilde B_ks_k$ is needed
+for $\rho_k$ and $\tilde g_k$ is in memory for the model.
+
+% =============================================================================
+\section{Audit: what the package already had}
+% =============================================================================
+
+Five of the eight components needed no work.
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+PreDoc & package & note \\
+\midrule
+Step 5, equation~\eqref{eq:step5} & \texttt{CertifiedDecrease} & on paired differences \\
+Step 3, truncated CG & \texttt{SteihaugCG} & \\
+Step 7, equation for $\Delta_{k+1}$ & \texttt{RDelta} & $\gamma_1,\gamma_2,\gamma_3$ as given \\
+$\tilde B_k$, the OP approximation & \texttt{BHHHModel} & \\
+a subsampled true Hessian & \texttt{ExactHessian} & the PreDoc's \emph{TH} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\texttt{CertifiedDecrease} is worth a word because the correspondence is exact and
+not obvious. It sizes the batch from the sample mean and variance of the paired
+differences $D_i = F(x_k,\xi_i) - F(x_k+s_k,\xi_i)$, taken under common random
+numbers, which is \eqref{eq:step5} with the sign of $\tilde\mu_k$ flipped so the
+mean decrease is positive. Pairing is not an optimisation: with independent draws
+at the two ends of the step, $\mathrm{Var}(D_i)$ does not shrink as
+$\norm{s_k} \to 0$, and the rule becomes unusable near a solution.
+
+Three thresholds also need care. The package separates acceptance from radius
+scaling: acceptance is decided by $\eta$ and scaling by $\eta_1$ and $\eta_2$,
+whereas the PreDoc accepts on its own $\eta_1$. Setting $\eta = \eta_1 = 0.01$
+reproduces it.
+
+The confidence level is passed as $p$ and the quantile derived from it. The
+notebook checks that this reaches the PreDoc's constant rather than assuming it:
+\texttt{CertifiedDecrease(p = 0.95).z} is $1.6448534923$ against the quoted
+$z_{0.95} \approx 1.6449$, a difference of $4.651\times 10^{-5}$, which is agreement
+to the four digits quoted.
+
+% =============================================================================
+\section{The four additions}
+% =============================================================================
+
+\subsection{\texorpdfstring{\texttt{MultinomialLogit}}{MultinomialLogit}}
+
+A \texttt{LikelihoodProblem} carrying the $M \times J \times p$ attribute array and
+the chosen alternative. It implements \eqref{eq:logit} and \eqref{eq:objective}
+directly. Writing $\bar x_n = \sum_j P_{nj} x_{nj}$ for the probability-weighted
+mean attribute, the per-observation score and Hessian are
+
+\begin{equation}
+  s_n = \bar x_n - x_{n c_n},
+  \qquad
+  H_n = \sum_j P_{nj}\, x_{nj} x_{nj}^\top - \bar x_n \bar x_n^\top ,
+  \label{eq:mnl-derivs}
+\end{equation}
+
+so $H_n$ is the covariance of the attribute vector under the choice probabilities.
+It is positive semidefinite, and the objective is therefore convex. This matters
+downstream: \texttt{BHHHModel} is positive semidefinite by construction and so can
+never report negative curvature, and on a convex problem that costs nothing. The
+comparison against the exact Hessian in Section~\ref{sec:models} is therefore about
+approximation quality alone.
+
+The default population is the PreDoc's $100\,000 \times 5 \times 10$, which is 40 MB.
+
+\paragraph{The generating noise, and a point we do not settle.} The PreDoc says
+that during generation ``some noise is injected in the data by adding some
+perturbation, with mean zero, to the true model parameters $\beta^*$'', and
+concludes that the information identity holds. Read literally, a separate
+$\beta_n = \beta^* + \varepsilon_n$ per individual is a \emph{mixed} logit
+generating process fitted with a plain logit, which is misspecification, and the
+identity then fails at every $\beta$ and does not improve with $M$.
+
+The keyword \texttt{noise} implements the literal reading, and measurement settles
+what it costs: at $\beta^*$ with $M = 4000$, the BHHH identity error is $0.064473$
+at \texttt{noise = 0} and $1.365955$ at \texttt{noise = 1.5}. The runs in this
+report all use \texttt{noise = 0}, the correctly specified case, so that the premise
+Table~\ref{tab:identity} checks is the premise the runs rely on. We have not
+reconciled the two readings and do not claim to.
+
+\subsection{\texorpdfstring{\texttt{SmoothedSize}}{SmoothedSize}}
+
+A wrapper over any \texttt{SamplingRule}, following the package's own idiom for
+composition. The inner rule proposes $N^{+}_{k+1}$ and the wrapper reports
+
+\begin{equation}
+  N_{k+1} = \min\bigl\{ b N_k,\; \max\{ a N_k,\; N^{\min}_k,\; N^{+}_{k+1}\} \bigr\},
+  \qquad N^{\min}_{k+1} = N^{\min}_k + N_{incr},
+\end{equation}
+
+which is \eqref{eq:naive} together with the PreDoc's floor. Every trait is
+forwarded, so the wrapper is transparent to the problem-compatibility checks, to
+the oracle's cap logic and to the solver.
+
+Two design points are worth recording. The gradient and objective channels are
+smoothed separately against their own previous sizes, so a rule that distinguishes
+them keeps the distinction; a rule that returns one size for both, which is every
+rule that pairs, is unaffected. And when the rising floor exceeds the ceiling
+$bN_k$, which happens most easily just after a sharp fall, the floor wins: it is a
+requirement the caller stated outright, where the ceiling is a smoothing
+preference.
+
+This subsumes what was there before. \texttt{CertifiedDecrease(monotone = true)} is
+the special case $a = 1$, and \texttt{monotone = false} is $a = 0$, $b = \infty$.
+Neither is the PreDoc's setting, and Table~\ref{tab:all} shows the two extremes
+behaving quite differently from $\mathrm{Naive}(0.75, 2)$.
+
+\subsection{\texorpdfstring{\texttt{CertifiedDecrease(variance = ...)}}{CertifiedDecrease(variance)}}
+\label{sec:variance-feature}
+
+A keyword taking \texttt{:empirical} (the default, unchanged) or
+\texttt{:outer\_product}, together with a trait \texttt{paired\_variance\_kind} that
+the solver reads to decide what to hand the rule. The outer-product estimate is
+computed by \texttt{paired\_op\_variance}.
+
+It is formed as the sample variance of the scalars $\nabla F_i^\top s_k$ rather than
+as the difference $s^\top \tilde B s - (\tilde g^\top s)^2$ of two quadratic forms.
+The two are algebraically the same, and the first cannot come out negative when the
+two terms nearly cancel. This is not a hypothetical concern: it is exactly the
+failure the earlier report had to record when it tried to reconstruct the quantity
+after the fact from an archived trace.
+
+Both estimates are now recorded on the trace whenever the problem supplies scores,
+under
+
+\begin{center}
+\texttt{:paired\_variance\_trajectory} \qquad and \qquad
+\texttt{:paired\_op\_variance\_trajectory},
+\end{center}
+
+so the estimate a run did not use is auditable against the one it did, on the same
+batch at the same iterate. The cost is one score matrix over the objective batch per
+paired iteration.
+
+One distinction is easy to lose and worth stating. The outer product appears here as
+an estimate of $\mathrm{Var}[\nabla F]$, not as an approximation to the Hessian. It
+does \emph{not} require the information identity, and it remains legitimate on a
+misspecified model where BHHH as a Hessian is not.
+
+\subsection{\texorpdfstring{\texttt{FiniteSumNLP(scheme = ...)}}{FiniteSumNLP(scheme)}}
+
+A field on both sampled oracles, taking \texttt{:independent}, \texttt{:nested} or
+\texttt{:prefix}, implementing IRV, I/CRV and CRV to the definitions quoted above.
+Within an iteration the batch is fixed and every evaluation shares it, which is
+untouched; the scheme decides only what happens between iterations.
+
+\texttt{:prefix} needs a finite population and is rejected on an expectation, which
+is the PreDoc's own restriction of CRV. It consumes no random numbers at all, which
+the notebook checks by comparing the oracle's generator state across five
+resamples. \texttt{:nested} is supported on both classes through two small
+functions the problem type can extend, with methods for index vectors and for
+Gaussian draws.
+
+% =============================================================================
+\section{How the four were checked}
+% =============================================================================
+
+Forty-five checks, each against the definition rather than against the
+implementation. The full suite of $1452$ pre-existing package tests also passes
+unchanged, which is what establishes that the defaults are untouched.
+
+\begin{center}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lp{8.6cm}r}
+\toprule
+feature & check & result \\
+\midrule
+\texttt{MultinomialLogit}
+  & gradient against central differences of the objective & rel.\ $5.05\times10^{-10}$ \\
+  & Hessian against central differences of the gradient   & rel.\ $5.74\times10^{-10}$ \\
+  & Hessian positive semidefinite                          & $\lambda_{\min} = 0.670$ \\
+  & $f(0) = \ln J$ over the whole population               & $6.66\times10^{-16}$ \\
+  & mean of the scores equals the gradient                 & $0$ \\
+\midrule
+\texttt{SmoothedSize}
+  & every transition of a 300-iteration run inside \eqref{eq:naive} & $0$ violations \\
+  & the same run's floor $10 + 10k$ respected               & $0$ violations \\
+  & the bare rule does leave those bounds                   & ratios in $[0.10, 7.87]$ \\
+\midrule
+variance
+  & \texttt{paired\_op\_variance} equals $s^\top\tilde Bs - (\tilde g^\top s)^2$ & rel.\ $<10^{-9}$ \\
+  & the two estimates agree as $\norm{s}\to0$               & ratio $1.0059 \to 1.0000$ \\
+  & rejected on a problem with no scores                    & \texttt{ArgumentError} \\
+\midrule
+schemes
+  & \texttt{:prefix} batch is $1{:}N_k$ at every iteration  & holds \\
+  & \texttt{:prefix} consumes no randomness                 & generator unchanged \\
+  & \texttt{:nested} keeps the batch on a rise              & $\mathcal{N}_k \subseteq \mathcal{N}_{k+1}$ \\
+  & \texttt{:nested} subsets it on a fall                   & $\mathcal{N}_{k+1} \subset \mathcal{N}_k$ \\
+  & \texttt{:independent} does \emph{not} nest              & confirmed \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The last of those matters as much as the others: without it the nesting checks
+would pass on a scheme that nested by accident, and would be evidence of nothing.
+
+% =============================================================================
+\section{Results}
+% =============================================================================
+
+Every arm below carries the PreDoc's trust-region constants, $x_0 = 0$,
+$\Delta_0 = 0.1\norm{\tilde g_0}$ with $\tilde g_0$ over the initial batch of
+$\lvert\mathcal{S}_0\rvert = 100$, and the same seed. Arms differ only in what they
+are named for. Two settings are ours and not the PreDoc's, which states neither: a
+cap of 300 iterations and a gradient tolerance of $10^{-6}$.
+
+Every run is scored after the fact by the same code, on the true objective and true
+gradient over all $100\,000$ individuals at the point it stopped, never on the
+solver's own stopping test. An arm reporting \texttt{max\_iter} is reported as not
+having converged, not as having taken that many iterations.
+
+\subsection{The premise: does the information identity hold?}
+
+\begin{table}[H]
+\centering
+\caption{The information identity, measured over all $100\,000$ individuals.
+$B_{err}$ is the BHHH relative error, $W_{err}$ the BHHH-2 one, and the gap between
+them is the rank-one term that vanishes at a stationary point.}
+\label{tab:identity}
+\begin{tabular}{lrrrr}
+\toprule
+point & $B_{err}$ & $W_{err}$ & $BW_{gap}$ & $\norm{g}$ \\
+\midrule
+$\beta^*$ (the truth)     & 0.011950 & 0.011949 & 0.000010 & $3.5033\times10^{-3}$ \\
+$\beta^* + 0.5$           & 0.832126 & 0.599609 & 0.342115 & $6.7378\times10^{-1}$ \\
+$0$ (the PreDoc's $x_0$)  & 0.245365 & 0.157656 & 0.402691 & $1.0094\times10^{0}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The identity holds at $\beta^*$ to $1.2\%$, and the residual is the
+$O(M^{-1/2})$ finite-sample discrepancy rather than a modelling error: in the
+population the two sides are identically equal. It degrades to $83\%$ half a unit
+away, which is the behaviour BHHH is known for and the reason the trust region is
+the safeguard.
+
+\subsection{The four questions}
+
+\begin{table}[H]
+\centering
+\caption{Every arm, scored identically. $f$ and $\norm{\nabla f}$ are over the whole
+population at the stopping point. \emph{terms} is the cumulative count of individual
+evaluations, which is the cost; iterations are not. \texttt{max\_it.} and
+\texttt{first\_ord.} abbreviate the statuses \texttt{max\_iter} and
+\texttt{first\_order}.}
+\label{tab:all}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrlrrrrrr}
+\toprule
+arm & iters & status & $N_{\min}$ & $N_{\max}$ & terms & $f$ (true) & $\norm{\nabla f}$ & acc \\
+\midrule
+raw, \VAI{}                 & 300 & \texttt{max\_it.}  & 10  & 3946    & $1.982\times10^{4}$ & 1.510823 & $3.284\times10^{-1}$ & 0.6509 \\
+Naive(0.75,2), \VAI{}       & 300 & \texttt{max\_it.}  & 50  & 4717    & $9.794\times10^{5}$ & 0.782861 & $2.683\times10^{-2}$ & 0.6924 \\
+monotone ($a=1$), \VAI{}    & 120 & \texttt{first\_ord.} & 100 & 100000  & $1.725\times10^{6}$ & 0.781998 & $9.002\times10^{-8}$ & 0.6915 \\
+Naive, \VAIVAC{}            &  26 & \texttt{first\_ord.} & 50  & 100000  & $9.627\times10^{5}$ & 0.781998 & $7.107\times10^{-8}$ & 0.6915 \\
+Naive, \VAC{}               &  28 & \texttt{first\_ord.} & 50  & 100000  & $1.019\times10^{6}$ & 0.781998 & $2.926\times10^{-8}$ & 0.6915 \\
+Naive \emph{tv}, \VAIVAC{}  &  26 & \texttt{first\_ord.} & 50  & 100000  & $9.627\times10^{5}$ & 0.781998 & $7.107\times10^{-8}$ & 0.6915 \\
+Naive \emph{sHs}, \VAIVAC{} &  24 & \texttt{first\_ord.} & 50  & 100000  & $8.304\times10^{5}$ & 0.781998 & $4.736\times10^{-7}$ & 0.6915 \\
+Naive, \VAIVAC{}, exact $H$ &  31 & \texttt{first\_ord.} & 50  & 100000  & $1.064\times10^{6}$ & 0.781998 & $1.210\times10^{-9}$ & 0.6915 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{1. Is the raw certified size unstable?} Yes, and more sharply than
+``unstable'' conveys. The size sits at $N_{\min} = 10$ for $79\%$ of the run, and
+the transition ratio $N_{k+1}/N_k$ ranges over $[0.0025, 263.07]$, with 9 of 299
+transitions jumping by more than fourfold. The cause is arithmetic and not
+numerical: \eqref{eq:step5} reads $\hat\sigma$ and $\hat\delta$ off the \emph{same}
+step, and when the decrease nearly vanishes the requirement jumps by orders of
+magnitude with nothing to damp it.
+
+The consequence is worse than an ugly plot. With ten individuals and ten
+parameters the batch problem is degenerate, so the run is not solving the problem:
+it ends at $f = 1.510823$ against $\ln 5 = 1.609438$ at the starting point, having
+moved almost nowhere in $300$ iterations. It is also by far the cheapest arm, at
+$1.982\times10^{4}$ terms, which is what a run that does nothing costs.
+
+\paragraph{2. Does the naive smoothing fix it?} It improves the run by a long way
+and does not fix it. $\mathrm{Naive}(0.75,2)$ with the floor brings the true
+objective from $1.510823$ to $0.782861$ and the true gradient from $0.3284$ to
+$0.02683$, and the bound holds at all $299$ transitions. But the arm still reports
+\texttt{max\_iter}.
+
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.86\textwidth]{figs/predoc_mnl_fig2_smoothing.pdf}
+\caption{The three sample update functions under independent draws, on a
+logarithmic scale, with the rising floor $N^{\min}_k = 10 + 10k$ shown for
+reference. The raw rule sits on $N_{\min}$ and spikes; $\mathrm{Naive}(0.75,2)$
+tracks the floor; $a = 1$ climbs to the population and stays.}
+\label{fig:smoothing}
+\end{figure}
+
+What converges under independent draws is the extreme setting $a = 1$: 120
+iterations, and $1.725\times10^{6}$ terms, which is the most expensive arm in the
+table by $60\%$. So the lower bound is doing real work here, and $a = 0.75$ is not
+tight enough on its own on this problem. That is a qualification of the PreDoc's
+report that $\mathrm{Naive}(0.75,2.0)$ ``empirically shows some better results'',
+not a contradiction of it: the PreDoc compares Naive against CMS-cum, and the
+monotone arm is neither.
+
+\paragraph{3. Do the common-variable schemes converge in fewer iterations?} Yes,
+and the gap is not marginal: 26 iterations under \VAIVAC{} and 28 under \VAC{},
+against an independent arm that does not converge in 300. This is the PreDoc's
+central empirical claim about sample management and it reproduces.
+
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.86\textwidth]{figs/predoc_mnl_fig3_schemes.pdf}
+\caption{The same rule and the same seed under the three sample management
+schemes. The two common-variable arms reach the population and stop; the
+independent arm runs to the iteration cap without doing so.}
+\label{fig:schemes}
+\end{figure}
+
+Three qualifications follow from the same table.
+
+First, the iteration count is not the cost. The three arms spend
+$9.794\times10^{5}$, $9.627\times10^{5}$ and $1.019\times10^{6}$ terms, all within
+$6\%$ of each other, because the converging runs reach the full population and their
+late iterations are correspondingly expensive. The defensible statement is not that
+common variables are cheaper. It is that on the same budget one arm converged and
+the other did not, which is a stronger claim and a different one.
+
+Second, the mechanism is not confirmed. The PreDoc attributes the effect to common
+variables stopping $\tilde f$ from moving for reasons unrelated to the step. The
+natural diagnostic, the median of $\abs{\tilde f_{k+1} - \tilde f_k}$ against the
+median achieved decrease over a common window, gives $1.430$, $4.267$ and $6.337$
+for \VAI{}, \VAIVAC{} and \VAC{}, which is the wrong order. The absolute movement
+does fall as predicted, from $7.605\times10^{-2}$ to $6.796\times10^{-3}$ and
+$8.638\times10^{-3}$, but so does the decrease, and by more. The comparison is
+confounded in any case: at a matched iteration index the \VAI{} run is still far out
+taking large steps while the \VAIVAC{} run is nearly converged. We report the
+diagnostic and do not draw the conclusion from it.
+
+Third, all three arms reach the same objective to six figures, $0.781998$ against
+$0.782861$, and the same accuracy to three. What separates them is whether they got
+there, not where they got.
+
+\paragraph{The \VAC{} hazard.} The PreDoc warns that the prefix scheme can overfit
+its own prefix: while $N_k$ is small the run minimises a different function, whose
+minimiser is some distance from the one sought, and the symptom is a spike then a
+fall in the sample size, possibly cycling.
+
+A fall on its own is not the hazard, since with $a = 0.75$ the rule is permitted to
+fall and should whenever the decrease is large. The hazard is a fall taken while the
+\emph{true} gradient is rising, and that is on the trace.
+
+\begin{table}[H]
+\centering
+\caption{Falls in the sample size, and whether the run was going backwards across
+them. The comparison that carries weight is the last two rows, which converged
+under the same rule and seed.}
+\label{tab:hazard}
+\begin{tabular}{lrrrr}
+\toprule
+arm & iters & falls & falls with $\norm{\nabla f}$ up & worst rise \\
+\midrule
+Naive(0.75,2), \VAI{} & 300 & 56 & 33 & $3.316\times$ \\
+Naive, \VAIVAC{}      &  26 &  6 &  1 & $1.149\times$ \\
+Naive, \VAC{}         &  28 &  8 &  4 & $1.779\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The signature is present, and it is proportionally worse under \VAC{} than under
+\VAIVAC{}, at 4 of 8 against 1 of 6 and a worst rise of $1.78\times$ against
+$1.15\times$. That is the ordering the PreDoc predicts, on runs identical in every
+other respect, and it is the mechanism it describes: \VAC{} reuses one prefix while
+\VAIVAC{} refreshes it at the margin.
+
+The \VAI{} row has the largest raw count, and it is not evidence about sample
+management: a run that never converged has a gradient moving for its own reasons.
+
+The hazard did not prevent convergence here, and it should not be expected to. The
+$100\,000$ individuals are generated independently, so the first hundred are an
+ordinary random sample. Sorted or clustered data is where it would bite, and this
+reproduction does not construct that case.
+
+\subsection{The two variance estimates}
+\label{sec:variance}
+
+The earlier report could not make this comparison. Reconstructing
+$s^\top\tilde Bs$ after the fact from an archived trace was refuted by its own
+check, on $84$ of $300$ iterations, for two independent reasons: the achieved
+reduction is not the difference of successive objective values on a rejected step,
+and under sampling the two values sit on different batches. Both estimates are now
+formed inside the iteration, on one batch at one iterate, and recorded.
+
+\begin{table}[H]
+\centering
+\caption{The two estimates against each other, over the 26 paired iterations of the
+\VAIVAC{} run.}
+\label{tab:variance}
+\begin{tabular}{lr}
+\toprule
+iterations with both finite & 26 \\
+median ratio $\hat\sigma^2_{sHs} / \hat\sigma^2_{tv}$ & 1.003150 \\
+ratio range & $[0.999912,\; 1.218152]$ \\
+iterations with ratio outside $[0.5, 2]$ & 0 \\
+negative outer-product values & 0 of 26 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.86\textwidth]{figs/predoc_mnl_fig5_variances.pdf}
+\caption{The empirical and outer-product estimates of $\mathrm{Var}(D_i)$, formed
+on the same batch at the same iterate of the \VAIVAC{} run, with $\norm{s_k}$ on
+the same axes. The two are indistinguishable at this scale over most of the run,
+which is Table~\ref{tab:variance} seen as a trajectory.}
+\label{fig:variances}
+\end{figure}
+
+The agreement is close: the median discrepancy is $0.3\%$ and the worst is $22\%$.
+As a rule the choice makes little difference and slightly favours \emph{sHs}, which
+converges in 24 iterations rather than 26 and at $8.304\times10^{5}$ terms rather
+than $9.627\times10^{5}$.
+
+Two cautions. The approximation is first order in $\norm{s_k}$, so the spread in
+the ratio is the step length and not an estimation error; the notebook confirms the
+direction directly, with the ratio running $1.0059 \to 1.0008 \to 1.0001 \to 1.0000$
+as $\norm{s}$ falls through four decades. And the close agreement is a property of
+this problem, where Table~\ref{tab:identity} shows the identity holding to $1.2\%$.
+It should not be carried to a model where it does not.
+
+\subsection{BHHH against the exact Hessian}
+\label{sec:models}
+
+\begin{table}[H]
+\centering
+\caption{The two model Hessians under the nested scheme, everything else fixed.}
+\begin{tabular}{lrrrr}
+\toprule
+model & iters & terms & $\norm{\nabla f}$ (true) & CG iterations \\
+\midrule
+\texttt{BHHHModel}    & 26 & $9.627\times10^{5}$ & $7.107\times10^{-8}$ & 55 \\
+\texttt{ExactHessian} & 31 & $1.064\times10^{6}$ & $1.210\times10^{-9}$ & 53 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+BHHH reaches the same objective in fewer iterations and at lower cost, and the exact
+Hessian reaches a smaller final gradient. Neither is a surprise at $p = 10$ with the
+identity holding to $1.2\%$: the two models are close, and the difference is within
+what one seed shows.
+
+The cost argument is about $p$ and not about this table. The exact Hessian costs
+$O(NJp^2)$ per batch against $O(NJp)$ for the score matrix, and the score matrix is
+computed for the gradient anyway, so the outer product is obtained free. At $p = 10$
+the constant is small enough that the two run in comparable time.
+
+One reporting note. \texttt{neval\_hprod} reads $0$ for the BHHH arm, because
+\texttt{OuterProductOperator} forms $Bv$ from the score matrix without going through
+the model's \texttt{hprod!}, so the counter never sees it. It did one product per CG
+iteration. The CG line is the one to read when the model is an outer product.
+
+% =============================================================================
+\section{What is not reproduced}
+% =============================================================================
+
+Four things, stated so that the reproduction is not read as more complete than it is.
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{CMS and CMS-cum smoothing.} The PreDoc compares $\mathrm{Naive}$
+      against $\mathrm{CMS\text{-}cum}$, and only $\mathrm{Naive}$ is implemented.
+      CMS holds the size constant for $m = \lceil \epsilon^\beta_k/\tilde\mu_k\rceil$
+      iterations, which needs the rule to carry a countdown across iterations rather
+      than answer from the current state. That is a different shape of rule, not a
+      different constant, and \texttt{SmoothedSize} is not it.
+
+\item \textbf{A separate Hessian sample $\mathcal{H}_k$.} The PreDoc's Step 1 draws
+      $\mathcal{H}_k$, possibly non-uniformly, and then assumes
+      $\mathcal{H}_k \subset \mathcal{S}_k$ throughout. Here the model is built on
+      the gradient batch, which is the case $\mathcal{H}_k = \mathcal{S}_k$.
+
+\item \textbf{The generating noise.} Discussed above: the keyword exists and the
+      runs use $\texttt{noise} = 0$. The two readings of the PreDoc's sentence are
+      not reconciled.
+
+\item \textbf{A convergence criterion.} The PreDoc states none, and its iteration
+      counts are read off figures. The cap of $300$ and the tolerance of $10^{-6}$
+      are ours. This is why comparisons against arms reporting \texttt{max\_iter}
+      are phrased as failures to converge within the cap.
+\end{enumerate}
+
+% =============================================================================
+\section{Where things are}
+% =============================================================================
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+notebook & \texttt{notebooks/Sampling/predoc\_logit\_v2.ipynb} \\
+driver & \texttt{\_audit/nb7\_predoc\_logit\_mnl.jl} \\
+\midrule
+\texttt{MultinomialLogit} & \texttt{src/Likelihood/models.jl} \\
+\texttt{SmoothedSize}, \texttt{paired\_variance\_kind} & \texttt{src/Sampling/rules.jl} \\
+schemes, \texttt{paired\_op\_variance} & \texttt{src/Sampling/oracles.jl} \\
+recording both variances & \texttt{src/Trust-region/common.jl} \\
+\midrule
+superseded report & \texttt{report/task14-predoc-logit/} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The notebook is six figures and eight tables, executed end to end with sequential
+execution counts and no errors. Nothing in this report is computed here; every
+number is transcribed from that execution.
+
+\end{document}

@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+  \centering
+  \caption{Trust-region runs on $f_\varepsilon$ from $x_0=(0.8,y_0)$ under the curvature-blind model $B_k=\operatorname{diag}(1,1)$, with truncated CG, R-delta, and first-order tolerance $10^{-9}$. The product $\varepsilon\,k_{\mathrm{esc}}$ is constant at $\approx\ln(1/y_0)$. The final row terminates \emph{at the saddle}, where $\|g_0\|\approx\varepsilon y_0=10^{-10}$ is already below tolerance. Under the true Hessian every run instead escapes at $k=2$.}
+  \label{tab: slow saddle}
+  \begin{tabular}{rrlrrrl}
+    \toprule
+    $\varepsilon$ & $y_0$ & Status & Iters & $k_{\mathrm{esc}}$ & $\#\{\|g_k\|<10^{-5}\}$ & Limit \\
+    \midrule
+    $1\times10^{-1}$ & $1\times10^{-3}$ & stagnated & 178 & 67 & 63 & minimiser \\
+    $1\times10^{-1}$ & $1\times10^{-6}$ & stagnated & 251 & 140 & 111 & minimiser \\
+    $1\times10^{-2}$ & $1\times10^{-3}$ & converged & 1494 & 640 & 457 & minimiser \\
+    $1\times10^{-2}$ & $1\times10^{-6}$ & converged & 2188 & 1334 & 1150 & minimiser \\
+    $1\times10^{-3}$ & $1\times10^{-3}$ & converged & 13814 & 6362 & 6912 & minimiser \\
+    $1\times10^{-3}$ & $1\times10^{-6}$ & converged & 20725 & 13273 & 13823 & minimiser \\
+    $1\times10^{-4}$ & $1\times10^{-3}$ & converged & 126642 & 63588 & 93094 & minimiser \\
+    $1\times10^{-4}$ & $1\times10^{-6}$ & converged & 3 & --- & 1 & \textbf{saddle} \\
+    \bottomrule
+  \end{tabular}
+\end{table}

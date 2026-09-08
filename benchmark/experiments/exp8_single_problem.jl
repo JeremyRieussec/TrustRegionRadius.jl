@@ -25,15 +25,19 @@
 # panels look fine for every mechanism and only the countdown distinguishes
 # them.
 #
-#   julia --project=benchmark benchmark/experiments/exp8_single_problem.jl
-#   julia --project=benchmark benchmark/experiments/exp8_single_problem.jl WOOD
-#   TRR_PROBLEM=ROSENBR julia --project=benchmark .../exp8_single_problem.jl
+# Run it the way every other experiment here is run -- through
+# initialisation.jl, which loads the package, the harness and config.jl exactly
+# once. This file deliberately carries no `using` and no `include` of its own:
+# it used to include archive.jl, harness.jl and config.jl itself, and re-running
+# config.jl over an already-loaded session raised
+# `invalid redefinition of constant Main.DEFAULT_MODEL`, which is why the suite
+# had it commented out.
+#
+#   julia --project=benchmark -e 'include("benchmark/initialisation.jl");
+#                                 single_problem_experiment("ROSENBR")'
+#
+# The problem may also come from TRR_PROBLEM.
 # =============================================================================
-
-using Plots
-include(joinpath(@__DIR__, "..", "archive.jl"))
-include(joinpath(@__DIR__, "..", "harness.jl"))
-include(joinpath(@__DIR__, "..", "config.jl"))
 
 "Problem traced when none is given on the command line or in TRR_PROBLEM."
 const DEFAULT_TRACE_PROBLEM = "ROSENBR"
@@ -151,7 +155,7 @@ end
 # Figures
 # -----------------------------------------------------------------------------
 
-"Δ_k against k, log scale. Iteration axis is 0:K, since Δ₀ precedes iteration 1."
+"Δ_k against k, log scale. Iteration axis is 0:K, since Δ0 precedes iteration 1."
 function plot_delta(rs, pname)
     plt = plot(; xlabel = "iteration k", ylabel = "Δ_k", yscale = :log10,
                  title = "$pname: trust-region radius", legend = :best, lw = 2)
@@ -179,10 +183,10 @@ end
 """
     plot_ratio(rs, pname, params)
 
-ρ_k against k, clipped to [`RHO_CLIP`], with η, η₁ and η₂ marked.
+ρ_k against k, clipped to [`RHO_CLIP`], with η, η1 and η2 marked.
 
 The three lines are worth drawing separately now that acceptance is decoupled
-from scaling: points in [η, η₁) are accepted steps that still contract the
+from scaling: points in [η, η1) are accepted steps that still contract the
 radius, a band that does not exist in the coupled formulation.
 """
 function plot_ratio(rs, pname, params)
@@ -196,10 +200,10 @@ function plot_ratio(rs, pname, params)
               label = r.config)
     end
     hline!(plt, [Float64(params.η)];  ls = :solid, c = :black, label = "η (accept)")
-    if params.η₁ != params.η
-        hline!(plt, [Float64(params.η₁)]; ls = :dash, c = :black, label = "η₁")
+    if params.η1 != params.η
+        hline!(plt, [Float64(params.η1)]; ls = :dash, c = :black, label = "η1")
     end
-    hline!(plt, [Float64(params.η₂)]; ls = :dashdot, c = :black, label = "η₂")
+    hline!(plt, [Float64(params.η2)]; ls = :dashdot, c = :black, label = "η2")
     return plt
 end
 
@@ -278,17 +282,16 @@ end
 # Main
 # -----------------------------------------------------------------------------
 
-function main(args = String[])
+function single_problem_experiment(args = String[])
     pname_wanted = chosen_problem(args)
     problem = select_problem(pname_wanted)
     problems = [problem]
 
     arch = ExperimentArchive(tag = "single_$(problem[1])")
-    save_config(arch; rules = RULES, params = SOLVER_PARAMS,
+    configs = rule_configs()
+    save_config(arch; rules = RULES, configs = configs, params = SOLVER_PARAMS,
                 extra = Dict("experiment" => "exp8_single_problem",
                              "problem" => problem[1]))
-
-    configs = rule_configs()
     records = run_experiment(problems, configs;
                              params = SOLVER_PARAMS, trace = true, archive = arch)
 
@@ -353,7 +356,7 @@ function main(args = String[])
         [never].
 
         Read the countdown against the first two panels. Every mechanism here
-        drives ‖g_k‖ below the tolerance with ρ_k mostly above η₂, so the
+        drives ‖g_k‖ below the tolerance with ρ_k mostly above η2, so the
         gradient and ratio panels look much the same for all of them; the
         countdown is where they separate. That is the content of the claim that
         first-order diagnostics cannot see the distinction between mechanisms
@@ -367,6 +370,11 @@ function main(args = String[])
         """)
 end
 
-if abspath(PROGRAM_FILE) == @__FILE__
-    main(ARGS)
-end
+# The notebook and the suite call this by name; `main` was the old spelling and
+# collided with experiments 9, 11 and 12, all of which have since been renamed to
+# their own entry points.
+single_problem_experiment(name::AbstractString) = single_problem_experiment([name])
+
+# No `PROGRAM_FILE` guard: this file is not runnable on its own any more, by
+# design. Direct execution would need the harness, and loading it from here is
+# exactly the double-definition that kept experiment 8 out of the suite.

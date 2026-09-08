@@ -1,0 +1,27 @@
+==============================================================================
+1. Invariance of {x = 0}
+==============================================================================
+  eps=0.1      RGradCapped  max|x_k| over the run = 0.000e+00  exactly invariant
+  eps=0.1      RDFO         max|x_k| over the run = 0.000e+00  exactly invariant
+  eps=0.1      RDelta       max|x_k| over the run = 0.000e+00  exactly invariant
+  eps=0.01     RGradCapped  max|x_k| over the run = 0.000e+00  exactly invariant
+  eps=0.01     RDFO         max|x_k| over the run = 0.000e+00  exactly invariant
+  eps=0.01     RDelta       max|x_k| over the run = 0.000e+00  exactly invariant
+  eps=0.001    RGradCapped  max|x_k| over the run = 0.000e+00  exactly invariant
+  eps=0.001    RDFO         max|x_k| over the run = 0.000e+00  exactly invariant
+  eps=0.001    RDelta       max|x_k| over the run = 0.000e+00  exactly invariant
+
+==============================================================================
+2. RGradCapped: Delta_k = mu_k ||g_k||, mu_k <= mu_bar
+==============================================================================
+  mu_bar=0.1     max theta_k = Delta/||g|| = 0.100000   (must be <= 0.1)  holds
+  mu_bar=1       max theta_k = Delta/||g|| = 1.000000   (must be <= 1)  holds
+  mu_bar=10      max theta_k = Delta/||g|| = 10.000000   (must be <= 10)  holds
+
+==============================================================================
+3. tau-anchoring puts a floor under the radius near the saddle
+==============================================================================
+  RGradCapped      needs_curvature=false   Delta_0=1.000e-05  min Delta=1.000e-05  iter=400 status=max_iter
+  RGradCappedTau   needs_curvature=true    Delta_0=1.000e-02  min Delta=4.129e-05  iter=400 status=max_iter
+
+PROBE OK

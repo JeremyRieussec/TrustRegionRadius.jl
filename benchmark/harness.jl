@@ -107,6 +107,31 @@ end
 # -----------------------------------------------------------------------------
 
 """
+    SampleRecord
+
+The stochastic half of a run, `nothing` on a deterministic one.
+
+Kept apart from [`RunRecord`](@ref) for the same reason `SampleTrace` is kept
+apart from `TRTrace`: a variance recorded from an exact evaluation is not a small
+number, it is a category error, and a table that carries a `σ̂²` column for
+deterministic rows invites exactly that reading.
+"""
+struct SampleRecord
+    Ng_traj::Vector{Int}
+    Nf_traj::Vector{Int}
+    sigma_g2_traj::Vector{Float64}
+    sigma_f2_traj::Vector{Float64}
+    true_grad_traj::Vector{Float64}
+    paired_delta_traj::Vector{Float64}
+    paired_var_traj::Vector{Float64}
+    samples_total::Int
+    cap_hits::Int
+end
+
+SampleRecord() = SampleRecord(Int[], Int[], Float64[], Float64[], Float64[],
+                              Float64[], Float64[], 0, 0)
+
+"""
     RunRecord
 
 One (problem, configuration) result. Flat and concrete so a vector of these can
@@ -129,9 +154,126 @@ struct RunRecord
     obj_traj::Vector{Float64}
     ratio_traj::Vector{Float64}
     active_traj::Vector{Bool}
+    # --- second order: present only when the run carried a curvature estimate
+    tau_traj::Vector{Float64}
+    lambda_traj::Vector{Float64}
+    # --- sampling: 0 on a deterministic run
+    samples::Int
+    # --- the step, and the diagnostics that make the local claims checkable.
+    # `step_traj` was missing, which is why no archived run could yield the
+    # empirical κ̄ = max ‖s_k‖/‖g_k‖ or verify ‖s_k‖ ≤ Δ_k.
+    step_traj::Vector{Float64}
+    gamma_traj::Vector{Float64}
+    xi_traj::Vector{Float64}
+    rho_tilde_traj::Vector{Float64}
+    cos_cauchy_traj::Vector{Float64}
+    cg_iters_traj::Vector{Int}
+    branch_traj::Vector{Symbol}
+    dist_traj::Vector{Float64}
+    lambda_true_traj::Vector{Float64}
+    hnorm_traj::Vector{Float64}
+    # --- stochastic half, or nothing
+    sample::Union{Nothing, SampleRecord}
 end
 
-solved(r::RunRecord) = r.status === :first_order
+"""
+    solved(r) -> Bool
+
+Whether the run reached a critical point.
+
+**`:second_order` counts.** A run with `tol_H > 0` that certifies
+`λ_min(B) ≥ −tol_H` reports `:second_order`, which is a *stronger* outcome than
+`:first_order`, not a different kind of failure. Testing `=== :first_order` — as
+this did — scored every successful τ-anchored run as unsolved, which would have
+made experiment 9 report that second-order anchoring never works: the columns
+doing best would have been the ones with zero reliability.
+"""
+solved(r::RunRecord) = r.status === :first_order || r.status === :second_order
+
+"""
+    certified_second_order(r) -> Bool
+
+Whether the run stopped because the *second-order* test was met, as distinct from
+merely reaching a small gradient. Only meaningful when `tol_H > 0`; a first-order
+run never sets it.
+"""
+certified_second_order(r::RunRecord) = r.status === :second_order
+
+"""
+    has_curvature(r) -> Bool
+
+Whether the run recorded `λ_min(B_k)`, i.e. whether any of the rule, the
+subsolver or `tol_H` asked for a curvature estimate. `false` for a plain
+first-order run, where `tau_traj` and `lambda_traj` are empty rather than zero.
+"""
+has_curvature(r::RunRecord) = !isempty(r.lambda_traj)
+
+"""
+    RecordView(rec)
+
+A `RunRecord` dressed as a solver result, so that every helper of the
+diagnostics layer — `active_fraction`, `inactivity_index`, `observed_order`,
+`radius_sums`, `branch_counts`, `kappa_bar_empirical` — applies unchanged to an
+archived run.
+
+Without it each experiment re-implements the same tail arithmetic and the same
+alignment, which is how a run and a table come to disagree.
+"""
+struct RecordView
+    solver_specific::Dict{Symbol, Any}
+end
+
+function RecordView(r::RunRecord)
+    d = Dict{Symbol, Any}(
+        :delta_trajectory      => r.delta_traj,
+        :grad_trajectory       => r.grad_traj,
+        :obj_trajectory        => r.obj_traj,
+        :ratio_trajectory      => r.ratio_traj,
+        :active_trajectory     => r.active_traj,
+        :step_trajectory       => r.step_traj,
+        :gamma_trajectory      => r.gamma_traj,
+        :xi_trajectory         => r.xi_traj,
+        :cos_cauchy_trajectory => r.cos_cauchy_traj,
+        :cg_iters_trajectory   => r.cg_iters_traj,
+        :branch_trajectory     => r.branch_traj,
+    )
+    isempty(r.tau_traj)         || (d[:tau_trajectory] = r.tau_traj)
+    isempty(r.lambda_traj)      || (d[:lambda_min_trajectory] = r.lambda_traj)
+    isempty(r.dist_traj)        || (d[:dist_trajectory] = r.dist_traj)
+    isempty(r.lambda_true_traj) || (d[:lambda_min_true_trajectory] = r.lambda_true_traj)
+    isempty(r.hnorm_traj)       || (d[:hessian_norm_trajectory] = r.hnorm_traj)
+    if r.sample !== nothing
+        d[:grad_sample_trajectory]      = r.sample.Ng_traj
+        d[:obj_sample_trajectory]       = r.sample.Nf_traj
+        d[:sigma_g2_trajectory]         = r.sample.sigma_g2_traj
+        d[:sigma_f2_trajectory]         = r.sample.sigma_f2_traj
+        d[:true_grad_trajectory]        = r.sample.true_grad_traj
+        d[:paired_decrease_trajectory]  = r.sample.paired_delta_traj
+        d[:paired_variance_trajectory]  = r.sample.paired_var_traj
+    end
+    return RecordView(d)
+end
+
+"""
+    _sample_record(ss) -> Union{Nothing, SampleRecord}
+
+Collect the stochastic half of a run from `stats.solver_specific`, or `nothing`
+when the run was deterministic. Presence is decided by the sample-size
+trajectory, which every sampled solver attaches and no deterministic one does.
+"""
+function _sample_record(ss)
+    haskey(ss, :grad_sample_trajectory) || return nothing
+    return SampleRecord(
+        collect(Int, get(ss, :grad_sample_trajectory, Int[])),
+        collect(Int, get(ss, :obj_sample_trajectory,  Int[])),
+        get(ss, :sigma_g2_trajectory,        Float64[]),
+        get(ss, :sigma_f2_trajectory,        Float64[]),
+        get(ss, :true_grad_trajectory,       Float64[]),
+        get(ss, :paired_decrease_trajectory, Float64[]),
+        get(ss, :paired_variance_trajectory, Float64[]),
+        get(ss, :samples_total,   0),
+        get(ss, :sample_cap_hits, 0))
+end
 
 """
     run_experiment(problems, configs; params, trace, archive, verbose) -> Vector{RunRecord}
@@ -145,13 +287,24 @@ quasi-Newton models carry mutable state and each run must start clean.
 
 If `archive` is given, each record is also written to `data/` as JLD2 so the
 run can be re-analysed without recomputing.
+
+`solver_kwargs` is forwarded to `tr_solve`, which is how an experiment asks for a
+diagnostic the default run does not pay for: `solver_kwargs = (hessian_norm =
+true,)` records `‖H_k‖` so that `Σ Δ_k²/M_k` can be formed afterwards.
+
+!!! warning "Resumed runs keep the flags they were run with"
+    A cached record is returned as archived. Adding a diagnostic to
+    `solver_kwargs` therefore has no effect on problems already in `data/`; pass
+    `resume = false`, or archive to a fresh directory, when the point of the run
+    is the new quantity.
 """
 function run_experiment(problems, configs;
                         params::TRParams = TRParams(),
                         trace::Bool = true,
                         archive = nothing,
                         resume::Bool = true,
-                        verbose::Bool = true)
+                        verbose::Bool = true,
+                        solver_kwargs = NamedTuple())
     records = RunRecord[]
     n_reused = 0
 
@@ -203,7 +356,8 @@ function run_experiment(problems, configs;
             rec = try
                 NLPModels.reset!(nlp)
                 st = tr_solve(nlp; rule = rule, model = model,
-                              subsolver = sub, params = params, trace = trace)
+                              subsolver = sub, params = params, trace = trace,
+                              solver_kwargs...)
                 ss = st.solver_specific
                 RunRecord(pname, cname, nlp.meta.nvar, st.status, st.iter,
                           neval_obj(nlp), neval_grad(nlp), neval_hprod(nlp),
@@ -213,13 +367,29 @@ function run_experiment(problems, configs;
                           get(ss, :grad_trajectory,   Float64[]),
                           get(ss, :obj_trajectory,    Float64[]),
                           get(ss, :ratio_trajectory,  Float64[]),
-                          get(ss, :active_trajectory, Bool[]))
+                          get(ss, :active_trajectory, Bool[]),
+                          get(ss, :tau_trajectory,        Float64[]),
+                          get(ss, :lambda_min_trajectory, Float64[]),
+                          get(ss, :samples_total, 0),
+                          get(ss, :step_trajectory,       Float64[]),
+                          get(ss, :gamma_trajectory,      Float64[]),
+                          get(ss, :xi_trajectory,         Float64[]),
+                          get(ss, :rho_tilde_trajectory,  Float64[]),
+                          get(ss, :cos_cauchy_trajectory, Float64[]),
+                          get(ss, :cg_iters_trajectory,   Int[]),
+                          get(ss, :branch_trajectory,     Symbol[]),
+                          get(ss, :dist_trajectory,       Float64[]),
+                          get(ss, :lambda_min_true_trajectory, Float64[]),
+                          get(ss, :hessian_norm_trajectory, Float64[]),
+                          _sample_record(ss))
             catch err
                 err isa InterruptException && rethrow()
                 verbose && @warn "run failed" problem=pname config=cname err
                 RunRecord(pname, cname, nlp.meta.nvar, :exception, 0, 0, 0, 0,
                           NaN, NaN, 0.0, Float64[], Float64[], Float64[],
-                          Float64[], Bool[])
+                          Float64[], Bool[], Float64[], Float64[], 0,
+                          Float64[], Float64[], Float64[], Float64[], Float64[],
+                          Int[], Symbol[], Float64[], Float64[], Float64[], nothing)
             end
             push!(records, rec)
             push!(row, solved(rec) ? @sprintf("%14d", rec.iterations) :
@@ -266,7 +436,33 @@ function save_record(a, rec::RunRecord)
         grad_norm_trajectory = rec.grad_traj,
         obj_trajectory       = rec.obj_traj,
         ratio_trajectory     = rec.ratio_traj,
-        active_trajectory    = rec.active_traj)
+        active_trajectory    = rec.active_traj,
+        tau_trajectory        = rec.tau_traj,
+        lambda_min_trajectory = rec.lambda_traj,
+        samples_total         = rec.samples,
+        step_trajectory       = rec.step_traj,
+        gamma_trajectory      = rec.gamma_traj,
+        xi_trajectory         = rec.xi_traj,
+        rho_tilde_trajectory  = rec.rho_tilde_traj,
+        cos_cauchy_trajectory = rec.cos_cauchy_traj,
+        cg_iters_trajectory   = rec.cg_iters_traj,
+        branch_trajectory     = rec.branch_traj,
+        dist_trajectory       = rec.dist_traj,
+        lambda_true_trajectory = rec.lambda_true_traj,
+        hessian_norm_trajectory = rec.hnorm_traj,
+        # The stochastic half is flattened rather than stored as a struct, so a
+        # future field is a new key with a default rather than a type mismatch on
+        # every archive written before it existed.
+        has_sample            = rec.sample !== nothing,
+        sample_Ng             = rec.sample === nothing ? Int[] : rec.sample.Ng_traj,
+        sample_Nf             = rec.sample === nothing ? Int[] : rec.sample.Nf_traj,
+        sample_sigma_g2       = rec.sample === nothing ? Float64[] : rec.sample.sigma_g2_traj,
+        sample_sigma_f2       = rec.sample === nothing ? Float64[] : rec.sample.sigma_f2_traj,
+        sample_true_grad      = rec.sample === nothing ? Float64[] : rec.sample.true_grad_traj,
+        sample_paired_delta   = rec.sample === nothing ? Float64[] : rec.sample.paired_delta_traj,
+        sample_paired_var     = rec.sample === nothing ? Float64[] : rec.sample.paired_var_traj,
+        sample_total          = rec.sample === nothing ? 0 : rec.sample.samples_total,
+        sample_cap_hits       = rec.sample === nothing ? 0 : rec.sample.cap_hits)
 end
 
 """
@@ -274,8 +470,9 @@ end
 
 Reconstruire un `RunRecord` depuis le dictionnaire rendu par `JLD2.load`.
 
-`h_evals` est absent des fichiers écrits avant l'ajout de ce champ ; il est
-alors mis à zéro plutôt que de faire échouer la relecture. Les autres champs
+`h_evals`, `tau_trajectory`, `lambda_min_trajectory` et `samples_total` sont
+absents des fichiers écrits avant l'ajout de ces champs ; ils reçoivent alors une
+valeur par défaut plutôt que de faire échouer la relecture. Les autres champs
 sont obligatoires : leur absence signale un fichier tronqué, et l'exception
 remonte à l'appelant qui recalculera.
 """
@@ -286,7 +483,43 @@ function _record_from_data(d::AbstractDict)
         d["f_evals"], d["g_evals"], get(d, "h_evals", 0),
         d["final_grad_norm"], d["final_obj"], d["solve_time"],
         d["delta_trajectory"], d["grad_norm_trajectory"],
-        d["obj_trajectory"], d["ratio_trajectory"], d["active_trajectory"])
+        d["obj_trajectory"], d["ratio_trajectory"], d["active_trajectory"],
+        # Archives written before the second-order and sampling fields existed
+        # lack these keys; default rather than fail, exactly as h_evals does.
+        get(d, "tau_trajectory",        Float64[]),
+        get(d, "lambda_min_trajectory", Float64[]),
+        get(d, "samples_total",         0),
+        get(d, "step_trajectory",        Float64[]),
+        get(d, "gamma_trajectory",       Float64[]),
+        get(d, "xi_trajectory",          Float64[]),
+        get(d, "rho_tilde_trajectory",   Float64[]),
+        get(d, "cos_cauchy_trajectory",  Float64[]),
+        get(d, "cg_iters_trajectory",    Int[]),
+        get(d, "branch_trajectory",      Symbol[]),
+        get(d, "dist_trajectory",        Float64[]),
+        get(d, "lambda_true_trajectory", Float64[]),
+        get(d, "hessian_norm_trajectory", Float64[]),
+        _sample_from_data(d))
+end
+
+"""
+    _sample_from_data(d) -> Union{Nothing, SampleRecord}
+
+Rebuild the stochastic half from the flattened keys. Archives written before the
+split carry none of them and load as deterministic, which is what they were.
+"""
+function _sample_from_data(d::AbstractDict)
+    get(d, "has_sample", false) || return nothing
+    return SampleRecord(
+        collect(Int, get(d, "sample_Ng", Int[])),
+        collect(Int, get(d, "sample_Nf", Int[])),
+        get(d, "sample_sigma_g2",     Float64[]),
+        get(d, "sample_sigma_f2",     Float64[]),
+        get(d, "sample_true_grad",    Float64[]),
+        get(d, "sample_paired_delta", Float64[]),
+        get(d, "sample_paired_var",   Float64[]),
+        get(d, "sample_total",    0),
+        get(d, "sample_cap_hits", 0))
 end
 
 """
@@ -322,9 +555,15 @@ end
 
 Assemble the `(n_problems × n_configs)` matrix a profile consumes.
 
-`metric` is `:iter`, `:obj`, `:grad`, `:time`, or a function of a `RunRecord`.
-Unsolved entries get `failure`, which is what makes the right-hand asymptote of
-a performance profile read as reliability.
+`metric` is `:iter`, `:obj`, `:grad`, `:hprod`, `:time`, `:samples`, or a
+function of a `RunRecord`. Unsolved entries get `failure`, which is what makes
+the right-hand asymptote of a performance profile read as reliability.
+
+!!! note "`:iter` assumes a fixed sample size"
+    Iteration count is proportional to work only when `N_k` is constant. Under an
+    adaptive sampling rule the same runs order differently by `:iter` and by
+    `:samples`, and that divergence is the finding rather than a nuisance — use
+    `:samples` whenever the columns differ in sampling rule.
 """
 function metric_matrix(records::Vector{RunRecord}, problems, configs,
                        metric = :iter; failure::Float64 = Inf)
@@ -333,10 +572,12 @@ function metric_matrix(records::Vector{RunRecord}, problems, configs,
     idx = Dict((r.problem, r.config) => r for r in records)
 
     f = metric isa Function ? metric :
-        metric === :iter ? (r -> Float64(r.iterations)) :
-        metric === :obj  ? (r -> Float64(r.f_evals))    :
-        metric === :grad ? (r -> Float64(r.g_evals))    :
-        metric === :time ? (r -> r.solve_time)          :
+        metric === :iter    ? (r -> Float64(r.iterations)) :
+        metric === :obj     ? (r -> Float64(r.f_evals))    :
+        metric === :grad    ? (r -> Float64(r.g_evals))    :
+        metric === :hprod   ? (r -> Float64(r.h_evals))    :
+        metric === :time    ? (r -> r.solve_time)          :
+        metric === :samples ? (r -> Float64(r.samples))    :
         throw(ArgumentError("metric_matrix: unknown metric $metric"))
 
     M = fill(failure, length(pnames), length(cnames))
@@ -358,12 +599,25 @@ That last column is the one worth reading. Two configurations can have
 identical iteration counts and identical first-order behaviour while one keeps
 the constraint permanently active and the other does not, and only the activity
 column distinguishes them.
+
+`second_order = true` adds a column counting the runs that stopped with a
+*certified* `:second_order` status. Read it against `solved`: a configuration
+solving every problem while certifying none has been running a first-order method
+under a second-order name — which is what a τ-anchored rule over a positive
+semidefinite model does, and what the warning in `models.md` is about.
 """
-function success_table(records::Vector{RunRecord}, problems, configs)
+function success_table(records::Vector{RunRecord}, problems, configs;
+                       second_order::Bool = false)
     io = IOBuffer()
-    @printf(io, "%-22s %10s %10s %10s %12s\n",
-            "configuration", "solved", "median", "mean", "tail active")
-    println(io, "-"^70)
+    if second_order
+        @printf(io, "%-22s %10s %10s %10s %12s %10s\n",
+                "configuration", "solved", "median", "mean", "tail active", "2nd order")
+        println(io, "-"^82)
+    else
+        @printf(io, "%-22s %10s %10s %10s %12s\n",
+                "configuration", "solved", "median", "mean", "tail active")
+        println(io, "-"^70)
+    end
     npb = length(problems)
     for (cname, _) in configs
         rs = filter(r -> r.config == cname, records)
@@ -375,10 +629,17 @@ function success_table(records::Vector{RunRecord}, problems, configs)
             k0 = max(1, floor(Int, 0.9 * length(r.active_traj)))
             push!(acts, count(r.active_traj[k0:end]) / length(r.active_traj[k0:end]))
         end
-        @printf(io, "%-22s %5d/%-4d %10s %10s %12s\n", cname, length(ok), npb,
-                isempty(iters) ? "--" : @sprintf("%.1f", _median(iters)),
-                isempty(iters) ? "--" : @sprintf("%.1f", sum(iters)/length(iters)),
-                isempty(acts)  ? "--" : @sprintf("%.3f", sum(acts)/length(acts)))
+        med  = isempty(iters) ? "--" : @sprintf("%.1f", _median(iters))
+        mean = isempty(iters) ? "--" : @sprintf("%.1f", sum(iters)/length(iters))
+        act  = isempty(acts)  ? "--" : @sprintf("%.3f", sum(acts)/length(acts))
+        if second_order
+            n2 = count(certified_second_order, rs)
+            @printf(io, "%-22s %5d/%-4d %10s %10s %12s %5d/%-4d\n",
+                    cname, length(ok), npb, med, mean, act, n2, npb)
+        else
+            @printf(io, "%-22s %5d/%-4d %10s %10s %12s\n",
+                    cname, length(ok), npb, med, mean, act)
+        end
     end
     return String(take!(io))
 end
@@ -387,6 +648,22 @@ function _median(v::AbstractVector)
     s = sort(collect(v)); n = length(s)
     n == 0 && return NaN
     isodd(n) ? s[(n+1)÷2] : (s[n÷2] + s[n÷2+1]) / 2
+end
+
+"""
+    measure_gap(r) -> Vector{Float64}
+
+`τ_k / ‖g_k‖` along the run: 1 wherever the model is convex, and unbounded near a
+saddle, which is exactly where a first-order diagnostic reports success.
+
+Empty when the run carried no curvature estimate. The two trajectories are the
+same length by construction (both are recorded once per iterate), so no alignment
+is needed — unlike `:ratio_trajectory`, which is one shorter.
+"""
+function measure_gap(r::RunRecord)
+    (isempty(r.tau_traj) || isempty(r.grad_traj)) && return Float64[]
+    n = min(length(r.tau_traj), length(r.grad_traj))
+    return [r.tau_traj[k] / max(r.grad_traj[k], 1e-300) for k in 1:n]
 end
 
 """

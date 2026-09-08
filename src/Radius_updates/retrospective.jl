@@ -37,12 +37,17 @@ which sends the rule to its most conservative branch — the same convention the
 solver uses for ρ.
 
 The denominator is `−g_{k+1}ᵀs_k + ½ s_kᵀH_{k+1}s_k`. Note the sign of the
-first term: it is a reduction measured *backwards* along the step, so with
-`g_{k+1}` roughly parallel to `s_k` near convergence the term is positive.
+first term: it is a reduction measured *backwards* along the step. Near
+convergence `g_{k+1}ᵀs_k → 0` — the new gradient is asymptotically orthogonal to
+the step that produced it — so it is the curvature term `½s_kᵀH_{k+1}s_k` that
+carries the denominator, and positivity of ρ̃ in the limit is a statement about
+the model Hessian along `s_k`, not about the gradient. That is why `ρ̃ → 1`
+requires either the secant condition or asymptotic second-order coherence, and
+is not implied by first-order coherence alone.
 """
-@inline function retrospective_ratio(actual::T, s::V, g_new::V, Hnew_s::V) where {T, V}
+@inline function retrospective_ratio(actual::T, s::V, g_new::V, Hnew_s::V) where {T <: Real, V}
     predicted = -dot(g_new, s) + T(0.5) * dot(s, Hnew_s)
-    return predicted > 0 ? actual / predicted : T(-Inf)
+    return (isfinite(actual) && predicted > 0) ? actual / predicted : T(-Inf)
 end
 
 """

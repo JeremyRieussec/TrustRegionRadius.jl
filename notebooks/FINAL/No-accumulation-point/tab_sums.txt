@@ -1,0 +1,16 @@
+\begin{table}[htbp]
+  \centering
+  \caption{Partial sums on $f(x)=e^{-x}$, $x_0=0$, over at most 700 iterations. $N$ is the number each run actually produced and is not the same for every rule: a run stops early once the radius has collapsed to where $f(x)-f(x+s)$ is pure rounding, so each sum is over its own $N$ and the rows are not directly comparable as totals. Every rule has $\sum_k\Delta_k=+\infty$ in the limit: the iterates must travel an infinite distance to drive the gradient to zero. For the criticality-anchored rules (R-DFO and R-grad with $\mu$ bounded) the radius decays harmonically, so the divergence is only logarithmic and $\sum_k\Delta_k^2$ converges. For R-delta the radius overflows double precision before its $N$ is reached, so the $+\infty$ entry is an overflow rather than a proof of divergence (though the series does diverge). A partial sum over a finite run settles neither convergence nor divergence.}
+  \label{tab: sums exponential}
+  \begin{tabular}{lrrr}
+    \toprule
+    Rule & $N$ & $\sum_{k<N}\Delta_k$ & $\sum_{k<N}\Delta_k^2$ \\
+    \midrule
+    R-delta & 608 & $1.172\times10^{59}$ & $3.530\times10^{117}$ \\
+    R-step & 394 & $8.017\times10^{2}$ & $1.898\times10^{3}$ \\
+    R-DFO & 700 & $5.900\times10^{0}$ & $1.430\times10^{0}$ \\
+    R-grad ($\mu$ bounded) & 700 & $7.248\times10^{0}$ & $1.430\times10^{0}$ \\
+    R-grad ($\mu$ unbounded) & 540 & $3.740\times10^{2}$ & $2.591\times10^{2}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}

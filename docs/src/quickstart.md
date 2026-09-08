@@ -7,37 +7,58 @@ using Pkg
 Pkg.add(url = "https://github.com/USER/TrustRegionRadius.jl")
 ```
 
+!!! note "Not executed"
+    This block is shown for reference and is not run when the documentation is
+    built.
+
 For development, clone and `Pkg.develop(path = ".")`.
 
 ## A first solve
 
-```julia
-using TrustRegionRadius, ADNLPModels
+```@example quickstart
+using TrustRegionRadius, ADNLPModels, NLPModels
 
 rosen(x) = (1 - x[1])^2 + 100(x[2] - x[1]^2)^2
 nlp = ADNLPModel(rosen, [-1.2, 1.0])
 
 stats = tr_solve(nlp; rule = RDelta())
-stats.status      # :first_order
-stats.solution    # ≈ [1.0, 1.0]
-stats.iter
+(stats.status, stats.solution, stats.iter)
 ```
 
 `tr_solve` returns a [`TRResult`](@ref), which is JSO's `GenericExecutionStats`, so
 `SolverBenchmark` and the rest of the ecosystem accept it unchanged. Evaluation counts live
 on the model — `neval_obj(nlp)`, `neval_grad(nlp)`, `neval_hprod(nlp)` — not on the result.
 
-## Choosing the three axes
+## Choosing the axes
 
-```julia
+```@example quickstart
 stats = tr_solve(nlp;
     rule      = RGrad(μ = 1.0),      # how Δ moves
     model     = SR1Model(mem = 5),   # what curvature the model reports
     subsolver = SteihaugCG(),        # how the subproblem is solved
-    params    = TRParams(η = 0.1, η₁ = 0.1, η₂ = 0.9, Δ₀ = 1.0, tol = 1e-8))
+    params    = TRParams(η = 0.1, η1 = 0.1, η2 = 0.9, Δ0 = 1.0, tol = 1e-8))
+(stats.status, stats.iter)
 ```
 
-Defaults are `RDelta()`, `ExactHessian()`, `SteihaugCG()`.
+Defaults are `RDelta()`, `ExactHessian()`, `SteihaugCG()`. The threshold keywords are
+ASCII (`η1`, `η2`, `Δ0`); the subscript spellings `η₁`, `η₂`, `Δ₀` are accepted as
+aliases and readable as properties either way.
+
+The fourth axis, the sampling rule, belongs to the *oracle* rather than to `tr_solve`,
+because it decides what the oracle returns:
+
+```@example quickstart
+prob = LogisticRegression(K = 5, M = 2_000)
+
+exact   = tr_solve(FullBatchNLP(prob);                       model = BHHHModel())
+sampled = tr_solve(FiniteSumNLP(prob, RadiusProportional()); model = BHHHModel())
+(exact.status, exact.iter, sampled.status, sampled.iter)
+```
+
+`tr_solve` picks the solver from the oracle: [`DeterministicTRSolver`](@ref),
+[`FiniteSumTRSolver`](@ref) or [`ExpectationTRSolver`](@ref). See
+[Problem classes](problem_classes.md) for what each one does differently and why the
+three are kept apart.
 
 !!! note "Hold `TRParams` fixed across mechanisms"
     In any comparison the thresholds and factors must be identical for every rule. Tuning
@@ -51,12 +72,13 @@ Defaults are `RDelta()`, `ExactHessian()`, `SteihaugCG()`.
 `η` decides whether a step is accepted; `η₁` and `η₂` decide only how the radius is scaled,
 and are the only two a rule ever sees:
 
-```julia
-TRParams(η₁ = 0.1, η₂ = 0.9)            # η defaults to η₁: the classical algorithm
-TRParams(η = 0.0, η₁ = 0.1, η₂ = 0.9)   # accept every step with positive predicted reduction
+```@example quickstart
+p1 = TRParams(η1 = 0.1, η2 = 0.9)           # η defaults to η1: the classical algorithm
+p2 = TRParams(η = 0.0, η1 = 0.1, η2 = 0.9)  # accept every step with positive pred. reduction
+(p1.η, p2.η)
 ```
 
-They must satisfy `0 ≤ η ≤ η₁ ≤ η₂ < 1`, checked in the constructor. Setting `η < η₁` opens a
+They must satisfy `0 ≤ η ≤ η1 ≤ η2 < 1`, checked in the constructor. Setting `η < η₁` opens a
 band where a step is accepted while the radius still contracts. [Thresholds and
 factors](thresholds.md) covers the consequences, and the matching convention
 `0 < γ₁ ≤ γ₂ < 1 < γ₃` on the scaling factors.
@@ -65,18 +87,24 @@ factors](thresholds.md) covers the consequences, and the matching convention
 
 `trace = true` attaches per-iteration trajectories to `stats.solver_specific`:
 
-```julia
+```@example quickstart
 stats = tr_solve(nlp; rule = RGrad(), trace = true)
-
 ss = stats.solver_specific
-ss[:delta_trajectory]      # Δₖ            length k+1, starting at Δ₀
-ss[:grad_trajectory]       # ‖gₖ‖          length k+1
-ss[:obj_trajectory]        # f(xₖ)         length k+1
-ss[:ratio_trajectory]      # ρₖ            length k
-ss[:step_trajectory]       # ‖sₖ‖          length k
-ss[:active_trajectory]     # ‖sₖ‖ == Δₖ    length k  (Bool)
-ss[:accepted_trajectory]   # ρₖ ≥ η        length k  (Bool)
+
+# Δₖ, ‖gₖ‖, f(xₖ) are state trajectories, of length k+1;
+# ρₖ, ‖sₖ‖ and the two Bool records are per-iteration, of length k.
+[k => length(ss[k]) for k in (:delta_trajectory, :grad_trajectory, :obj_trajectory,
+                              :ratio_trajectory, :step_trajectory,
+                              :active_trajectory, :accepted_trajectory)]
 ```
+
+The one-entry difference is the alignment convention, and it is set out in full on the
+[Diagnostics](diagnostics.md) page.
+
+A sampled run adds `:grad_sample_trajectory`, `:obj_sample_trajectory`,
+`:samples_total`, `:sample_cap_hits` and — where a truth exists —
+`:true_grad_trajectory`. A finite-sum run adds `:full_batch_trajectory`, marking the
+iterations at which `Nₖ = M` and the step was therefore exact.
 
 The first three are one entry longer than the rest, since they have a value before the first
 iteration; align on the tail when plotting them together.
@@ -93,18 +121,30 @@ other does not, and nothing else in a standard diagnostic distinguishes them.
 The tail fraction answers "is it still binding at the end?" but not "when did it stop?". For
 that, count the active iterations still ahead of each index:
 
-```julia
+[`inactivity_index`](@ref) answers it directly. It returns the first iteration after
+which the constraint never binds again, counted from zero, or `nothing` if it was still
+binding at the end.
+
+```@example quickstart
+(inactivity_index(stats), active_fraction(stats; tail = 0.1))
+```
+
+A `nothing` there means the run never entered the regime where the local rate is
+available. If you want the staircase itself for a plot, count the active iterations
+still ahead of each index:
+
+```@example quickstart
 a = ss[:active_trajectory]
 K = length(a)
 R = [count(@view a[k+1:end]) for k in 0:K-1]     # Rₖ, a staircase down to zero
+(first(R), last(R))
 ```
 
 `R` starts at the total number of active iterations, steps down by one at each active
 iteration, and is flat on inactive ones. It reaches zero at the last active iteration `k*`,
 after which the step is the unconstrained model minimiser. The range stops at `K-1` on
 purpose: `R_K = 0` for every run, so including it would make every curve reach zero and erase
-the distinction. A staircase that never reaches zero was still binding on the final
-iteration, and the run never entered the regime where the local rate is available.
+the distinction.
 
 Because the run stops at `‖g‖ ≤ tol` rather than at infinity, a positive tail is evidence of
 inactivity *over the iterations observed*, not a proof of eventual inactivity — and a tail of
@@ -139,29 +179,49 @@ silently folded into "failure".
 
 One struct and two methods:
 
-```julia
+```@example quickstart
 struct MyRule <: RadiusRule
-    γ₁::Float64
-    γ₂::Float64
-    γ₃::Float64
-    function MyRule(; γ₁ = 0.25, γ₂ = 0.5, γ₃ = 2.0)
-        check_factors(:MyRule; γ₁ = γ₁, γ₂ = γ₂, γ₃ = γ₃)
-        new(γ₁, γ₂, γ₃)
+    γ1::Float64
+    γ2::Float64
+    γ3::Float64
+    function MyRule(; γ1 = 0.25, γ2 = 0.5, γ3 = 2.0)
+        check_factors(:MyRule; γ1 = γ1, γ2 = γ2, γ3 = γ3)
+        new(γ1, γ2, γ3)
     end
 end
 
-TrustRegionRadius.initial_radius(::MyRule, Δ₀, g_norm) = Δ₀
-
 function TrustRegionRadius.update_radius!(r::MyRule, Δ::Float64, ρ::Float64, ::Bool,
-                                          η₁::Float64, η₂::Float64,
+                                          η1::Float64, η2::Float64,
                                           ::Float64, ::Float64, ::Float64)
-    ρ < η₁  && return r.γ₁ * Δ        # unsuccessful: the result MUST be < Δ
-    ρ ≥ η₂  && return r.γ₃ * Δ
+    ρ < η1  && return r.γ1 * Δ        # unsuccessful: the result MUST be < Δ
+    ρ >= η2 && return r.γ3 * Δ
     return Δ
 end
 
 TrustRegionRadius.asymptotic_regime(::MyRule) = :bounded_below
+
+tr_solve(nlp; rule = MyRule(), params = TRParams(tol = 1e-8)).status
 ```
+
+Two things in that template are easy to get wrong, and both were wrong in an earlier
+version of this page.
+
+`check_factors` takes **ASCII** keywords, `γ1, γ2, γ3`. The Unicode subscripts
+`γ₁, γ₂, γ₃` are accepted as aliases on [`TRParams`](@ref) (`η₁, η₂, Δ₀`) but **not**
+by the rule validators, so `check_factors(:MyRule; γ₁ = 0.25)` raises
+`MethodError: no method matching check_factors(::Symbol; γ₁::Float64)`.
+
+There is deliberately **no `initial_radius` method** above. The fallback
+[`initial_radius`](@ref)`(::RadiusRule, Δ0::Float64, ::Float64)` already returns `Δ0`,
+and adding an unannotated `initial_radius(::MyRule, Δ0, g_norm) = Δ0` makes the two
+ambiguous rather than overriding one:
+
+```
+MethodError: initial_radius(::MyRule, ::Float64, ::Float64) is ambiguous.
+```
+
+Define it only when your rule ignores `Δ0`, as the `μ`-scaled rules do, and annotate
+the argument types when you do.
 
 Then `tr_solve(nlp; rule = MyRule())`. `update_radius!` is exported, so extending it needs the
 qualified name; `using` brings it into scope without making it extensible. Arguments the rule
@@ -191,7 +251,7 @@ scripts group by.
 ### The arguments in order
 
 ```julia
-update_radius!(rule, Δ, ρ, accepted, η₁, η₂, s_norm, g_norm_old, g_norm_new)
+update_radius!(rule, Δ, ρ, accepted, η1, η2, s_norm, g_norm_old, g_norm_new)
 ```
 
 `accepted` is third. It is passed rather than recomputed because a rule cannot derive it:

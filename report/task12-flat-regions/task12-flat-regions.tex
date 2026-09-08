@@ -1,0 +1,891 @@
+% =============================================================================
+% Flat regions on the radius axis: theory, figures and tables.
+%
+% Companion to notebooks/Saddle/flat_regions_v1.ipynb. Every number is printed by
+% a cell of that notebook that ran, or read from the exp15 archive it names.
+%
+% The theory of Section 2 is cited from report/task7-slow-saddle by the labels it
+% carries there. Nothing is reproved. Section 3 is new, and it is the only place
+% this file derives anything.
+%
+% Standalone. Own preamble, no bibliography, no \cite. The macro block mirrors
+% the one near the top of _Thesis_FINAL/Article3/Survey-part3-v1.tex, through
+% \providecommand, so this file can later be folded into that document.
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\geometry{margin=2.3cm}
+
+% ---- macros mirrored from Survey-part3-v1.tex -------------------------------
+\providecommand{\defeq}{\mathrel{:=}}
+\providecommand{\kbar}{\overline{\kappa}}
+\providecommand{\calO}{{\mathcal{O}}}
+\providecommand{\NN}{{\mathbb{N}}}
+\providecommand{\abs}[1]{\left \vert #1 \right \vert}
+\providecommand{\norm}[1]{\left \lVert #1 \right \rVert}
+\providecommand*\mykappa[1]{ \kappa_{\scriptscriptstyle \text{#1}} }
+\providecommand*\myeta[1]{ \eta_{\scriptscriptstyle \text{#1}} }
+\providecommand{\Rdelta}{\textsf{R-delta}}
+\providecommand{\Rstep}{\textsf{R-step}}
+\providecommand{\Rdfo}{\textsf{R-DFO}}
+\providecommand{\Rgrad}{\textsf{R-grad}}
+\providecommand{\Rrtr}{\textsf{R-RTR}}
+\providecommand{\Rgrtr}{\textsf{R-gRTR}}
+\providecommand{\gone}{\gamma_1}
+\providecommand{\gtwo}{\gamma_2}
+\providecommand{\gthree}{\gamma_3}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}[proposition]{Lemma}
+\newtheorem{corollary}[proposition]{Corollary}
+\theoremstyle{definition}
+\newtheorem{assumption}{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+
+\title{Flat regions on the radius axis\\
+       \large Theory, figures and tables from \texttt{flat\_regions\_v1.ipynb}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A radius tied to a criticality measure inherits the measure's collapse near a
+saddle, and the escape time grows without bound as the saddle is made slower.
+This report gathers the theory the statement rests on, cited rather than
+reproved, and the seven figures and three tables of
+\texttt{flat\_regions\_v1.ipynb}. The model is the true Hessian throughout, so
+the stall appears with perfect curvature information. Three results are new. The
+growth envelope of the escape proposition is drawn on the same axes as the run
+and is never crossed. The hypothesis \texttt{as: RCA} is found to hold with
+equality rather than as an inequality, $\Delta_k = \overline{\mu}\norm{g_k}$ to
+eight decimal places on every iteration. And the escape-time ratio between the
+two criticality measures, which the earlier prediction missed by three per cent,
+is recovered to within $0.3$ per cent by an integral that accounts for the branch
+switch in $\tau$.
+\end{abstract}
+
+\tableofcontents
+
+% =============================================================================
+\section{What is reported here}\label{sec: scope}
+% =============================================================================
+
+The experiment \texttt{exp15\_slow\_saddle.jl} produces the scalar tables and the
+collapse. The report \texttt{task7-slow-saddle} carries the proofs. This document
+reports what the notebook adds to both, which is what a batch script cannot
+produce: the iterate paths, the theory drawn on the same axes as the run, and two
+open items settled.
+
+Every number below is printed by a cell of
+\texttt{notebooks/Saddle/flat\_regions\_v1.ipynb} that ran, or read from the
+archive \texttt{exp\_2026-08-29\_21-51-19\_slow\_saddle} that the notebook names.
+The notebook executes top to bottom from a clean kernel with no errors.
+
+% =============================================================================
+\section{The theory, cited}\label{sec: theory}
+% =============================================================================
+
+\subsection{The family}
+
+For $\varepsilon > 0$,
+\begin{equation}
+  f_\varepsilon(x,y) = \tfrac12 x^2
+      + \varepsilon\left(\tfrac14 y^4 - \tfrac12 y^2\right),
+  \qquad
+  \nabla f_\varepsilon = \bigl(x,\ \varepsilon y(y^2-1)\bigr),
+  \label{eqn: f}
+\end{equation}
+with
+\begin{equation}
+  \nabla^2 f_\varepsilon(0,y)
+    = \operatorname{diag}\bigl(1,\ \varepsilon(3y^2-1)\bigr),
+  \qquad
+  \nabla^2 f_\varepsilon(0,0) = \operatorname{diag}(1,-\varepsilon).
+  \label{eqn: hessian}
+\end{equation}
+The origin is a saddle, nonsingular for every $\varepsilon > 0$. The minimisers
+sit at $(0,\pm1)$, at distance $1$ from it whatever $\varepsilon$ is, so
+$\varepsilon$ tunes the escape rate without moving the geometry. That separation
+is what makes the family a clean instrument.
+
+\subsection{The four statements}
+
+We cite these by the labels they carry in \texttt{task7-slow-saddle}. We do not
+restate their proofs.
+
+\begin{description}[leftmargin=2.6em, style=nextline]
+  \item[\texttt{prop: invariant}]
+    The line $\{x = 0\}$ is invariant, under truncated conjugate gradient and
+    under the exact Mor\'e--Sorensen solver alike. A run started on it stays on
+    it, and there $\norm{g_k} = \varepsilon\abs{y_k}(1-y_k^2) \leq
+    \varepsilon\abs{y_k}$ for $\abs{y} \leq 1$.
+  \item[\texttt{as: RCA}]
+    The hypothesis is put on the radius rule and not on a named rule. There are
+    $C > 0$ and $k_0 \geq 0$ with
+    $\Delta_k \leq C \max_{k_0 \leq j \leq k}\norm{g_j}$ for all $k \geq k_0$.
+  \item[\texttt{prop: escape}]
+    Under \texttt{as: RCA}, with $x_0 = 0$ and $0 < \abs{y_{k_0}} \leq \tfrac12$,
+    the first index with $\abs{y_k} > \tfrac12$ satisfies
+    \begin{equation}
+      k_{\mathrm{esc}} \;>\; k_0
+        + \frac{\ln\bigl(1/(2\abs{y_{k_0}})\bigr)}{\ln(1 + C\varepsilon)}.
+      \label{eqn: escape}
+    \end{equation}
+    The proof uses no property of the model or of the subproblem solution beyond
+    $\norm{s_k} \leq \Delta_k$. That is what makes it a statement about the
+    radius axis, and why it holds with the exact Hessian.
+  \item[\texttt{prop: rdfo}]
+    $\Rgrad$ satisfies \texttt{as: RCA} with $C = \overline{\mu}$ and $k_0 = 0$,
+    immediately and with no entry condition. $\Rdfo$ satisfies it for $k > k_0$
+    with $C = \gthree\zeta$, but only from an index $k_0$ with
+    $\Delta_{k_0} \leq \zeta\norm{g_{k_0}}$. If no such index exists the
+    proposition asserts that $\Delta_k \to 0$ geometrically and the run converges
+    to the saddle.
+\end{description}
+
+The corollary \texttt{prop: budget} turns \eqref{eqn: escape} around: for any
+budget $K$ there is an $\varepsilon$ making $k_{\mathrm{esc}} > K$. The stall is
+therefore not a corner case to be tuned away.
+
+\subsection{The continuous limit and its constant}
+
+The recursion $\abs{y_{k+1}} \leq \abs{y_k} + \Delta_k$ with
+$\Delta_k = C\varepsilon\,\hat\omega(y_k)$ has continuous limit
+$\mathrm{d}y/\mathrm{d}k = C\varepsilon\,\hat\omega(y)$, so
+\begin{equation}
+  k_{\mathrm{esc}} \;\sim\;
+    \frac{1}{C\varepsilon}\int_{y_0}^{1/2}\frac{\mathrm{d}y}{\hat\omega(y)} .
+  \label{eqn: continuous limit}
+\end{equation}
+For the gradient measure $\hat\omega(y) = y(1-y^2)$ and the integral is
+\texttt{eqn: exact constant} of the report,
+\begin{equation}
+  \int_{y_0}^{1/2}\frac{\mathrm{d}y}{y(1-y^2)}
+    = \ln\frac{1}{\sqrt3\,y_0} + \calO(y_0^2).
+  \label{eqn: exact constant}
+\end{equation}
+The $\sqrt3$ comes from the factor $1-y^2$ at the escape threshold, not from the
+threshold itself.
+
+% =============================================================================
+\section{New theory: the integrand for \texorpdfstring{$\tau$}{tau}}
+\label{sec: tau theory}
+% =============================================================================
+
+This section is the only place this document derives anything, and it settles the
+first open item.
+
+With $\omega_k = \tau_k = \max\{\norm{g_k}, -\lambda_k^-\}$ the earlier
+prediction treated $-\lambda^-$ as the constant $\varepsilon$, giving arithmetic
+growth, $k_{\mathrm{esc}} \approx 1/(2\overline{\mu}\varepsilon)$ and a ratio of
+escape times of $2\ln(1/(2y_0)) = 12.43$. Two facts break that.
+
+First, $-\lambda^-$ is not constant. On the invariant line \eqref{eqn: hessian}
+gives $\lambda^- = \varepsilon(3y^2-1)$, so
+\begin{equation}
+  -\lambda^- = \varepsilon(1 - 3y^2),
+  \label{eqn: lambda minus}
+\end{equation}
+which decays to zero at $y = 1/\sqrt3 = 0.577350$. The notebook confirms that
+value and that the escape threshold $\tfrac12$ lies below it, so
+\eqref{eqn: lambda minus} is positive throughout the range but not constant on
+it.
+
+Second, $\tau$ switches branch inside the range. The two terms are equal where
+$y(1-y^2) = 1-3y^2$, and the notebook locates that root by bisection at
+\begin{equation}
+  y^\ast = 0.460811 \;<\; \tfrac12 .
+  \label{eqn: switch}
+\end{equation}
+Below $y^\ast$ the curvature term dominates and above it the gradient term does,
+which Table~\ref{tab: branch} shows.
+
+\begin{table}[H]
+  \centering\small
+  \caption{The two terms of $\tau$ on the invariant line. The branch switch at
+    $y^\ast = 0.460811$ lies inside $[y_0, \tfrac12]$, so neither term is the
+    measure throughout.}
+  \label{tab: branch}
+  \begin{tabular}{rrrl}
+    \toprule
+    $y$ & $y(1-y^2)$ & $1-3y^2$ & branch \\
+    \midrule
+    0.00100 & 0.001000 & 0.999997 & curvature \\
+    0.10000 & 0.099000 & 0.970000 & curvature \\
+    0.30000 & 0.273000 & 0.730000 & curvature \\
+    0.40000 & 0.336000 & 0.520000 & curvature \\
+    0.46081 & 0.362959 & 0.362959 & curvature \\
+    0.48000 & 0.369408 & 0.308800 & gradient  \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The correct integrand is therefore the measure itself,
+\begin{equation}
+  \hat\omega_\tau(y) = \max\bigl\{\,y(1-y^2),\ 1-3y^2\,\bigr\},
+  \label{eqn: omega tau}
+\end{equation}
+and the predicted ratio of escape times is the quotient of the two integrals of
+\eqref{eqn: continuous limit},
+\begin{equation}
+  R_{\mathrm{pred}}
+    = \left.\int_{y_0}^{1/2}\frac{\mathrm{d}y}{y(1-y^2)}
+      \middle/
+      \int_{y_0}^{1/2}\frac{\mathrm{d}y}{\hat\omega_\tau(y)}\right. .
+  \label{eqn: ratio pred}
+\end{equation}
+
+\begin{table}[H]
+  \centering\small
+  \caption{The two integrals of \eqref{eqn: continuous limit}, by Simpson on
+    $u = \ln y$. The quadrature is validated against the closed form of
+    \eqref{eqn: exact constant} before being applied to
+    \eqref{eqn: omega tau}, which has none.}
+  \label{tab: integrals}
+  \begin{tabular}{rrrrr}
+    \toprule
+    $y_0$ & $I_{\mathrm{grad}}$ numerical & closed form & difference
+      & $I_\tau$ numerical \\
+    \midrule
+    $10^{-3}$ &  6.358449 &  6.358449 & $7.11\times10^{-14}$ & 0.736439 \\
+    $10^{-6}$ & 13.266204 & 13.266204 & $6.57\times10^{-14}$ & 0.737438 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Table~\ref{tab: integrals} gives
+\begin{equation}
+  R_{\mathrm{pred}} = 8.6341 \ \ (y_0 = 10^{-3}),
+  \qquad
+  R_{\mathrm{pred}} = 17.9896 \ \ (y_0 = 10^{-6}).
+  \label{eqn: ratio values}
+\end{equation}
+Section~\ref{sec: open one} compares these with the fitted ratios.
+
+\begin{remark}[why $I_\tau$ barely moves with $y_0$]
+  $I_{\mathrm{grad}}$ diverges logarithmically as $y_0 \to 0$ and $I_\tau$ does
+  not, since $\hat\omega_\tau \to 1$ there. The predicted ratio therefore grows
+  like $\ln(1/y_0)$, which is why it is $8.63$ at $y_0 = 10^{-3}$ and $17.99$ at
+  $10^{-6}$ while the two $I_\tau$ differ in the fourth decimal.
+\end{remark}
+
+% =============================================================================
+\section{Method}\label{sec: method}
+% =============================================================================
+
+The grid is \texttt{exp15}'s and is not redefined: $\varepsilon$ over five
+decades from $10^{-1}$ to $10^{-5}$, $\overline{\mu}$ and $\zeta$ over three
+decades from $10^{-2}$ to $10$, $y_0 \in \{10^{-3}, 10^{-6}\}$ and
+$x_0 \in \{0, 0.8\}$, escape threshold $\tfrac12$, and at most $50\,000$
+iterations. Two tolerances are used and never pooled, $10^{-14}$ in the rate
+regime and $10^{-5}$ in the outcome regime.
+
+The model is \texttt{ExactHessian} and the subproblem solver truncated conjugate
+gradient throughout.
+
+Two things are worth recording about how the notebook obtains its numbers.
+
+\paragraph{The suite is loaded once.}
+\texttt{benchmark/initialisation.jl} already includes
+\texttt{exp15\_slow\_saddle.jl}, so including it again would re-evaluate its
+\texttt{const}s. The notebook loads the suite once and asserts that all eighteen
+names it uses came from it.
+
+\paragraph{The archive does not carry the trajectories.}
+\texttt{exp15} saves its rows through
+\texttt{Base.structdiff(r, (ys = 0, deltas = 0))}, so \texttt{ys} and
+\texttt{deltas} are stripped. The three tables of Section~\ref{sec: tables} read
+the archive and recompute only the columns marked derived. The figures that draw
+a trajectory rerun their cells: $6$ for the paths, $3$ for the envelope, $1$ for
+the binding test, $14$ for the $\Rdfo$ arm and $2$ for the two measures.
+
+% =============================================================================
+\section{The figures}\label{sec: figures}
+% =============================================================================
+
+\subsection{Iterate paths}
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth]{figs/flat_regions_fig1_paths.pdf}
+  \caption{$\Rgrad$ capped at $\overline{\mu} = 1$ with the \emph{true} Hessian
+    and truncated conjugate gradient, $y_0 = 10^{-3}$. Top row $x_0 = 0.8$,
+    bottom row $x_0 = 0$, one column per $\varepsilon$. The saddle is the star
+    and the two minimisers the diamonds. Trust regions are drawn on a thinned
+    subset of the accepted steps. The stall is present with perfect curvature
+    information.}
+  \label{fig: paths}
+\end{figure}
+
+The bottom row is the invariant line, where \texttt{prop: escape} applies
+exactly. The top row shows the transient: the $x$ component is solved first, and
+only then does the run begin the slow climb along $y$. The panels differ only in
+$\varepsilon$ and the escape iteration moves by two decades across them, while
+the geometry does not move at all.
+
+\subsection{The theory on the same axes as the run}
+
+\begin{figure}[H]\centering
+  \includegraphics[width=0.76\textwidth]{figs/flat_regions_fig2_envelope.pdf}
+  \caption{$\abs{y_k}$ against $k$, both logarithmic, with the envelope
+    $\abs{y_0}(1+\overline{\mu}\varepsilon)^k$ of \texttt{prop: escape} over each
+    run. $\overline{\mu} = 1$, $y_0 = 10^{-3}$, true Hessian. The envelope is
+    drawn up to escape only, since that is where the proposition states it.}
+  \label{fig: envelope}
+\end{figure}
+
+\texttt{prop: escape} bounds the running maximum $M_k$ from above and
+$\abs{y_k} \leq M_k$, so the observed curve must lie below the envelope. It does,
+on every iteration of every run.
+
+\begin{table}[H]
+  \centering\small
+  \caption{The envelope check. A run crossing the envelope would be a failure of
+    the bound. None does.}
+  \label{tab: envelope}
+  \begin{tabular}{rrrrrl}
+    \toprule
+    $\varepsilon$ & $k_{\mathrm{esc}}$ & points
+      & $\max \abs{y}/\text{envelope}$ & at $k$ & crossed \\
+    \midrule
+    $10^{-1}$ &   67 &   68 & 1.000000 & 0 & no \\
+    $10^{-2}$ &  639 &  640 & 1.000000 & 0 & no \\
+    $10^{-3}$ & 6362 & 6363 & 1.000000 & 0 & no \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The maximum ratio is attained at $k = 0$, where the two are equal by
+construction. Away from the start the observed curve falls below the envelope,
+which is the direction the proposition predicts.
+
+\subsection{The radius is the binding quantity}
+
+\begin{figure}[H]\centering
+  \includegraphics[width=0.76\textwidth]{figs/flat_regions_fig3_binding.pdf}
+  \caption{$\Delta_k$, $C\norm{g_k}$ with $C = \overline{\mu} = 1$, and
+    $\norm{s_k}$ along one run at $\varepsilon = 10^{-2}$, $y_0 = 10^{-3}$, true
+    Hessian. The three curves coincide.}
+  \label{fig: binding}
+\end{figure}
+
+\texttt{prop: escape} uses only $\norm{s_k} \leq \Delta_k$ together with
+\texttt{as: RCA}, so the bound is about the radius and not about the subproblem
+solution. Over the $640$ iterations to escape,
+\begin{equation}
+  \min_k \frac{\Delta_k}{\overline{\mu}\norm{g_k}}
+    = \max_k \frac{\Delta_k}{\overline{\mu}\norm{g_k}}
+    = 1.00000000,
+  \label{eqn: rca equality}
+\end{equation}
+the trust-region constraint is active on $100\%$ of iterations, and
+$\norm{s_k} = \Delta_k$ to $10^{-8}$ on $100\%$.
+
+This is stronger than \texttt{as: RCA} requires. The assumption is an inequality
+and the run satisfies it as an equality, so the escape bound is not being carried
+by slack in the hypothesis. The radius rule alone sets the step length.
+
+\subsection{The \texorpdfstring{$\Rdfo$}{R-DFO} entry condition}
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth]{figs/flat_regions_fig4_dfo_entry.pdf}
+  \caption{$\Rdfo$ at $\varepsilon = 10^{-2}$, $y_0 = 10^{-3}$, $\zeta = 1$, true
+    Hessian. Left, started inside the band at $\Delta_0 = \zeta\norm{g_0}$, so
+    the entry condition of \texttt{prop: rdfo} holds at $k_0 = 0$ and the run
+    stalls for $610$ iterations. Right, started at $\Delta_0 = 1$, outside the
+    band, where the run never enters it. The entry index is computed from the
+    trace as the first $k$ with $\Delta_k \leq \zeta\norm{g_k}$.}
+  \label{fig: dfo}
+\end{figure}
+
+\begin{table}[H]
+  \centering\small
+  \caption{Which branch of \texttt{prop: rdfo} each cell falls in, at
+    $\varepsilon = 10^{-2}$ and $y_0 = 10^{-3}$, with $\Delta_0$ swept. $k_0$ is
+    computed from the trace and not assumed.}
+  \label{tab: dfo scan}
+  \begin{tabular}{rrlrlrr}
+    \toprule
+    $\zeta$ & $\Delta_0$ & $k_0$ & $k_{\mathrm{esc}}$ & status
+      & $\abs{y_{\mathrm{end}}}$ & dist.\ saddle \\
+    \midrule
+    0.01 & $1.0\times10^{-7}$ & 0            & never & \texttt{max\_iter} & 0.18895 & 0.18895 \\
+    0.01 & $1.0\times10^{-3}$ & 12           & never & \texttt{max\_iter} & 0.48241 & 0.48241 \\
+    0.01 & $1.0\times10^{0}$  & never enters & 1     & \texttt{stalled}   & 1.00000 & 1.00000 \\
+    \midrule
+    0.1  & $1.0\times10^{-6}$ & 0            & 6048  & \texttt{stalled}   & 1.00000 & 1.00000 \\
+    0.1  & $1.0\times10^{-3}$ & 9            & 5060  & \texttt{stalled}   & 1.00000 & 1.00000 \\
+    0.1  & $1.0\times10^{0}$  & never enters & 1     & \texttt{stalled}   & 1.00000 & 1.00000 \\
+    \midrule
+    1    & $1.0\times10^{-5}$ & 0            & 610   & \texttt{stalled}   & 1.00000 & 1.00000 \\
+    1    & $1.0\times10^{-3}$ & 6            & 524   & \texttt{stalled}   & 1.00000 & 1.00000 \\
+    1    & $1.0\times10^{0}$  & never enters & 1     & \texttt{stalled}   & 1.00000 & 1.00000 \\
+    \midrule
+    10   & $1.0\times10^{-4}$ & 0            & 68    & \texttt{stalled}   & 1.00000 & 1.00000 \\
+    10   & $1.0\times10^{-3}$ & 3            & 60    & \texttt{stalled}   & 1.00000 & 1.00000 \\
+    10   & $1.0\times10^{0}$  & 22           & 1     & \texttt{stalled}   & 1.00000 & 1.00000 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Table~\ref{tab: dfo scan} settles the first branch and leaves the second open.
+Nine of twelve cells enter the band, at $k_0$ between $0$ and $22$, and every one
+of them stalls in proportion to $\zeta\varepsilon$, which is the first branch
+working. The entry index is not a formality: at $\zeta = 0.01$ the two cells that
+enter differ in $k_0$ by twelve iterations and both fail to escape within
+$50\,000$.
+
+\textbf{The second branch is not occupied on this scan.} Three cells never enter
+the band, and none of the three converges to the saddle. All three escape at
+$k = 1$ instead, because the first step from $\Delta_0 = 1$ is enormous relative
+to $\norm{g_0} \approx \varepsilon y_0 = 10^{-5}$ and carries the iterate past
+the threshold in one move. The proposition's second branch requires
+$\Delta_k \to 0$ geometrically, which needs a sequence of unsuccessful
+iterations that does not occur here.
+
+We report the absence rather than searching for a configuration that produces the
+predicted picture. Whether the second branch is occupied anywhere on this family
+is open.
+
+\subsection{The two measures}
+
+\begin{figure}[H]\centering
+  \includegraphics[width=0.76\textwidth]{figs/flat_regions_fig5_measures.pdf}
+  \caption{$\abs{y_k}$ against $k$ for $\omega_k = \norm{g_k}$ and
+    $\omega_k = \tau_k$ at $\overline{\mu} = 1$, $\varepsilon = 10^{-2}$,
+    $y_0 = 10^{-3}$, true Hessian, with the continuous-limit curves of
+    \eqref{eqn: continuous limit} over each. The predicted curves use
+    $\hat\omega(y) = y(1-y^2)$ and \eqref{eqn: omega tau} respectively.}
+  \label{fig: measures}
+\end{figure}
+
+The gradient measure gives $\Delta_k \propto \abs{y_k}$ and geometric growth. The
+second measure gives a radius that does not vanish with $\abs{y_k}$, so growth is
+faster, and the run escapes at $k = 74$ against $k = 639$. Drawing
+\eqref{eqn: continuous limit} over the observed curves is what turns the visual
+comparison into a test, and Section~\ref{sec: open one} quantifies it.
+
+\subsection{The outcome map}
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth]{figs/flat_regions_fig6_outcomes.pdf}
+  \caption{Three outcomes over the $(\overline{\mu},\varepsilon)$ grid on the
+    invariant line, $\Rgrad$ capped with the true Hessian. Crosses mark false
+    convergence, circles fast escape, squares slow escape or none. The two
+    tolerance regimes are separate maps. \textbf{The first-order tolerance is
+    what draws the false-convergence boundary}, $10^{-14}$ on the top row and
+    $10^{-5}$ on the bottom.}
+  \label{fig: outcomes}
+\end{figure}
+
+\begin{table}[H]
+  \centering\small
+  \caption{Outcome composition, $\Rgrad$ capped on the invariant line, twenty
+    cells per row. The two regimes differ in the first-order tolerance and in
+    nothing else.}
+  \label{tab: outcomes}
+  \begin{tabular}{llrrrr}
+    \toprule
+    regime & $y_0$ & false convergence & fast & slow & never \\
+    \midrule
+    rate, $\texttt{tol} = 10^{-14}$    & $10^{-3}$ &  0 & 0 & 10 & 10 \\
+    rate, $\texttt{tol} = 10^{-14}$    & $10^{-6}$ &  0 & 0 & 10 & 10 \\
+    \midrule
+    outcome, $\texttt{tol} = 10^{-5}$  & $10^{-3}$ & 16 & 0 &  4 &  0 \\
+    outcome, $\texttt{tol} = 10^{-5}$  & $10^{-6}$ & 20 & 0 &  0 &  0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The contrast is complete. At $\texttt{tol} = 10^{-14}$ not one of the forty cells
+reports false convergence. At $\texttt{tol} = 10^{-5}$, thirty-six of forty do,
+and at $y_0 = 10^{-6}$ every cell does. Near the saddle
+$\norm{g_k} \approx \varepsilon\abs{y_k}$, so lowering $\varepsilon\abs{y_0}$
+below the tolerance defeats the stopping test, and the two regimes are two
+different experiments rather than two views of one.
+
+\subsection{The gap}
+
+\begin{figure}[H]\centering
+  \includegraphics[width=0.72\textwidth]{figs/flat_regions_fig7_gap.pdf}
+  \caption{The ratio of the fitted geometric rate to
+    $\ln(1+\overline{\mu}\varepsilon)$, against $\overline{\mu}\varepsilon$, over
+    the whole grid on the invariant line. The dashed line at $1$ is the bound.
+    Every point lies on or below it.}
+  \label{fig: gap}
+\end{figure}
+
+% =============================================================================
+\section{The tables}\label{sec: tables}
+% =============================================================================
+
+\subsection{The \texorpdfstring{$(\overline{\mu},\varepsilon)$}{(mu-bar, eps)} grid}
+
+\begin{table}[H]
+  \centering\footnotesize
+  \caption{$\Rgrad$ capped, rate regime, $x_0 = 0$, true Hessian. Read from the
+    archive; $\ln(1+\overline{\mu}\varepsilon)$, the ratio and the collapse
+    product are derived here. \texttt{never} is a category and never a number.
+    $n$ is the point count of the rate fit.}
+  \label{tab: grid grad}
+  \begin{tabular}{rrrrrrrrrl}
+    \toprule
+    $y_0$ & $\overline{\mu}$ & $\varepsilon$ & $k_{\mathrm{esc}}$
+      & fitted rate & $\ln(1+\overline{\mu}\varepsilon)$ & ratio
+      & $\overline{\mu}\varepsilon k_{\mathrm{esc}}$ & $n$ & outcome \\
+    \midrule
+    $10^{-3}$ & 0.01 & $10^{-1}$ & 6362  & 0.000990 & 0.001000 & 0.9904 & 6.3620 & 6362  & slow \\
+    $10^{-3}$ & 0.01 & $10^{-2}$ & never & 0.000100 & 0.000100 & 0.9989 &        & 50001 & never \\
+    $10^{-3}$ & 0.01 & $10^{-3}$ & never & 0.000010 & 0.000010 & 1.0000 &        & 50001 & never \\
+    $10^{-3}$ & 0.01 & $10^{-4}$ & never & 0.000001 & 0.000001 & 1.0000 &        & 50001 & never \\
+    $10^{-3}$ & 0.01 & $10^{-5}$ & never & 0.000000 & 0.000000 & 1.0000 &        & 50001 & never \\
+    $10^{-3}$ & 0.1  & $10^{-1}$ & 639   & 0.009857 & 0.009950 & 0.9906 & 6.3900 & 639   & slow \\
+    $10^{-3}$ & 0.1  & $10^{-2}$ & 6362  & 0.000990 & 0.001000 & 0.9904 & 6.3620 & 6362  & slow \\
+    $10^{-3}$ & 0.1  & $10^{-3}$ & never & 0.000100 & 0.000100 & 0.9989 &        & 50001 & never \\
+    $10^{-3}$ & 1    & $10^{-1}$ & 67    & 0.094540 & 0.095310 & 0.9919 & 6.7000 & 67    & slow \\
+    $10^{-3}$ & 1    & $10^{-2}$ & 639   & 0.009857 & 0.009950 & 0.9906 & 6.3900 & 639   & slow \\
+    $10^{-3}$ & 1    & $10^{-3}$ & 6362  & 0.000990 & 0.001000 & 0.9904 & 6.3620 & 6362  & slow \\
+    $10^{-3}$ & 10   & $10^{-1}$ & 12    & 0.587519 & 0.693147 & 0.8476 & 12.0000 & 12   & slow \\
+    $10^{-3}$ & 10   & $10^{-2}$ & 69    & 0.094059 & 0.095310 & 0.9869 & 6.9000 & 69    & slow \\
+    $10^{-3}$ & 10   & $10^{-3}$ & 642   & 0.009856 & 0.009950 & 0.9905 & 6.4200 & 642   & slow \\
+    $10^{-3}$ & 10   & $10^{-4}$ & 6364  & 0.000990 & 0.001000 & 0.9904 & 6.3640 & 6364  & slow \\
+    \midrule
+    $10^{-6}$ & 0.01 & $10^{-1}$ & 13273 & 0.000997 & 0.001000 & 0.9976 & 13.2730 & 13273 & slow \\
+    $10^{-6}$ & 0.1  & $10^{-1}$ & 1334  & 0.009926 & 0.009950 & 0.9976 & 13.3400 & 1334  & slow \\
+    $10^{-6}$ & 0.1  & $10^{-2}$ & 13273 & 0.000997 & 0.001000 & 0.9976 & 13.2730 & 13273 & slow \\
+    $10^{-6}$ & 1    & $10^{-1}$ & 139   & 0.095130 & 0.095310 & 0.9981 & 13.9000 & 139   & slow \\
+    $10^{-6}$ & 1    & $10^{-2}$ & 1334  & 0.009926 & 0.009950 & 0.9976 & 13.3400 & 1334  & slow \\
+    $10^{-6}$ & 1    & $10^{-3}$ & 13273 & 0.000997 & 0.001000 & 0.9976 & 13.2730 & 13273 & slow \\
+    $10^{-6}$ & 10   & $10^{-1}$ & 22    & 0.658274 & 0.693147 & 0.9497 & 22.0000 & 22    & slow \\
+    $10^{-6}$ & 10   & $10^{-2}$ & 142   & 0.094980 & 0.095310 & 0.9965 & 14.2000 & 142   & slow \\
+    $10^{-6}$ & 10   & $10^{-3}$ & 1336  & 0.009927 & 0.009950 & 0.9976 & 13.3600 & 1336  & slow \\
+    $10^{-6}$ & 10   & $10^{-4}$ & 13276 & 0.000997 & 0.001000 & 0.9976 & 13.2760 & 13276 & slow \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Table~\ref{tab: grid grad} shows the rows with a finite rate; the notebook prints
+all forty, including three at $y_0 = 10^{-6}$ where the escape phase is empty and
+the fit returns no value. The escape time is a function of the product
+$\overline{\mu}\varepsilon$ alone, and halving the cap does what halving
+$\varepsilon$ does. Every cell with $\overline{\mu}\varepsilon = 10^{-3}$ has
+$k_{\mathrm{esc}}$ within two iterations of $6362$, whatever $\overline{\mu}$ and
+$\varepsilon$ separately are.
+
+\subsection{The \texorpdfstring{$\zeta$}{zeta} grid}
+
+\begin{table}[H]
+  \centering\footnotesize
+  \caption{$\Rdfo$ started inside the band at $\Delta_0 = \zeta\norm{g_0}$, so
+    the entry condition holds at $k_0 = 0$ by construction. Rate regime,
+    $x_0 = 0$, true Hessian. The bound uses $C = \gthree\zeta$ with
+    $\gthree = 2.0$. Rows with $k_{\mathrm{esc}} = $ \texttt{never} are rows, not
+    omissions.}
+  \label{tab: grid dfo}
+  \begin{tabular}{rrrrrrrrl}
+    \toprule
+    $y_0$ & $\zeta$ & $\varepsilon$ & $k_{\mathrm{esc}}$ & fitted rate
+      & $\ln(1+\gthree\zeta\varepsilon)$ & ratio
+      & $\gthree\zeta\varepsilon k_{\mathrm{esc}}$ & outcome \\
+    \midrule
+    $10^{-3}$ & 0.01 & $10^{-1}$ & 6048  & 0.001030 & 0.001998 & 0.5154 & 12.0960 & slow \\
+    $10^{-3}$ & 0.01 & $10^{-2}$ & never & 0.000104 & 0.000200 & 0.5189 &         & never \\
+    $10^{-3}$ & 0.1  & $10^{-1}$ & 610   & 0.010203 & 0.019803 & 0.5152 & 12.2000 & slow \\
+    $10^{-3}$ & 0.1  & $10^{-2}$ & 6048  & 0.001030 & 0.001998 & 0.5154 & 12.0960 & slow \\
+    $10^{-3}$ & 1    & $10^{-1}$ & 68    & 0.093646 & 0.182322 & 0.5136 & 13.6000 & slow \\
+    $10^{-3}$ & 1    & $10^{-2}$ & 610   & 0.010203 & 0.019803 & 0.5152 & 12.2000 & slow \\
+    $10^{-3}$ & 1    & $10^{-3}$ & 6048  & 0.001030 & 0.001998 & 0.5154 & 12.0960 & slow \\
+    $10^{-3}$ & 10   & $10^{-1}$ & 11    & 0.525981 & 1.098612 & 0.4788 & 22.0000 & slow \\
+    $10^{-3}$ & 10   & $10^{-2}$ & 68    & 0.093646 & 0.182322 & 0.5136 & 13.6000 & slow \\
+    $10^{-3}$ & 10   & $10^{-3}$ & 610   & 0.010203 & 0.019803 & 0.5152 & 12.2000 & slow \\
+    $10^{-3}$ & 10   & $10^{-4}$ & 6048  & 0.001030 & 0.001998 & 0.5154 & 12.0960 & slow \\
+    \midrule
+    $10^{-6}$ & 0.01 & $10^{-1}$ & 12694 & 0.001036 & 0.001998 & 0.5188 & 25.3880 & slow \\
+    $10^{-6}$ & 0.1  & $10^{-1}$ & 1280  & 0.010288 & 0.019803 & 0.5195 & 25.6000 & slow \\
+    $10^{-6}$ & 0.1  & $10^{-2}$ & 12694 & 0.001036 & 0.001998 & 0.5188 & 25.3880 & slow \\
+    $10^{-6}$ & 1    & $10^{-1}$ & 139   & 0.095948 & 0.182322 & 0.5263 & 27.8000 & slow \\
+    $10^{-6}$ & 1    & $10^{-2}$ & 1280  & 0.010288 & 0.019803 & 0.5195 & 25.6000 & slow \\
+    $10^{-6}$ & 1    & $10^{-3}$ & 12694 & 0.001036 & 0.001998 & 0.5188 & 25.3880 & slow \\
+    $10^{-6}$ & 10   & $10^{-1}$ & 23    & 0.592288 & 1.098612 & 0.5391 & 46.0000 & slow \\
+    $10^{-6}$ & 10   & $10^{-2}$ & 139   & 0.095948 & 0.182322 & 0.5263 & 27.8000 & slow \\
+    $10^{-6}$ & 10   & $10^{-3}$ & 1280  & 0.010288 & 0.019803 & 0.5195 & 25.6000 & slow \\
+    $10^{-6}$ & 10   & $10^{-4}$ & 12694 & 0.001036 & 0.001998 & 0.5188 & 25.3880 & slow \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The ratio column sits near $0.52$ across the whole grid, against near $0.99$ for
+$\Rgrad$ in Table~\ref{tab: grid grad}. The $\Rdfo$ bound holds and is loose by a
+factor of about two, uniformly. The reason is that $\gthree$ is the worst case of
+an expansion the next iteration undoes, so the effective constant is $\zeta$
+rather than $\gthree\zeta$, and $\gthree = 2$. Scaling by $\zeta$ instead puts
+the collapse product at about $6.05$, close to the $\Rgrad$ value of $6.36$.
+
+\subsection{The two measures}
+
+\begin{table}[H]
+  \centering\footnotesize
+  \caption{Fitted ratio of escape times against the prediction
+    \eqref{eqn: ratio values}, one row per cell that escaped under both measures.
+    The fitted ratio is a quotient of two integers, so $1/k(\tau)$ is the finest
+    difference it can express. That resolution is a column and not a filter.}
+  \label{tab: measures}
+  \begin{tabular}{rrrrrrrrr}
+    \toprule
+    $y_0$ & $\overline{\mu}$ & $\varepsilon$ & $k(\norm{g})$ & $k(\tau)$
+      & fitted & predicted & difference & resolution \\
+    \midrule
+    $10^{-3}$ & 0.01 & $10^{-1}$ & 6362 & 736 &  8.6440 &  8.6341 &   0.0100 & 0.14\% \\
+    $10^{-3}$ & 0.1  & $10^{-1}$ &  639 &  74 &  8.6351 &  8.6341 &   0.0011 & 1.35\% \\
+    $10^{-3}$ & 0.1  & $10^{-2}$ & 6362 & 736 &  8.6440 &  8.6341 &   0.0100 & 0.14\% \\
+    $10^{-3}$ & 1    & $10^{-1}$ &   67 &   7 &  9.5714 &  8.6341 &   0.9374 & 14.29\% \\
+    $10^{-3}$ & 1    & $10^{-2}$ &  639 &  74 &  8.6351 &  8.6341 &   0.0011 & 1.35\% \\
+    $10^{-3}$ & 1    & $10^{-3}$ & 6362 & 736 &  8.6440 &  8.6341 &   0.0100 & 0.14\% \\
+    $10^{-3}$ & 10   & $10^{-1}$ &   12 &   3 &  4.0000 &  8.6341 &  -4.6341 & 33.33\% \\
+    $10^{-3}$ & 10   & $10^{-2}$ &   69 &  10 &  6.9000 &  8.6341 &  -1.7341 & 10.00\% \\
+    $10^{-3}$ & 10   & $10^{-3}$ &  642 &  76 &  8.4474 &  8.6341 &  -0.1867 & 1.32\% \\
+    $10^{-3}$ & 10   & $10^{-4}$ & 6364 & 739 &  8.6116 &  8.6341 &  -0.0224 & 0.14\% \\
+    \midrule
+    $10^{-6}$ & 0.01 & $10^{-1}$ & 13273 & 737 & 18.0095 & 17.9896 &   0.0199 & 0.14\% \\
+    $10^{-6}$ & 0.1  & $10^{-1}$ &  1334 &  74 & 18.0270 & 17.9896 &   0.0374 & 1.35\% \\
+    $10^{-6}$ & 0.1  & $10^{-2}$ & 13273 & 737 & 18.0095 & 17.9896 &   0.0199 & 0.14\% \\
+    $10^{-6}$ & 1    & $10^{-1}$ &   139 &   7 & 19.8571 & 17.9896 &   1.8675 & 14.29\% \\
+    $10^{-6}$ & 1    & $10^{-2}$ &  1334 &  74 & 18.0270 & 17.9896 &   0.0374 & 1.35\% \\
+    $10^{-6}$ & 1    & $10^{-3}$ & 13273 & 737 & 18.0095 & 17.9896 &   0.0199 & 0.14\% \\
+    $10^{-6}$ & 10   & $10^{-1}$ &    22 &   3 &  7.3333 & 17.9896 & -10.6563 & 33.33\% \\
+    $10^{-6}$ & 10   & $10^{-2}$ &   142 &  10 & 14.2000 & 17.9896 &  -3.7896 & 10.00\% \\
+    $10^{-6}$ & 10   & $10^{-3}$ &  1336 &  76 & 17.5789 & 17.9896 &  -0.4106 & 1.32\% \\
+    $10^{-6}$ & 10   & $10^{-4}$ & 13276 & 740 & 17.9405 & 17.9896 &  -0.0491 & 0.14\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% =============================================================================
+\section{Open item one: the \texorpdfstring{$\tau$}{tau} constant}
+\label{sec: open one}
+% =============================================================================
+
+The structural prediction, that the ratio does not depend on $\varepsilon$, holds
+and was already established. What did not hold was the value. The earlier
+prediction $2\ln(1/(2y_0)) = 12.43$ is wrong by nearly a half, and refining it to
+$\hat\omega_\tau = 1-3y^2$ alone gives $8.362$ at $y_0 = 10^{-3}$, three per cent
+below a measured $8.64$.
+
+Equation \eqref{eqn: omega tau} closes the gap. Reading
+Table~\ref{tab: measures} by resolution:
+
+\begin{table}[H]
+  \centering\small
+  \caption{The comparison by population. The error tracks the resolution, which
+    is what a quotient of small integers must do.}
+  \label{tab: ratio summary}
+  \begin{tabular}{lrrrr}
+    \toprule
+    population & $y_0$ & cells & fitted range & worst relative error \\
+    \midrule
+    every cell that escaped in both & $10^{-3}$ & 10 & 4.0000 to 9.5714 & 53.67\% \\
+    every cell that escaped in both & $10^{-6}$ & 10 & 7.3333 to 19.8571 & 59.24\% \\
+    \midrule
+    $k(\tau) \geq 20$, resolution below 5\% & $10^{-3}$ & 7 & 8.4474 to 8.6440 & 2.16\% \\
+    $k(\tau) \geq 20$, resolution below 5\% & $10^{-6}$ & 7 & 17.5789 to 18.0270 & 2.28\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+On the four best-resolved cells, those at resolution $0.14\%$, the fitted ratios
+are $8.6440$, $8.6440$, $8.6440$ and $8.6116$ against a predicted $8.6341$, and
+$18.0095$ three times and $17.9405$ against $17.9896$. Those agree to between
+$0.11\%$ and $0.27\%$.
+
+\textbf{The discrepancy is explained.} The correction has two parts and both were
+needed. Treating $-\lambda^-$ as constant was the larger error, and it is what
+the $1-3y^2$ form already repaired. Ignoring the branch switch at $y^\ast$ was
+the remainder, worth the difference between $8.362$ and $8.6341$, that is between
+a three per cent gap and a two-tenths of one per cent gap.
+
+\begin{remark}[what is left unaccounted for]
+  The residual disagreement of $0.1$ to $0.3$ per cent on the best-resolved cells
+  is not explained here. Two candidates are available and we do not separate
+  them. \eqref{eqn: continuous limit} is a continuum approximation to a
+  recursion, with an error of order $\overline{\mu}\varepsilon$ per step, and
+  \eqref{eqn: exact constant} carries an $\calO(y_0^2)$ remainder. Both are of
+  the right size and neither was isolated.
+\end{remark}
+
+% =============================================================================
+\section{Open item two: the bound is one-sided}\label{sec: open two}
+% =============================================================================
+
+\texttt{prop: escape} bounds the escape time from below, so it bounds the growth
+rate from above. The fitted rate must lie below
+$\ln(1+\overline{\mu}\varepsilon)$, and the question is by how much.
+
+\begin{table}[H]
+  \centering\small
+  \caption{The gap across the grid, rate regime, $x_0 = 0$. The ratio is the
+    fitted geometric rate divided by $\ln(1+\overline{\mu}\varepsilon)$. Three of
+    the forty cells give no fit and are excluded, leaving thirty-seven.}
+  \label{tab: gap}
+  \begin{tabular}{lrrr}
+    \toprule
+    population & cells & ratio range & above the bound \\
+    \midrule
+    every cell with a fit                          & 37 & 0.8476 to 1.0000 & 0 \\
+    $\overline{\mu}\varepsilon \leq 10^{-1}$       & 35 & 0.9869 to 1.0000 & 0 \\
+    $\overline{\mu}\varepsilon > 10^{-1}$          &  2 & 0.8476 to 0.9497 & 0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Two things follow.
+
+The bound is never violated. Not one of the thirty-seven cells has a fitted rate
+above $\ln(1+\overline{\mu}\varepsilon)$, which is the side
+\texttt{prop: escape} predicts and the first thing a one-sided bound must
+survive.
+
+The bound is tight where it is used. Over the thirty-five cells with
+$\overline{\mu}\varepsilon \leq 10^{-1}$, the ratio ranges from $0.9869$ to
+$1.0000$, so the bound is within $1.4$ per cent of the observed rate over four
+decades of the product. It degrades only in the two cells at
+$\overline{\mu}\varepsilon \geq 1$, to $0.8476$ and $0.9497$, and the reason is
+visible in Table~\ref{tab: grid grad}: there $\ln(1+\overline{\mu}\varepsilon) =
+0.693147$ against $\overline{\mu}\varepsilon = 1$, so the linearisation the
+continuous limit rests on has stopped applying. That is a known corner and not a
+surprise.
+
+The tightest cells are the ones that do not escape. Rows with
+$k_{\mathrm{esc}} = $ \texttt{never} have $n = 50001$ points in the fit and a
+ratio of $1.0000$ to four decimals. A run that never leaves the flat region
+measures the growth rate more precisely than one that escapes, because it spends
+its whole budget inside the regime the bound describes.
+
+% =============================================================================
+\section{Findings for the existing subsection}\label{sec: findings}
+% =============================================================================
+
+The report \texttt{task7-slow-saddle} already carries a findings section for
+\texttt{Survey-part3-v1.tex}. We do not repeat it and we do not apply it. One
+finding is added, from this notebook's own integrals.
+
+\paragraph{Line 1150, the constant of the capped escape time.}
+The source reads
+\begin{verbatim}
+    t_{\mathrm{esc}} \;\approx\; \frac{\ln(1/\abs{y_0})}{\overline{\mu}\,\varepsilon} ,
+\end{verbatim}
+carrying \verb|\label{eqn: escape time capped}| at line 1151. The collapse
+product is compared with three candidate constants below.
+
+\begin{table}[H]
+  \centering\small
+  \caption{The mean collapse product against three candidate constants, at four
+    thresholds on $\overline{\mu}\varepsilon$. The threshold is not a
+    convenience: the continuous limit replaces
+    $\ln(1+\overline{\mu}\varepsilon)$ by $\overline{\mu}\varepsilon$, which
+    fails at the one cell where that product is $1$.}
+  \label{tab: collapse}
+  \begin{tabular}{rrrrrrr}
+    \toprule
+    $y_0$ & $\overline{\mu}\varepsilon \leq$ & cells & mean product
+      & residual $\ln(1/y_0)$ & $\ln(1/(2y_0))$ & $\ln(1/(\sqrt3 y_0))$ \\
+    \midrule
+    $10^{-3}$ & 1         & 10 &  7.0250 & \textbf{0.1172} & 0.8104 & 0.6666 \\
+    $10^{-3}$ & $10^{-1}$ &  9 &  6.4722 & 0.4355 & 0.2576 & \textbf{0.1138} \\
+    $10^{-3}$ & $10^{-2}$ &  7 &  6.3786 & 0.5292 & 0.1640 & \textbf{0.0201} \\
+    $10^{-3}$ & $10^{-3}$ &  4 &  6.3625 & 0.5453 & 0.1479 & \textbf{0.0041} \\
+    \midrule
+    $10^{-6}$ & 1         & 10 & 14.3235 & \textbf{0.5080} & 1.2011 & 1.0573 \\
+    $10^{-6}$ & $10^{-1}$ &  9 & 13.4706 & 0.3450 & 0.3482 & \textbf{0.2044} \\
+    $10^{-6}$ & $10^{-2}$ &  7 & 13.3050 & 0.5105 & 0.1826 & \textbf{0.0388} \\
+    $10^{-6}$ & $10^{-3}$ &  4 & 13.2737 & 0.5418 & 0.1514 & \textbf{0.0075} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The residual for $\ln(1/(\sqrt3 y_0))$ falls monotonically as the limit is
+approached, to $0.0041$ and $0.0075$, while the residual for $\ln(1/\abs{y_0})$
+stays near $0.54$. At the tightest threshold the first is smaller by a factor of
+$133$ and $72$. Only the unrestricted row favours $\ln(1/\abs{y_0})$, and that
+row contains the cell at $\overline{\mu}\varepsilon = 1$ where the limit does not
+apply.
+
+This is a different location from the finding the report makes at line 1107,
+which concerns the caption of \texttt{tab: slow saddle} and the model axis under
+$\Rdelta$. Line 1150 sits in the radius-axis paragraph and is the equation the
+collapse test at line 1157 is stated against, so it is what this notebook
+measures. The same constant stands at line 1081 in \texttt{eqn: escape time},
+where the source says \texttt{linearises to}, so it is offered there as an
+approximation and the case is weaker.
+
+We describe and do not apply. Both readings stand. The source may keep
+$\ln(1/\abs{y_0})$ as the leading behaviour of the linearised flow, or take
+$\ln(1/(\sqrt3\abs{y_0}))$ as the constant the collapse lands on. The author
+chooses.
+
+\paragraph{Nothing else is new.} The envelope, the binding radius and the two
+tolerance regimes confirm statements the report already makes. The corrected
+$\tau$ constant of Section~\ref{sec: open one} and the unoccupied second branch
+of \texttt{prop: rdfo} in Section~\ref{sec: figures} are findings about the
+report rather than about the subsection.
+
+% =============================================================================
+\section{Discussion}\label{sec: discussion}
+% =============================================================================
+
+\paragraph{The stall is a property of the radius, not of the model.}
+Every run in this report uses the exact Hessian. The model sees the escape
+direction perfectly and reports $\lambda_{\min} = -\varepsilon$ at the saddle.
+The method still takes $6362$ iterations to move a distance $\tfrac12$ at
+$\overline{\mu}\varepsilon = 10^{-3}$. \eqref{eqn: rca equality} says why: the
+radius is exactly $\overline{\mu}\norm{g_k}$ on every iteration, and near the
+saddle $\norm{g_k} \approx \varepsilon\abs{y_k}$, so the step the rule permits
+shrinks with the distance the run is trying to cover. The subproblem solver is
+not the constraint and neither is the model.
+
+\paragraph{Two uses of second-order information, with different effects.}
+The radius measure and the stopping test are both second-order and they act on
+different things. Replacing $\norm{g_k}$ by $\tau_k$ in the radius shortens the
+escape by a factor of $8.6$ at $y_0 = 10^{-3}$ and $18.0$ at $10^{-6}$, and
+Section~\ref{sec: tau theory} now predicts both to under half a per cent. The
+stopping test does something else: Table~\ref{tab: outcomes} shows that at
+$\texttt{tol} = 10^{-5}$ thirty-six of forty cells stop at the saddle and report
+success, and lowering the tolerance removes all of it. Neither substitutes for
+the other and they are reported separately throughout.
+
+\paragraph{The entry condition is where $\Rgrad$ and $\Rdfo$ part.}
+$\Rgrad$ satisfies \texttt{as: RCA} at $k_0 = 0$ with no condition, so the stall
+is unconditional. $\Rdfo$ needs the run to enter the band first, and
+Table~\ref{tab: dfo scan} shows $k_0$ ranging from $0$ to $22$ and three cells
+never entering. Where entry happens the stall follows, with a bound loose by a
+uniform factor of about two because $\gthree$ is a worst case. Where it does not,
+the behaviour on this family is immediate escape rather than the convergence to
+the saddle the proposition's second branch describes. That branch remains
+unexercised.
+
+\paragraph{What the section can now claim.}
+Three statements are supported by measurement rather than by argument. The growth
+envelope of \texttt{prop: escape} is never crossed, on any run, at any
+$\varepsilon$. The hypothesis \texttt{as: RCA} holds with equality on this
+family, so the bound is not resting on slack. And the bound is tight to $1.4$ per
+cent over four decades of $\overline{\mu}\varepsilon$, degrading only where
+$\ln(1+t) \approx t$ stops holding. A bound that is one-sided, never violated and
+tight to a few per cent is worth stating as such.
+
+\paragraph{What remains open.}
+The second branch of \texttt{prop: rdfo} is not occupied on this scan and we do
+not know whether it is occupied anywhere on this family. The residual $0.1$ to
+$0.3$ per cent in Section~\ref{sec: open one} has two candidate explanations and
+neither was isolated. Both are recorded rather than resolved.
+
+\end{document}

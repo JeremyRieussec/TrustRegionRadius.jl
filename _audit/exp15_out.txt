@@ -1,0 +1,28 @@
+[ Info: Experiment archive → C:\Users\jerem\OneDrive\Desktop\GitHub\TrustRegionRadius.jl\benchmark\results\exp_2026-08-29_21-51-19_slow_saddle
+[ Info: Wrote config → C:\Users\jerem\OneDrive\Desktop\GitHub\TrustRegionRadius.jl\benchmark\results\exp_2026-08-29_21-51-19_slow_saddle\experiment_config.toml
+┌ Info: regime done
+│   regime = :rate
+└   nrows = 340
+┌ Info: regime done
+│   regime = :outcome
+└   nrows = 680
+┌ Info: RDFO entry arm done
+└   ncells = 40
+┌ Info: second-order rerun done
+└   ncells = 289
+[ Info: table → tables\exp15_grid_grad.txt
+[ Info: table → tables\exp15_grid_dfo.txt
+[ Info: table → tables\exp15_grid_dfo_entry.txt
+[ Info: table → tables\exp15_comparator.txt
+[ Info: table → tables\exp15_measures.txt
+[ Info: table → tables\exp15_outcomes.txt
+[ Info: figure → figures\exp15_fig1_y_vs_k.pdf
+[ Info: figure → figures\exp15_fig2_kesc_vs_eps.pdf
+[ Info: figure → figures\exp15_fig3_collapse.pdf
+[ Info: figure → figures\exp15_fig4_rate.pdf
+[ Info: figure → figures\exp15_fig5_outcomes.pdf
+[ Info: figure → figures\exp15_fig6_measures.pdf
+[ Info: Wrote summary → C:\Users\jerem\OneDrive\Desktop\GitHub\TrustRegionRadius.jl\benchmark\results\exp_2026-08-29_21-51-19_slow_saddle\experiment_summary.md
+
+TOTAL 3.0 min, 1009 rows
+ARCHDIR C:\Users\jerem\OneDrive\Desktop\GitHub\TrustRegionRadius.jl\benchmark\results\exp_2026-08-29_21-51-19_slow_saddle
