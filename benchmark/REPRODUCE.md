@@ -36,14 +36,21 @@ From the repository root:
 
 ```bash
 git checkout 5b959ce        # the commit of the campaign, from the table
-julia --project=benchmark -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+git show main:Manifest.toml > Manifest.toml
+git show main:benchmark/Manifest.toml > benchmark/Manifest.toml
+julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
 julia --project=benchmark -e 'include("benchmark/initialisation.jl"); comparison()'
 ```
 
+The manifests were committed after the campaigns, so the campaign commits lack them; the
+two `git show` lines copy them in, and since those commits ignore `Manifest.toml` the tree
+stays clean. Use `Pkg.instantiate()` alone: `Pkg.develop` or `Pkg.update` rewrites the
+manifest, and on `main`, where it is tracked, leaves the tree dirty.
+
 Each campaign writes a new archive under `benchmark/results/`. CUTEst problems are opened
 through `CUTEst.jl`, which decodes each SIF file and compiles it with `gfortran`: install it
-first (`apt install gfortran` on Debian or Ubuntu), since the `CUTEst.jl` that `Pkg` resolves
-today (1.4.0) fails to load without it. Check that the log reports
+first (`apt install gfortran` on Debian or Ubuntu), since the `CUTEst.jl` of the manifest
+(1.4.0) fails to load without it. Check that the log reports
 `CUTEst: 196 problems selected`, the number in every archive; a different SIF collection can
 select a different set.
 
@@ -53,7 +60,7 @@ Rerunning everything takes about a day (below). `quick_check.jl` checks the pack
 the comparison archive in a fraction of that. From the repository root, on `main`:
 
 ```bash
-julia --project=benchmark -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
 # unzip exp_2026-08-29_02-28-45_comparison.zip from the Zenodo record, then
 julia --project=benchmark benchmark/quick_check.jl exp_2026-08-29_02-28-45_comparison
 ```
@@ -68,14 +75,15 @@ argument restricts it to the cheapest problems. It also prints the ratio of solv
 this machine to the campaign machine, over the runs that took at least 0.1 s there; that
 ratio scales the durations below.
 
-On a laptop, an Intel Core i5-13500H under WSL with Julia 1.12.6, gfortran 13.3 and the
-dependencies `Pkg` resolved on 29 October 2026, the check took about three minutes,
-compilation included, and gave a ratio of 2.0. 1050 of the 1056 runs agreed exactly. The six
-that did not are all on HUMPS, a two-variable problem on which the rules creep for up to
-ten thousand iterations, and the status agreed in all six. A rounding difference is
-presumably enough to move such a run, whether in the objective as another gfortran compiles
-it or in a dependency at another version; without the manifest of the campaign the two
-cannot be told apart.
+On a laptop, an Intel Core i5-13500H under WSL with Julia 1.12.6 and gfortran 13.3, the
+check took about three minutes, compilation included, and gave a ratio of 2.0. 1050 of the
+1056 runs agreed exactly. The six that did not are all on HUMPS, a two-variable problem on
+which the rules creep for up to ten thousand iterations, and the status agreed in all six.
+They differ by the same counts whether the environment is instantiated from the manifests
+of the campaign or resolved afresh, so the package versions are not the cause. What still
+differs from the campaign machine is the processor, the Julia patch release (1.12.6 against
+1.12.1) and the gfortran that compiles the SIF file; a rounding difference from any of them
+is enough to move a run that creeps for thousands of iterations.
 
 ## How long it takes
 
@@ -107,11 +115,17 @@ above apart, and they are what to compare.
 
 ## Dependency versions
 
-The repository ships no `Manifest.toml`, so `Pkg.instantiate()` resolves the dependencies
-within the `[compat]` bounds of `Project.toml`, and the versions can differ from those of the
-runs. The archives record a content hash of the root `Project.toml` and `Manifest.toml`
-(`f2aa70c00c0418a4` and `b5e9c5e29c995cb9`, the same in all seven); the manifest of the
-`benchmark` environment, the one active during the runs, was not hashed.
+The repository ships the manifests of the campaign environment: `Manifest.toml` at the
+root and `benchmark/Manifest.toml`, both resolved under Julia 1.12.1. The archives record a
+content hash of the root `Project.toml` and `Manifest.toml`, `f2aa70c00c0418a4` and
+`b5e9c5e29c995cb9` in all seven, and the committed files give exactly those values, so the
+root manifest is the one the campaigns ran with. The `benchmark` manifest, the environment
+actually active during the runs, was not hashed; it agrees with the root manifest on all
+21 packages they share. To check the root hash, under Julia 1.12:
+
+```julia
+string(hash(read("Manifest.toml", String)); base = 16)   # b5e9c5e29c995cb9
+```
 
 ## Reading an archive
 

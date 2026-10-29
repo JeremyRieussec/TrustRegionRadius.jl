@@ -117,7 +117,7 @@ rejected step leaves both the model and the iterate unchanged.
 ## Benchmarks
 
 ```bash
-julia --project=benchmark -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
 julia --project=benchmark benchmark/run_campaign.jl
 julia --project=benchmark benchmark/experiments/exp3_zeta_sweep.jl   # just one
 ```
