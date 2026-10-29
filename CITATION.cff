@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: >-
   If you use this software in academic work, please cite both the software and
-  the survey it accompanies.
+  the article it accompanies.
 title: "TrustRegionRadius.jl: a testbed for trust-region radius update mechanisms"
 type: software
 authors:
@@ -15,9 +15,11 @@ authors:
 repository-code: "https://github.com/JeremyRieussec/TrustRegionRadius.jl"
 license: MIT
 version: 0.1.0
-# Uncomment once a release has been archived on Zenodo:
-# doi: 10.5281/zenodo.XXXXXXX
-# date-released: 2026-01-01
+date-released: 2026-09-08
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22655838
+    description: "Archives of the seven campaigns of the numerical study, run with v0.1.0"
 keywords:
   - optimization
   - trust-region methods
@@ -25,7 +27,7 @@ keywords:
   - Julia
 preferred-citation:
   type: article
-  title: "A survey of trust-region radius update mechanisms. Part I: First-order analysis"
+  title: "A numerical study of radius update rules in trust-region algorithms"
   authors:
     - family-names: Rieussec
       given-names: Jérémy
@@ -33,4 +35,25 @@ preferred-citation:
       given-names: Fabian
   year: 2026
   journal: "arXiv preprint"
-  doi: 10.48550/arXiv.2606.30202
+  doi: 10.48550/arXiv.2610.26134
+references:
+  - type: article
+    title: "Structural conditions on trust-region radius updates. Part I: first-order convergence and complexity"
+    authors:
+      - family-names: Rieussec
+        given-names: Jérémy
+      - family-names: Bastin
+        given-names: Fabian
+    year: 2026
+    journal: "arXiv preprint"
+    doi: 10.48550/arXiv.2606.30202
+  - type: article
+    title: "Structural conditions on trust-region radius updates. Part II: second-order convergence and asymptotic radius behaviour"
+    authors:
+      - family-names: Rieussec
+        given-names: Jérémy
+      - family-names: Bastin
+        given-names: Fabian
+    year: 2026
+    journal: "arXiv preprint"
+    doi: 10.48550/arXiv.2610.26137

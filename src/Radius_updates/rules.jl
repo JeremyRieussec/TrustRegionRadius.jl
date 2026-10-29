@@ -612,8 +612,8 @@ end
 """
     _r_exp(t, η1, γ1, γ2, γ3, M, λ1, λ2) -> Float64
 
-The R-function of Hei (2003), in the normalisation of Part I: a non-decreasing
-`R_{η1} : ℝ → ℝ₊` with
+The R-function of Hei (2003), in the normalisation of the numerical study: a
+non-decreasing `R_{η1} : ℝ → ℝ₊` with
 
     lim_{t→-∞} R = γ1,     R(t) ≤ γ2 for t < η1,
     R(η1) = γ3,        lim_{t→+∞} R = M, with M > γ3
@@ -629,6 +629,10 @@ multiplies by `R(ρ_k)` contracts on unsuccessful iterations automatically.
 
 Requires `M > γ3`: the value
 at the threshold must itself be exceeded by the asymptote.
+
+Part I writes the same factor in a narrower normalisation, with `R(η1) = 1 + γ2`
+and the asymptote `γ3`; the constants here are not an instance of it (see
+`check_hei_factors`).
 
 `t = -Inf` (the solver's convention for a non-positive predicted reduction, and
 for a non-finite trial objective) gives `exp(-Inf) = 0` and hence `R = γ1`, the
@@ -1010,18 +1014,21 @@ function update_radius!(r::RRTR, Δ::Float64, ρ̃::Float64, accepted::Bool,
 end
 
 """
-    RRTRGrad(; γ1 = 0.25, γ3 = 2.0, μ = 1.0, η̃₁ = 0.05, η̃₂ = 0.9,
-               half_test = true, Δmin = 0.0, Δmax = Inf)
+    RRTRGrad(; γ1 = 0.25, γ2 = 0.5, γ3 = 2.0, μ = 1.0, μ_max = Inf,
+               η̃₁ = 0.05, η̃₂ = 0.9, half_test = true, Δmin = 0.0, Δmax = Inf)
 
 Retrospective gradient-scaled rule of Fan, Pan & Song (2016):
 
-    μ_{k+1} = γ1 μ_k     if the step was rejected, or ρ̃ < η̃₁
-              γ3 μ_k     if ρ̃ ≥ η̃₂ and ‖s_k‖ > ½Δ_k
-              μ_k        otherwise
+    μ_{k+1} = γ1 μ_k               if the step was rejected, or ρ̃ < η̃₁
+              γ2 μ_k               if η̃₁ ≤ ρ̃ < η̃₂
+              min{γ3 μ_k, μ_max}   if ρ̃ ≥ η̃₂ and ‖s_k‖ > ½Δ_k
+              μ_k                  otherwise
     Δ_{k+1} = μ_{k+1} · crit_{k+1}
 
-Structurally [`RGrad`](@ref) with ρ replaced by ρ̃ and no intermediate
-contraction, so `γ2` is absent from this rule. The argument that μ cannot
+Structurally [`RGrad`](@ref) with ρ replaced by ρ̃, intermediate contraction by
+`γ2` included, and with the cap `μ_max` of [`RGradCapped`](@ref): the default
+`μ_max = Inf` leaves μ uncapped, and the initial `μ` is clamped to `μ_max`.
+`half_test = false` drops the ½Δ test. The argument that μ cannot
 diverge is *ratio-agnostic* — it uses only the monotone decrease of `f`, the
 local quadratic bounds, and the ½Δ test — so it transfers unchanged from `RGrad`
 to this rule. All the ratio has to supply is convergence to 1.
