@@ -3,7 +3,11 @@
 A testbed for **trust-region radius update mechanisms**, built on the
 [JuliaSmoothOptimizers](https://jso.dev) stack.
 
-Companion code for *A survey of trust-region radius update mechanisms*, Parts I–III.
+Companion code for *A numerical study of radius update rules in trust-region algorithms*
+([arXiv:2610.26134](https://arxiv.org/abs/2610.26134)), whose campaigns were run with v0.1.0 and
+are archived at [doi:10.5281/zenodo.22655838](https://doi.org/10.5281/zenodo.22655838). The theory
+it tests is in *Structural conditions on trust-region radius updates*, Parts I and II
+([arXiv:2606.30202](https://arxiv.org/abs/2606.30202), [arXiv:2610.26137](https://arxiv.org/abs/2610.26137)).
 
 ## Why this package exists
 

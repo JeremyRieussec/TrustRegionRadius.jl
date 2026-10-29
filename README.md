@@ -9,7 +9,11 @@ A testbed for **trust-region radius update mechanisms**, built on
 [JuliaSmoothOptimizers](https://jso.dev) (`NLPModels`, `SolverCore`, `Krylov`,
 `LinearOperators`).
 
-Companion code for *A survey of trust-region radius update mechanisms*, Parts I–III.
+Companion code for *A numerical study of radius update rules in trust-region algorithms*
+([arXiv:2610.26134](https://arxiv.org/abs/2610.26134)), whose campaigns were run with v0.1.0 and
+are archived at [doi:10.5281/zenodo.22655838](https://doi.org/10.5281/zenodo.22655838). The theory
+it tests is in *Structural conditions on trust-region radius updates*, Parts I and II
+([arXiv:2606.30202](https://arxiv.org/abs/2606.30202), [arXiv:2610.26137](https://arxiv.org/abs/2610.26137)).
 
 ## What it is for
 
@@ -114,7 +118,7 @@ rejected step leaves both the model and the iterate unchanged.
 
 ```bash
 julia --project=benchmark -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
-julia --project=benchmark benchmark/experiments/run_all.jl
+julia --project=benchmark benchmark/run_campaign.jl
 julia --project=benchmark benchmark/experiments/exp3_zeta_sweep.jl   # just one
 ```
 
@@ -136,13 +140,16 @@ benchmark/results/exp_2026-04-16_02-08-34_zeta_sweep/
 | `exp5_inactivity` | fraction of late iterations with ‖s‖ = Δ |
 | `exp6_interaction` | rule × model grid; additivity residuals |
 | `exp7_convergence_rate` | local order, conditioned on inactivity |
+| `exp17_second_order_profiles` | performance profiles of the second-order rules on CUTEst |
+
+To reproduce the numbers of the numerical study, see [`benchmark/REPRODUCE.md`](benchmark/REPRODUCE.md).
 
 ## Two things worth knowing
 
 **`RGrad` is uncapped; `RGradCapped` is not.** For `RGrad` the multiplier μ is exactly the
 ratio Δ/‖g‖, and it grows geometrically past any threshold, so the trust-region constraint
 eventually stops binding with no side condition. The capped variant supplies the bound the
-asymptotic theory assumes, at the cost of needing `μ_max > κ̄ = 4/λ*_min` — a constant that
+asymptotic theory assumes, at the cost of needing `μ_max > κ̄ = 8/λ*_min` — a constant that
 depends on the solution and so cannot be chosen in advance.
 
 **The activity flag is the interesting observable.** Whether the constraint eventually stops
