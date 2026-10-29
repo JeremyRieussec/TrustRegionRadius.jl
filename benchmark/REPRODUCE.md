@@ -41,8 +41,69 @@ julia --project=benchmark -e 'include("benchmark/initialisation.jl"); comparison
 ```
 
 Each campaign writes a new archive under `benchmark/results/`. CUTEst problems are opened
-through `CUTEst.jl`; without it, `default_problems()` falls back to the eight analytic
-problems with only a warning, and `benchmark/run_campaign.jl` refuses to start.
+through `CUTEst.jl`, which decodes each SIF file and compiles it with `gfortran`: install it
+first (`apt install gfortran` on Debian or Ubuntu), since the `CUTEst.jl` that `Pkg` resolves
+today (1.4.0) fails to load without it. Check that the log reports
+`CUTEst: 196 problems selected`, the number in every archive; a different SIF collection can
+select a different set.
+
+## A quick check
+
+Rerunning everything takes about a day (below). `quick_check.jl` checks the package against
+the comparison archive in a fraction of that. From the repository root, on `main`:
+
+```bash
+julia --project=benchmark -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+# unzip exp_2026-08-29_02-28-45_comparison.zip from the Zenodo record, then
+julia --project=benchmark benchmark/quick_check.jl exp_2026-08-29_02-28-45_comparison
+```
+
+It re-solves every problem of the comparison on which all archived runs ended inside the
+time budget and in under one second on the campaign machine: 176 of the 196 problems,
+1056 runs, under the six rules that `RULES` still holds (`RRTR` and `RAdaptiveStep` were
+commented out of it after the campaign). The status, the iteration count and the evaluation
+counts of each run must agree exactly with the archive; the script lists every run that
+does not, says how many differ in status, and exits with 1 if any differs. A second
+argument restricts it to the cheapest problems. It also prints the ratio of solve times,
+this machine to the campaign machine, over the runs that took at least 0.1 s there; that
+ratio scales the durations below.
+
+On a laptop, an Intel Core i5-13500H under WSL with Julia 1.12.6, gfortran 13.3 and the
+dependencies `Pkg` resolved on 29 October 2026, the check took about three minutes,
+compilation included, and gave a ratio of 2.0. 1050 of the 1056 runs agreed exactly. The six
+that did not are all on HUMPS, a two-variable problem on which the rules creep for up to
+ten thousand iterations, and the status agreed in all six. A rounding difference is
+presumably enough to move such a run, whether in the objective as another gfortran compiles
+it or in a dependency at another version; without the manifest of the campaign the two
+cannot be told apart.
+
+## How long it takes
+
+All seven campaigns ran on one machine, an Intel Core i9-13900, on a single thread. The
+sum of the archived solve times:
+
+| campaign | runs | solve time | ended on the 120 s budget |
+|---|---|---|---|
+| comparison | 1568 | 2.5 h | 67 |
+| ζ sweep | 1176 | 2.1 h | 52 |
+| inactivity | 1176 | 2.0 h | 51 |
+| interaction | 3136 | 2.1 h | 34 |
+| convergence order | 1568 | 2.9 h | 75 |
+| μ̄ sweep | 1372 | 2.5 h | 63 |
+| second order | 4704 | 7.7 h | 198 |
+| **total** | **14 700** | **21.9 h** | **540** |
+
+Decoding and compiling the problems add little on that machine: the comparison started
+2.61 h before the next campaign, against 2.53 h of solve time. Elsewhere, multiply by the
+ratio `quick_check.jl` prints: on the laptop above, a full rerun would take some 43 hours.
+
+## What depends on the machine
+
+A run is unsolved when it exhausts 10⁴ iterations or 120 s of wall clock, and only the second
+test depends on the machine. On a slower machine, runs that came close to the budget reach
+it too, so the counts of solved problems can change. The iteration and evaluation counts of
+the runs that end inside the budget do not, rounding on long runs such as those of HUMPS
+above apart, and they are what to compare.
 
 ## Dependency versions
 
