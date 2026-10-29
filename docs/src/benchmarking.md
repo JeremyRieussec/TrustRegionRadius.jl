@@ -107,7 +107,7 @@ across problems makes the results depend on the order they were visited.
 
 
 ```bash
-julia --project=benchmark -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
 julia --project=benchmark -e 'include("benchmark/initialisation.jl"); comparison()'
 ```
 
