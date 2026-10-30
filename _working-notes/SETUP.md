@@ -10,16 +10,16 @@ about ten minutes; the rest is one-time repository configuration.
 `Project.toml` ships with a placeholder. A real one has been generated for you:
 
 ```
-7a8d5bce-8bd3-4f8e-8a33-850f3a7a2263
+b2e96d2e-59a1-40e6-a41d-1c10527a0261
 ```
 
 It must appear in **three** places, identically:
 
 | file | line |
 |---|---|
-| `Project.toml` | `uuid = "7a8d5bce-…"` |
-| `benchmark/Project.toml` | `TrustRegionRadius = "7a8d5bce-…"` |
-| `docs/Project.toml` | `TrustRegionRadius = "7a8d5bce-…"` |
+| `Project.toml` | `uuid = "b2e96d2e-…"` |
+| `benchmark/Project.toml` | `TrustRegionRadius = "b2e96d2e-…"` |
+| `docs/Project.toml` | `TrustRegionRadius = "b2e96d2e-…"` |
 
 If you would rather generate your own:
 
@@ -69,9 +69,13 @@ bug.
 They are separate so that Plots, JLD2 and CUTEst are not dependencies of the package itself.
 
 ```bash
-julia --project=benchmark -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
-julia --project=docs      -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
+julia --project=docs      -e 'using Pkg; Pkg.instantiate()'
 ```
+
+Both manifests are tracked and record the package by `path = ".."`, so `Pkg.instantiate()` is
+enough. Do not `Pkg.develop` there: it rewrites the tracked manifest, and in `benchmark/`
+`run_campaign.jl` then refuses to start from a dirty tree.
 
 CUTEst needs a working SIF decoder and compiler toolchain. If it fails to build, the
 benchmark harness falls back to `analytic_problems()` and everything else still runs — that
@@ -109,9 +113,11 @@ Two conventions worth following, because tooling depends on them:
 
 - **The repository must end in `.jl`** — `TrustRegionRadius.jl`. Documenter, TagBot and the
   General registry all assume it.
-- **`Manifest.toml` stays untracked.** It is already in `.gitignore`. A package pins
-  `[compat]` ranges, not exact versions; committing a Manifest makes the package
-  unusable in any environment that resolves differently.
+- **The manifests are tracked.** `Manifest.toml` is committed at the root and in
+  `benchmark/`, `docs/` and `notebooks/`; the `.gitignore` rule is commented out. That is what
+  lets the campaigns be rerun in the environment that produced them: the root manifest hashes
+  to the `manifest_hash` every archive records. It costs users nothing, since Pkg ignores a
+  dependency's manifest and reads only its `[compat]` ranges.
 
 ### 7. Continuous integration
 
@@ -121,7 +127,6 @@ Copy the three workflow files from `.github/workflows/` (supplied alongside this
 |---|---|
 | `CI.yml` | runs the test suite on Julia LTS + stable, on Linux/macOS/Windows |
 | `Documenter.yml` | builds and publishes the docs to `gh-pages` on every push to `main` |
-| `CompatHelper.yml` | opens PRs when a dependency's `[compat]` bound falls behind |
 | `TagBot.yml` | creates a GitHub release when a version is registered |
 
 The CI matrix deliberately excludes the benchmark environment: CUTEst cannot be built on a
@@ -204,7 +209,7 @@ cannot be reproduced two years from now cannot be diagnosed either.
 - [x] `docs/make.jl` builds locally with no warnings
 - [x] `LICENSE` present (MIT supplied; change if your institution requires otherwise)
 - [x] repository named `TrustRegionRadius.jl`
-- [x] `Manifest.toml` untracked
+- [x] manifests committed (root, `benchmark/`, `docs/`, `notebooks/`)
 - [x] workflows copied, `DOCUMENTER_KEY` set, Pages pointed at `gh-pages`
 - [x] `deploydocs` uncommented with the real repository
 - [x] CI green
