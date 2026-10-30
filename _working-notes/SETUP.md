@@ -121,7 +121,6 @@ Copy the three workflow files from `.github/workflows/` (supplied alongside this
 |---|---|
 | `CI.yml` | runs the test suite on Julia LTS + stable, on Linux/macOS/Windows |
 | `Documenter.yml` | builds and publishes the docs to `gh-pages` on every push to `main` |
-| `CompatHelper.yml` | opens PRs when a dependency's `[compat]` bound falls behind |
 | `TagBot.yml` | creates a GitHub release when a version is registered |
 
 The CI matrix deliberately excludes the benchmark environment: CUTEst cannot be built on a
