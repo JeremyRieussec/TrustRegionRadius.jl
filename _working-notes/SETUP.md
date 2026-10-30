@@ -70,12 +70,12 @@ They are separate so that Plots, JLD2 and CUTEst are not dependencies of the pac
 
 ```bash
 julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
-julia --project=docs      -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+julia --project=docs      -e 'using Pkg; Pkg.instantiate()'
 ```
 
-`benchmark/Manifest.toml` is tracked and records the package by `path = ".."`, so
-`Pkg.instantiate()` is enough there. Do not `Pkg.develop` in that environment: it rewrites the
-tracked manifest, and `run_campaign.jl` refuses to start from a dirty tree.
+Both manifests are tracked and record the package by `path = ".."`, so `Pkg.instantiate()` is
+enough. Do not `Pkg.develop` there: it rewrites the tracked manifest, and in `benchmark/`
+`run_campaign.jl` then refuses to start from a dirty tree.
 
 CUTEst needs a working SIF decoder and compiler toolchain. If it fails to build, the
 benchmark harness falls back to `analytic_problems()` and everything else still runs — that
