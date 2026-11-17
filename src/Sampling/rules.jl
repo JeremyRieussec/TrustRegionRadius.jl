@@ -12,6 +12,8 @@
 #   OrthogonalityTest       E‖proj⊥∇Fᵢ‖²/(ν²‖ĝ‖²)          needs scores
 #   AugmentedInnerProduct   the maximum of the two          needs scores
 #   SequentialEstimation    2z²σ_f²/(κ²pred²)              couples through pred
+#   CertifiedDecrease       z_p²σ̂_N²/δ̂_N², paired          couples through the step
+#   SmoothedSize            a wrapped rule, a·N_k ≤ N_{k+1} ≤ b·N_k above a rising floor
 #
 # ---------------------------------------------------------------------------
 # Where the cap comes from

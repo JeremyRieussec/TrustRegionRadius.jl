@@ -181,19 +181,27 @@
         @test errs[end] > errs[1]                 # and with it the discarded term
     end
 
-    @testset "all three examples run under every sampling rule" begin
+    @testset "every example runs under every sampling rule" begin
         # No N_max anywhere: every example below is a finite sum, where
         # check_population_cap rejects a user-supplied N_max because the cap is M.
         # The examples have M ∈ {800, 2_000}, so the old N_max = 20_000 was
         # redundant in every case and dropping it changes nothing that is tested.
-        samplers = [("Fixed",        () -> FixedSample(64)),
+        samplers = [("FullBatch",    () -> FullBatch()),
+                    ("Fixed",        () -> FixedSample(64)),
                     ("RadiusProp",   () -> RadiusProportional()),
                     ("NormTest",     () -> NormTest(θ = 0.5)),
                     ("InnerProduct", () -> InnerProductTest(N_min = 8)),
                     ("Orthogonality",() -> OrthogonalityTest(N_min = 8)),
                     ("Augmented",    () -> AugmentedInnerProduct(N_min = 8)),
                     ("Geometric",    () -> GeometricSample(N₀ = 8, rate = 1.1)),
-                    ("Sequential",   () -> SequentialEstimation(N_min = 8))]
+                    ("Sequential",   () -> SequentialEstimation(N_min = 8)),
+                    ("Certified",    () -> CertifiedDecrease(N_min = 8)),
+                    ("Smoothed",     () -> SmoothedSize(CertifiedDecrease(N_min = 8)))]
+
+        # "Every" is checked rather than claimed: a sampling rule the package
+        # exports and this list omits fails here.
+        @test Set(nameof(typeof(sf())) for (_, sf) in samplers) ==
+              exported_concrete(SamplingRule)
 
         rngm = MersenneTwister(1)
         Xm = randn(rngm, 800, 5)

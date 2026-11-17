@@ -1,6 +1,6 @@
 # Radius mechanisms
 
-Ten rules, all concrete subtypes of [`RadiusRule`](@ref). Every one reads the scaling
+Eleven rules, all concrete subtypes of [`RadiusRule`](@ref). Every one reads the scaling
 thresholds `η₁` and `η₂` and none reads the acceptance threshold `η`; see
 [Thresholds and factors](thresholds.md).
 
@@ -10,11 +10,13 @@ thresholds `η₁` and `η₂` and none reads the acceptance threshold `η`; see
 |---|---|---|---|
 | [`RDelta`](@ref) | nothing | `:bounded_below` | no |
 | [`RStep`](@ref) | `‖sₖ‖` | `:step_summable` | no |
+| [`RDeltaStep`](@ref) | `Δₖ`, and `‖sₖ‖` on an unsuccessful step | `:bounded_below` | no |
 | [`RDFO`](@ref) | `‖gₖ‖` via `ζ` | `:vanishing` | **yes** (`ζ > κ̄`) |
 | [`RGrad`](@ref) | `‖gₖ‖` via `μₖ`, uncapped | `:vanishing` | **no** |
 | [`RGradCapped`](@ref) | `‖gₖ‖` via `μₖ ≤ μ_max` | `:vanishing` | **yes** (`μ_max > κ̄`) |
 | [`RAdaptiveStep`](@ref) | `‖sₖ‖`, smooth factor | `:step_summable` | no |
 | [`RAdaptiveGrad`](@ref) | `‖gₖ₊₁‖` via `μₖ`, accumulated | `:vanishing` | no |
+| [`RAdaptiveGradCapped`](@ref) | `‖gₖ₊₁‖` via `μₖ ≤ μ_max`, accumulated | `:vanishing` | **yes** (`μ_max > κ̄`) |
 | [`RRTR`](@ref) | `‖sₖ‖`, driven by ρ̃ | `:step_summable` | no |
 | [`RRTRGrad`](@ref) | `‖gₖ₊₁‖` via `μₖ`, driven by ρ̃ | `:vanishing` | no |
 
@@ -23,7 +25,7 @@ on exceeding it cannot be configured reliably in advance. That is the single mos
 in the table.
 
 `RAdaptiveGrad` accumulates its multiplier, and so climbs past any threshold as `RGrad`
-does. 
+does. `RAdaptiveGradCapped` bounds it, at the price `RGradCapped` pays for the same bound.
 
 ## The three regimes
 
@@ -33,21 +35,24 @@ which is the one that separates `RStep` from `RDelta`:
 
 | regime | meaning | rules |
 |---|---|---|
-| `:vanishing` | `Δₖ → 0` with `Σ Δₖ²/Mₖ < ∞`, from the rule alone | `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveGrad`, `RRTRGrad` |
+| `:vanishing` | `Δₖ → 0` with `Σ Δₖ²/Mₖ < ∞`, from the rule alone | `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveGrad`, `RAdaptiveGradCapped`, `RRTRGrad` |
 | `:step_summable` | `Δₖ` inherits the summability of `Σ‖sₖ‖` in the local regime, so `Δₖ → 0` there and nothing follows globally | `RStep`, `RAdaptiveStep`, `RRTR` |
-| `:bounded_below` | `liminf Δₖ > 0` | `RDelta` |
+| `:bounded_below` | `liminf Δₖ > 0` | `RDelta`, `RDeltaStep` |
 
 ## The families
 
 **Criticality-blind** (`RDelta`). The radius depends on its own history and on ρ, never on
 `‖gₖ‖` or `‖sₖ‖`. Consequently `liminf Δₖ > 0`: the constraint eventually stops binding with
 no side condition, but the radius carries no asymptotic information about criticality.
+`RDeltaStep` differs on one branch only: an unsuccessful step contracts to `γ₁‖sₖ‖` instead
+of `γ₁Δₖ`. [`asymptotic_regime`](@ref) places it with `RDelta`.
 
 **Step-driven** (`RStep`, `RAdaptiveStep`, `RRTR`). The radius tracks the trial step. All
 carry a `Δmin` floor, and it is not cosmetic — see the warning below. All require `η₁ > 0`,
 which [`validate_thresholds`](@ref) enforces when the solver is built.
 
-**Criticality-anchored** (`RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveGrad`,  `RRTRGrad`). The radius is tied to `‖gₖ‖`, so `Δₖ → 0`. These are the
+**Criticality-anchored** (`RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveGrad`,
+`RAdaptiveGradCapped`, `RRTRGrad`). The radius is tied to `‖gₖ‖`, so `Δₖ → 0`. These are the
 rules for which the `κ̄` threshold matters. Query with [`is_criticality_anchored`](@ref).
 
 **Retrospective** (`RRTR`, `RRTRGrad`). The radius update is judged by ρ̃, computed from the
@@ -90,9 +95,9 @@ the safeguard factor `max[γ₁, θₖ]` of Part I, held at a constant here.
     rejection, and the run continues to `max_iterations` making no progress. It also violates
     the contraction condition, so the convergence theorem of Part I does not cover it. A rule
     added outside the package must contract on every unsuccessful iteration;
-    `test/test_thresholds.jl` checks this for all nine rules at five values of ρ below `η`,
-including `-Inf` — which is what the solver passes whenever the predicted reduction is
-non-positive.
+    `test/test_thresholds.jl` checks this for all eleven rules at five values of ρ below `η`,
+    including `-Inf`, which is what the solver passes whenever the predicted reduction is
+    non-positive. The same file fails if a rule is exported and missing from its list.
 
 On an accepted step the first branch is the interesting one, `max(γ₃‖sₖ‖, Δₖ)`:
 simultaneously step-driven *and* non-decreasing, which is what lets `RRTR` secure eventual
@@ -167,7 +172,7 @@ family is directly comparable with the three-case rules under one `(η, η₁, �
 
 ## The catalogue, executed
 
-The nine first-order rules, with the two traits that decide where each one belongs in
+The eleven first-order rules, with the two traits that decide where each one belongs in
 the theory. `is_criticality_anchored` says whether the radius is tied to a criticality
 measure; `asymptotic_regime` says what the radius does in the limit; and
 `needs_retrospective` marks the two rules that score an iteration with the *new* model
@@ -176,24 +181,25 @@ rather than the old one.
 ```@example rules
 using TrustRegionRadius, ADNLPModels, Printf
 
-catalogue = ["RDelta"        => RDelta(),
-             "RStep"         => RStep(),
-             "RDFO"          => RDFO(),
-             "RGrad"         => RGrad(),
-             "RGradCapped"   => RGradCapped(),
-             "RAdaptiveStep" => RAdaptiveStep(),
-             "RAdaptiveGrad" => RAdaptiveGrad(),
-             "RRTR"          => RRTR(),
-             "RRTRGrad"      => RRTRGrad()]
+catalogue = ["RDelta"              => RDelta(),
+             "RStep"               => RStep(),
+             "RDeltaStep"          => RDeltaStep(),
+             "RDFO"                => RDFO(),
+             "RGrad"               => RGrad(),
+             "RGradCapped"         => RGradCapped(),
+             "RAdaptiveStep"       => RAdaptiveStep(),
+             "RAdaptiveGrad"       => RAdaptiveGrad(),
+             "RAdaptiveGradCapped" => RAdaptiveGradCapped(),
+             "RRTR"                => RRTR(),
+             "RRTRGrad"            => RRTRGrad()]
 
 for (name, r) in catalogue
-    @printf("%-15s anchored=%-6s regime=%-15s retrospective=%s
-",
+    @printf("%-20s anchored=%-6s regime=%-15s retrospective=%s\n",
             name, is_criticality_anchored(r), asymptotic_regime(r), needs_retrospective(r))
 end
 ```
 
-The three regimes partition the nine: `:bounded_below` keeps the radius away from zero,
+The three regimes partition the eleven: `:bounded_below` keeps the radius away from zero,
 `:step_summable` makes `Σ Δ_k` finite in the local phase, and `:vanishing` drives
 `Δ_k → 0`. Every anchored rule is `:vanishing`, and that is not a coincidence: anchoring
 the radius to a criticality measure that tends to zero is what makes it tend to zero.

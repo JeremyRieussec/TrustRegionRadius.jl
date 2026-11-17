@@ -23,14 +23,14 @@ interacts with. Four orthogonal axes:
 
 | axis | choices |
 |---|---|
-| **radius rule** | `RDelta`, `RStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RRTR`, `RRTRGrad` |
+| **radius rule** | `RDelta`, `RStep`, `RDeltaStep`, `RDFO`, `RGrad`, `RGradCapped`, `RAdaptiveStep`, `RAdaptiveGrad`, `RAdaptiveGradCapped`, `RRTR`, `RRTRGrad` |
 | **model Hessian** | `ExactHessian`, `LBFGSModel`, `SR1Model`, `ScaledIdentity`, `SPDTarget`, `BHHHModel`, `BHHH2Model`, `GaussNewtonModel` |
 | **subproblem solver** | `SteihaugCG`, `ExactMS`, `KrylovCG`, `KrylovCR`, `EigenPoint` |
-| **sampling rule** | `FullBatch`, `FixedSample`, `RadiusProportional`, `NormTest`, `GeometricSample`, `InnerProductTest`, `OrthogonalityTest`, `AugmentedInnerProduct`, `SequentialEstimation`, `CertifiedDecrease` |
+| **sampling rule** | `FullBatch`, `FixedSample`, `RadiusProportional`, `NormTest`, `GeometricSample`, `InnerProductTest`, `OrthogonalityTest`, `AugmentedInnerProduct`, `SequentialEstimation`, `CertifiedDecrease`, `SmoothedSize` |
 
-The nine radius rules are the first-order ones; `SecondOrder(inner)` wraps any
-criticality-anchored rule, with the aliases `RGradTau`, `RGradCappedTau`, `RDFOTau`,
-`RAdaptiveGradTau` and `RRTRGradTau`.
+The eleven radius rules are the first-order ones; `SecondOrder(inner)` wraps any of the six
+criticality-anchored ones, with the aliases `RGradTau`, `RGradCappedTau`, `RDFOTau`,
+`RAdaptiveGradTau`, `RAdaptiveGradCappedTau` and `RRTRGradTau`.
 
 The sampling rule belongs to the *oracle*, not to `tr_solve`: build a `FiniteSumNLP`
 or an `ExpectationNLP` around it and pass that. There is no `sampling` keyword.

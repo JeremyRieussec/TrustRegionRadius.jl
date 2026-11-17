@@ -131,6 +131,7 @@ without switching off the growth.
 | [`GeometricSample`](@ref) | `N₀·rate^k`, fixed in advance | no |
 | [`SequentialEstimation`](@ref) | `2z²σ_f²/(κ²·pred²)` | **yes**, through `pred` |
 | [`CertifiedDecrease`](@ref) | `z_p²σ̂_N²/δ̂_N²`, paired | **yes**, through the step |
+| [`SmoothedSize`](@ref) | the size the wrapped rule asks for, held within `[a·N_k, b·N_k]` and above a rising floor | as the wrapped rule does |
 
 ### Certifying the decrease instead of the gradient
 
@@ -139,7 +140,7 @@ decrease rather than against the gradient, using **paired differences** under co
 random numbers: with the same realisation at both ends of the step,
 
 ```math
-D_i = F(x_k, \\xi_i) - F(x_k + s_k, \\xi_i)
+D_i = F(x_k, \xi_i) - F(x_k + s_k, \xi_i)
 ```
 
 and `N_{k+1}` is the ceiling of `z_p² σ̂_N² / δ̂_N²`, where `δ̂_N` and `σ̂_N²` are the
@@ -156,6 +157,44 @@ differences, [`supports_paired`](@ref) declares that a problem can supply them,
 [`paired_decrease_stats`](@ref) forms the two statistics in one pass, and
 [`record_paired!`](@ref) hands them back to the rule. A run under this rule records
 `:paired_decrease_trajectory` and `:paired_variance_trajectory`.
+
+The variance in the numerator comes in two forms, chosen by the `variance` keyword.
+`:empirical`, the default, is the sample variance of the `D_i`. `:outer_product` is the
+first-order approximation `D_i ≈ −∇F_iᵀs_k`, whose variance is
+
+```math
+s_k^\top \tilde B_k s_k - (\tilde g_k^\top s_k)^2 ,
+```
+
+with `B̃_k` the outer product of the scores; [`paired_op_variance`](@ref) computes it as the
+sample variance of the scalars `∇F_iᵀs_k`, which cannot come out negative. It needs
+per-observation scores, so the rule is then rejected on a problem that has none. It does
+not need the information identity: the outer product stands in here for the covariance of
+the scores, not for the Hessian. Whenever the problem supplies scores both estimates are
+recorded, the second under `:paired_op_variance_trajectory`, so the one a run did not use
+can be compared with the one it did.
+
+### Smoothing the size
+
+The certified size is read off a single step, and `δ̂_N²` can collapse from one iteration
+to the next, so the raw requirement moves by orders of magnitude between consecutive
+iterations. [`SmoothedSize`](@ref) wraps a rule and bounds the move:
+
+```math
+N_{k+1} = \min\bigl\{ b N_k,\ \max\{ a N_k,\ N^{\min}_k,\ N^{+}_{k+1} \} \bigr\},
+\qquad N^{\min}_k = N_{\mathrm{floor}} + k\,N_{\mathrm{incr}},
+```
+
+where `N⁺` is what the wrapped rule asks for and `0 < a ≤ 1 < b`. When the rising floor
+exceeds the ceiling `b·N_k`, the floor wins. `CertifiedDecrease(monotone = true)` is the
+special case `a = 1`. The wrapper changes the size read off the statistic and leaves the
+statistic alone, so it is not a variance reduction; every trait of the wrapped rule is
+forwarded.
+
+```julia
+rule = SmoothedSize(CertifiedDecrease(p = 0.95, N_min = 10);
+                    a = 0.75, b = 2.0, N_floor = 10, N_incr = 10)
+```
 
 ### Why the inner-product tests are cheaper
 
@@ -210,6 +249,45 @@ error, and every mechanism stalls for a reason external to it:
 
 The solver re-evaluates `f` and `g` at the incumbent after every resample, so the
 numerator and denominator of ρ̂ always come from one batch.
+
+## Carrying the batch between iterations
+
+Common random numbers fix the batch *within* an iteration. What becomes of it *between*
+iterations is a separate choice, the `scheme` keyword of the oracle;
+[`sample_schemes`](@ref) lists the three.
+
+| `scheme` | between iterations |
+|---|---|
+| `:independent`, the default | a fresh draw, independent of the last batch |
+| `:nested` | on a rise the batch is kept and new draws are appended; on a fall a uniform subsample of it is kept |
+| `:prefix` | the first `N_k` terms of the population, `{1, …, N_k}`, with no random number drawn |
+
+```julia
+nlp = FiniteSumNLP(prob, rule; scheme = :nested, replace = false)
+```
+
+Under `:independent` the estimate `f̂` moves between iterations for two reasons at once,
+the iterate moved and the sample changed, and while `N_k` is small the second dominates.
+The other two correlate consecutive estimates. On a finite sum, pass `replace = false` with
+`:nested` for the batches to be nested as sets; with replacement the appended draws can
+repeat terms already held.
+
+!!! warning "`:prefix` can optimise the wrong problem"
+    Under `:prefix` the run minimises the average over the first `N_k` terms, and while
+    `N_k` is small that function has a minimiser of its own. A run can settle on it,
+    report a small gradient, then grow the batch and find itself far from the solution.
+    Compare against `:independent` on the same seed before reading anything into an
+    iteration count.
+
+Not every scheme exists on every problem class:
+
+- `:prefix` needs a finite population. An expectation has no first term, and
+  [`ExpectationNLP`](@ref) rejects the scheme at construction.
+- `:nested` on an expectation needs draws that can be extended. The package supplies that
+  for [`PerturbedExpectation`](@ref). A user-defined expectation whose `draw_batch` returns
+  another type must add a method to the internal `_extend_draw`; until it does, the oracle
+  throws an `ArgumentError` when the sample first has to grow, and does not fall back to an
+  independent draw under the name of a nested one.
 
 ## Score on the truth
 
