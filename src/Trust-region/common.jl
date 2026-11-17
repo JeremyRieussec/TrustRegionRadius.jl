@@ -38,26 +38,48 @@ Solver parameters, shared by all three solvers.
 
 `‖ĝ_k‖ ≤ tol` is a statement about **one batch**. On a small batch it can be met on
 sampling noise alone, and then the solver reports `:first_order` at a point that is
-not critical — a batch of `N = 2` with an exact model puts the step on the batch
+not critical. A batch of `N = 2` with an exact model puts the step on the batch
 minimiser, so `‖ĝ‖` is zero to rounding whatever `∇f` is doing. `true_stop` chooses
-what has to hold before that stop is believed:
+what has to hold before that stop is believed.
 
 | value | cost per candidate stop | accepts the stop when |
 |:--|:--|:--|
-| `:none` | none | always — the batch test is the test |
+| `:none` | none | always (the batch test is the test) |
 | `:test` | none | `‖ĝ_k‖ + z·σ_g/√N_k ≤ tol` |
 | `:full` | one cap-sized pass | `‖g‖ ≤ tol` on the largest batch allowed |
-| `:both` | a pass only when `:test` is inconclusive | `:test`, else `:full` |
+| `:both` | a pass only when `:test` refuses | `:test`, else `:full` |
 
-`:test` is free: it asks whether the batch can *resolve* `tol` at all, by putting a
-one-sided confidence bound on `‖∇f‖` from the plug-in standard error `σ_g/√N_k`. It
-never stops on noise, but it can refuse to stop for a long time when `N_k` is held
-down by the sampling rule.
+`:test` is free. `σ_g` is the plug-in standard deviation of the per-observation
+gradients on the current batch, and the bound above is a one-sided confidence bound
+on `‖∇f‖` built from the standard error `σ_g/√N_k`. What it guarantees is conditional
+on that estimate. The stop is refused whenever the dispersion the batch itself shows
+is too large for `N_k` observations to resolve `tol`. That catches the batch whose
+terms cancel in the mean while each of them stays far from zero, which is the case of
+the paragraph above. On a finite sum the standard error is zero at `N_k = M`, where
+the batch is the population, so the test is then exact. Below that, it can refuse to
+stop for a long time when `N_k` is held down by the sampling rule.
 
-`:full` is exact and always pays. `:both` is the one to reach for: the cheap bound
-settles the well-resolved case with no extra evaluations, and the expensive pass is
-spent only when the batch genuinely cannot tell. See [`confirm_gradient_norm!`](@ref)
-for what "the largest batch allowed" means and how its cost is accounted.
+`:test` does not guarantee that the stop is real. The variance is estimated on the
+very batch whose gradient is being tested, and a batch says nothing about the
+observations it did not draw. When every observation in the batch is fitted with a
+margin, each per-observation score vanishes on its own. `‖ĝ_k‖` and `σ_g` then vanish
+together, the bound reads `0 + z·0 ≤ tol`, and it certifies nothing. Small batches on
+a binary-choice likelihood produce this readily. With
+`p = LogisticRegression(K = 5, M = 2_000, seed = 2)`, the oracle
+`FiniteSumNLP(p, RadiusProportional(); x0 = zeros(5), seed = 1)`, `RDelta()`,
+`BHHHModel(ridge = 1e-8)`, `SteihaugCG()` and `tol = 1e-6`, both `:test` and `:both`
+report `:first_order` at iteration 33, on a batch of two with `σ_g² = 8.1e-14`, at a
+point where `‖∇f‖ = 0.42`. The test suite pins that run.
+
+`:both` tries `:test` first and takes the full pass only when `:test` refuses. It
+saves the passes that `:full` would spend on well-resolved candidates, and it
+inherits every wrong acceptance of `:test`, because a bound that passes on vanished
+scores never triggers the pass.
+
+`:full` is exact and always pays. It is the only mode whose verdict does not depend
+on the batch, and the mode to use when the status has to mean something. See
+[`confirm_gradient_norm!`](@ref) for what "the largest batch allowed" means and how
+its cost is accounted.
 
 `true_stop = false` and `true_stop = true` remain accepted, and mean `:none` and
 `:full`. A deterministic solver rejects anything but `:none` — the batch test *is*

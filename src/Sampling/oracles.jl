@@ -518,6 +518,11 @@ arithmetic on numbers [`update_variances!`](@ref) has already computed. It is a
 batch, and on a batch of two it is itself a one-degree-of-freedom quantity. It is
 used to decide whether a stop is *believable*, never to decide the step.
 
+A batch in which every per-observation gradient has vanished gives `σ_g² = 0` and a
+standard error of zero. That zero describes the batch and says nothing about the
+observations outside it, which is how `:test` and `:both` come to accept a stop that
+is not real. See the section on confirming the stopping test in [`TRParams`](@ref).
+
 # The finite population correction is not optional here
 
 For an expectation the population is unbounded and the answer is `σ_g/√N_k`. For a

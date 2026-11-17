@@ -32,8 +32,9 @@ for [`PerturbedExpectation`](@ref), which supplies the exact mean by constructio
 and `false` for a general expectation — where the request is not conservative but
 impossible, and is refused rather than silently downgraded to the batch test.
 
-`:test` is available on every expectation: it consults only `σ_g` and `N_k`, both of
-which the oracle already maintains, and asserts nothing it cannot support.
+`:test` is available on every expectation, since it consults only `σ_g` and `N_k`,
+both of which the oracle already maintains. Its verdict is only as good as that
+variance estimate, and [`TRParams`](@ref) describes the batch on which it fails.
 """
 mutable struct ExpectationTRSolver{T, V, R, M, S} <: AbstractTRSolver
     core::TRCore{T, V, R, M, S}
@@ -154,23 +155,26 @@ on entry.
 
 # The three modes
 
-`:test` — free. `σ_g/√N_k` is the standard error of the batch gradient, so
+`:test` is free. `σ_g/√N_k` is the plug-in standard error of the batch gradient, so
 
     ‖ĝ_k‖ + z·σ_g/√N_k ≤ tol
 
-is a one-sided confidence statement that the *true* `‖∇f‖` is below `tol`. When the
-batch is too small to resolve `tol` the bound cannot be met however small `‖ĝ_k‖`
-happens to be, which is exactly the case the unguarded test gets wrong. Costs
-nothing and never certifies noise; the price is that it can withhold a correct stop
-until the sampling rule has grown `N_k`.
+is a one-sided confidence statement that the *true* `‖∇f‖` is below `tol`, valid to
+the extent that `σ_g`, estimated on that same batch, is close to the population
+value. When the scores of the batch cancel in the mean while each of them stays
+large, `σ_g` is large and the bound cannot be met however small `‖ĝ_k‖` happens to
+be. That is the case the unguarded test gets wrong, and `:test` refuses it. When the
+scores of the batch have each vanished, `σ_g` vanishes with `‖ĝ_k‖` and the bound
+passes whatever `∇f` is doing. [`TRParams`](@ref) gives a measured instance. The mode
+can also withhold a correct stop until the sampling rule has grown `N_k`.
 
-`:full` — exact and unconditional. [`confirm_gradient_norm!`](@ref) at the cap.
+`:full` is exact and unconditional, through [`confirm_gradient_norm!`](@ref) at the
+cap. It is the only mode that does not depend on the batch.
 
-`:both` — the cheap bound first. If it holds, the batch has *proved* the stop and
-there is nothing left to buy. If it does not, the batch is inconclusive — `‖ĝ_k‖` is
-small but the noise could be hiding anything — and only then is the cap-sized pass
-paid for. Same guarantee as `:full`, at a fraction of the evaluations, and it is the
-mode to prefer.
+`:both` tries the cheap bound first and pays for the cap-sized pass only when the
+bound fails. It costs a fraction of the evaluations of `:full`. It does not carry
+the same guarantee, because a bound that passes on vanished scores is accepted and
+the pass is never taken.
 
 !!! note "Screening on `‖∇f‖ = 0` would be the wrong screen"
     The natural-sounding alternative is to test `H₀: ∇f = 0` and reject the stop
