@@ -1,0 +1,4 @@
+# The campaign manifests are records, checked by content hash. Store them byte for
+# byte: with line-ending conversion on, a Windows checkout would carry CRLF and the
+# hash would no longer match the one the archives record.
+benchmark/manifests/** -text
