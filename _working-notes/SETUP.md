@@ -69,13 +69,17 @@ bug.
 They are separate so that Plots, JLD2 and CUTEst are not dependencies of the package itself.
 
 ```bash
-julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
-julia --project=docs      -e 'using Pkg; Pkg.instantiate()'
+julia --project=benchmark -e 'using Pkg; Pkg.develop(PackageSpec(path = pwd())); Pkg.instantiate()'
+julia --project=docs      -e 'using Pkg; Pkg.develop(PackageSpec(path = pwd())); Pkg.instantiate()'
 ```
 
-Both manifests are tracked and record the package by `path = ".."`, so `Pkg.instantiate()` is
-enough. Do not `Pkg.develop` there: it rewrites the tracked manifest, and in `benchmark/`
-`run_campaign.jl` then refuses to start from a dirty tree.
+`Manifest.toml` is ignored by git, so each machine resolves its own, and `Pkg.develop` is what
+records the package by path. An ignored manifest does not make the tree dirty, so
+`run_campaign.jl` still starts.
+
+To rerun an archived campaign in the environment that produced it, do not resolve. Copy the
+frozen manifests of `benchmark/manifests/v0.1.0/` into place and call `Pkg.instantiate()`
+alone, under Julia 1.12, as `benchmark/REPRODUCE.md` describes.
 
 CUTEst needs a working SIF decoder and compiler toolchain. If it fails to build, the
 benchmark harness falls back to `analytic_problems()` and everything else still runs — that
@@ -113,11 +117,11 @@ Two conventions worth following, because tooling depends on them:
 
 - **The repository must end in `.jl`** — `TrustRegionRadius.jl`. Documenter, TagBot and the
   General registry all assume it.
-- **The manifests are tracked.** `Manifest.toml` is committed at the root and in
-  `benchmark/`, `docs/` and `notebooks/`; the `.gitignore` rule is commented out. That is what
-  lets the campaigns be rerun in the environment that produced them: the root manifest hashes
-  to the `manifest_hash` every archive records. It costs users nothing, since Pkg ignores a
-  dependency's manifest and reads only its `[compat]` ranges.
+- **The live manifests are ignored, the campaign manifests are frozen.** `Manifest.toml` is
+  ignored everywhere, so developing under one version of Julia never rewrites the environment
+  of another machine. What lets the campaigns be rerun in the environment that produced them
+  is `benchmark/manifests/v0.1.0/`: two frozen copies, at a path Pkg never writes to, of which
+  the root one hashes to the `manifest_hash` every archive records.
 
 ### 7. Continuous integration
 
@@ -209,7 +213,7 @@ cannot be reproduced two years from now cannot be diagnosed either.
 - [x] `docs/make.jl` builds locally with no warnings
 - [x] `LICENSE` present (MIT supplied; change if your institution requires otherwise)
 - [x] repository named `TrustRegionRadius.jl`
-- [x] manifests committed (root, `benchmark/`, `docs/`, `notebooks/`)
+- [x] campaign manifests frozen under `benchmark/manifests/v0.1.0/`; live `Manifest.toml` ignored
 - [x] workflows copied, `DOCUMENTER_KEY` set, Pages pointed at `gh-pages`
 - [x] `deploydocs` uncommented with the real repository
 - [x] CI green

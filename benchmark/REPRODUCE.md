@@ -36,16 +36,18 @@ From the repository root:
 
 ```bash
 git checkout 5b959ce        # the commit of the campaign, from the table
-git show main:Manifest.toml > Manifest.toml
-git show main:benchmark/Manifest.toml > benchmark/Manifest.toml
+git show main:benchmark/manifests/v0.1.0/Manifest-root.toml > Manifest.toml
+git show main:benchmark/manifests/v0.1.0/Manifest-benchmark.toml > benchmark/Manifest.toml
 julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
 julia --project=benchmark -e 'include("benchmark/initialisation.jl"); comparison()'
 ```
 
-The manifests were committed after the campaigns, so the campaign commits lack them; the
-two `git show` lines copy them in, and since those commits ignore `Manifest.toml` the tree
-stays clean. Use `Pkg.instantiate()` alone: `Pkg.develop` or `Pkg.update` rewrites the
-manifest, and on `main`, where it is tracked, leaves the tree dirty.
+The manifests of the campaigns are kept on `main` under `benchmark/manifests/v0.1.0/`, at a
+path Julia never reads, so that no Pkg command can rewrite them. The campaign commits lack
+them; the two `git show` lines copy them to where Julia looks, and since `Manifest.toml` is
+ignored at every commit the tree stays clean. Use `Pkg.instantiate()` alone, under Julia
+1.12, the minor version the manifests were resolved for: `Pkg.develop` or `Pkg.update`
+re-resolves the copy, and the run is then no longer in the campaign environment.
 
 Each campaign writes a new archive under `benchmark/results/`. CUTEst problems are opened
 through `CUTEst.jl`, which decodes each SIF file and compiles it with `gfortran`: install it
@@ -115,17 +117,23 @@ above apart, and they are what to compare.
 
 ## Dependency versions
 
-The repository ships the manifests of the campaign environment: `Manifest.toml` at the
-root and `benchmark/Manifest.toml`, both resolved under Julia 1.12.1. The archives record a
-content hash of the root `Project.toml` and `Manifest.toml`, `f2aa70c00c0418a4` and
-`b5e9c5e29c995cb9` in all seven, and the committed files give exactly those values, so the
-root manifest is the one the campaigns ran with. The `benchmark` manifest, the environment
+The repository keeps the manifests of the campaign environment under
+`benchmark/manifests/v0.1.0/`: `Manifest-root.toml`, the manifest of the repository root,
+and `Manifest-benchmark.toml`, that of `benchmark/`, both resolved under Julia 1.12.1. The
+live `Manifest.toml` files are ignored by git, so each machine resolves its own and the
+records cannot be overwritten by accident. The archives record a content hash of the root
+`Project.toml` and `Manifest.toml`, `f2aa70c00c0418a4` and `b5e9c5e29c995cb9` in all seven;
+`Project.toml` and `Manifest-root.toml` give exactly those values, so the root manifest
+kept here is the one the campaigns ran with. The `benchmark` manifest, the environment
 actually active during the runs, was not hashed; it agrees with the root manifest on all
-21 packages they share. To check the root hash, under Julia 1.12:
+21 packages they share. To check the root hash:
 
 ```julia
-string(hash(read("Manifest.toml", String)); base = 16)   # b5e9c5e29c995cb9
+string(hash(read("benchmark/manifests/v0.1.0/Manifest-root.toml", String)); base = 16)   # b5e9c5e29c995cb9
 ```
+
+The files are stored byte for byte, with line-ending conversion switched off in
+`.gitattributes`, and the value is the same under Julia 1.11 and 1.12.
 
 ## Reading an archive
 
