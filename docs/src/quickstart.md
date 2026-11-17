@@ -28,6 +28,9 @@ stats = tr_solve(nlp; rule = RDelta())
 `tr_solve` returns a [`TRResult`](@ref), which is JSO's `GenericExecutionStats`, so
 `SolverBenchmark` and the rest of the ecosystem accept it unchanged. Evaluation counts live
 on the model — `neval_obj(nlp)`, `neval_grad(nlp)`, `neval_hprod(nlp)` — not on the result.
+`neval_hprod` counts products with the problem's own Hessian, so it stays at zero under
+every model but [`ExactHessian`](@ref); to compare models on products, sum
+`:cg_iters_trajectory` instead.
 
 ## Choosing the axes
 

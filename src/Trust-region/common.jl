@@ -219,6 +219,13 @@ end
 An alias of JSO's `GenericExecutionStats`. Useful fields: `status`, `solution`,
 `objective`, `dual_feas`, `iter`, `elapsed_time`. Evaluation counts live on the
 model — `neval_obj(nlp)`, `neval_grad(nlp)`, `neval_hprod(nlp)`.
+
+`neval_hprod` counts products with the *problem's* Hessian, so it is non-zero under
+[`ExactHessian`](@ref) only. A quasi-Newton or outer-product model forms `B·v` itself
+and never asks the problem, so the counter reads zero under it whatever the run cost.
+To compare models on products, sum `:cg_iters_trajectory`: under [`SteihaugCG`](@ref)
+it holds one product per inner iteration for every model, and on an `ExactHessian` run
+its sum is `neval_hprod`.
 """
 const TRResult = GenericExecutionStats
 

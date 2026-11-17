@@ -18,16 +18,24 @@
 
     # Every rule under its defaults. Named so a failure says which one.
     RULES = [
-        ("RDelta",           RDelta()),
-        ("RStep",            RStep()),
-        ("RDFO",             RDFO()),
-        ("RGrad",            RGrad()),
-        ("RGradCapped",      RGradCapped(μ_max = 8.0)),
-        ("RAdaptiveStep",    RAdaptiveStep()),
-        ("RAdaptiveGrad",    RAdaptiveGrad()),
-        ("RRTR",             RRTR()),
-        ("RRTRGrad",         RRTRGrad()),
+        ("RDelta",              RDelta()),
+        ("RStep",               RStep()),
+        ("RDeltaStep",          RDeltaStep()),
+        ("RDFO",                RDFO()),
+        ("RGrad",               RGrad()),
+        ("RGradCapped",         RGradCapped(μ_max = 8.0)),
+        ("RAdaptiveStep",       RAdaptiveStep()),
+        ("RAdaptiveGrad",       RAdaptiveGrad()),
+        ("RAdaptiveGradCapped", RAdaptiveGradCapped(μ_max = 8.0)),
+        ("RRTR",                RRTR()),
+        ("RRTRGrad",            RRTRGrad()),
     ]
+
+    # "Every rule" is checked rather than claimed: a rule the package exports and
+    # this list omits fails here. `SecondOrder` wraps a rule and has no defaults
+    # of its own; test_second_order.jl covers it.
+    @test Set(Symbol(name) for (name, _) in RULES) ==
+          setdiff(exported_concrete(RadiusRule), [:SecondOrder])
 
     @testset "the threshold chain is enforced" begin
         @test_throws ArgumentError TRParams(η = 0.5, η1 = 0.2, η2 = 0.9)   # η > η1
