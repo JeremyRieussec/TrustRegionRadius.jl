@@ -301,10 +301,14 @@ needs to mean something.
 `:test` and `:both` read the plug-in variance of the batch that produced `ĝ_k`. A
 batch whose per-observation scores have all vanished gives a zero variance as well
 as a zero gradient, so the confidence bound passes and certifies nothing. On a
-logistic regression sampled two observations at a time we measured both modes
-reporting `:first_order` at a point where `‖∇f‖ = 0.42`, with `tol = 1e-6`. The
-run is described under [`TRParams`](@ref). `:full` is the only mode that does not
-depend on the batch.
+logistic regression sampled two observations at a time we measured the bound
+accepting a stop at a point where `‖∇f‖ = 0.42`, with `tol = 1e-6`.
+
+`TRParams(stop_N_min = …)` is the guard. The two modes read the bound only on a
+batch of at least `stop_N_min` observations, 30 by default, and with that default
+the run above is no longer stopped there. The guard makes the wrong stop unlikely
+and does not exclude it, so `:full` remains the only mode that does not depend on
+the batch. The run and the cost of the guard are described under [`TRParams`](@ref).
 
 Every finite sum has a truth, at one full pass. An expectation has one only when the
 construction supplies it — [`PerturbedExpectation`](@ref) does, a general one does not —

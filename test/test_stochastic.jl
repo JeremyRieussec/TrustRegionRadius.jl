@@ -161,7 +161,8 @@
 
         # Every guard rejects it and reaches the actual minimiser. That holds on
         # this problem, where the two terms of the batch cancel without vanishing.
-        # The next testset is the case where :test and :both do not reject.
+        # The next testset is the case where the bound alone does not reject, and
+        # where stop_N_min has to.
         for mode in (:test, :full, :both)
             st = run(mode)
             @test st.status === :first_order
@@ -170,62 +171,71 @@
         end
     end
 
-    @testset "a batch of vanished scores passes :test and :both" begin
-        # The limit of the guard tested above, pinned as we measured it and not as
-        # we would like it to be. :test reads the plug-in variance of the batch
-        # that produced ĝ. When every observation of that batch is fitted with a
-        # margin, each score vanishes on its own, the variance vanishes with the
-        # gradient, and ‖ĝ‖ + z·σ_g/√N ≤ tol holds whatever ∇f is doing. :both
-        # accepts on the same bound and never takes its pass. :full is the
+    @testset "stop_N_min keeps :test and :both off a batch of vanished scores" begin
+        # :test reads the plug-in variance of the batch that produced ĝ. When every
+        # observation of that batch is fitted with a margin, each score vanishes on
+        # its own, the variance vanishes with the gradient, and
+        # ‖ĝ‖ + z·σ_g/√N ≤ tol holds whatever ∇f is doing. :both accepts on the
+        # same bound and never takes its pass. stop_N_min is the guard. The bound
+        # is read only on a batch of at least that many observations. :full is the
         # control, because its verdict is the exact gradient.
         #
         # No threshold here is tuned. tol is the tolerance of the runs, and 1e-2
         # is four orders of magnitude above it and below every true gradient we
-        # measured at a wrong stop. When the confirmation logic is fixed, the
-        # :test and :both assertions of this testset are the ones to revise.
+        # measured at a wrong stop.
         tol = 1e-6
         p = LogisticRegression(K = 5, M = 2_000, seed = 2)
-        run(mode, seed) = begin
+        run(mode, seed; kw...) = begin
             m = FiniteSumNLP(p, RadiusProportional(); x0 = zeros(5), seed = seed)
             st = tr_solve(m; rule = RDelta(), model = BHHHModel(ridge = 1e-8),
                           subsolver = SteihaugCG(), trace = true,
-                          params = TRParams(tol = tol, max_iterations = 1_000,
-                                            true_stop = mode))
+                          params = TRParams(; tol = tol, max_iterations = 1_000,
+                                            true_stop = mode, kw...))
             (m, st)
         end
         truth(st) = norm(true_gradient(p, st.solution))
         z = TRParams().stop_z
 
-        # The measured run, oracle seed 1. Both modes stop at iteration 33 on a
-        # batch of two with σ_g² = 8.1e-14, where the true ‖∇f‖ is 0.42.
+        # The bound without the guard, oracle seed 1. With stop_N_min = 1 both
+        # modes stop at iteration 33 on a batch of two with σ_g² = 8.1e-14, where
+        # the true ‖∇f‖ is 0.42. The last batch has two observations, the bound
+        # holds on it, and no confirmation pass was ever paid for.
+        wrong_iter = 0
         for mode in (:test, :both)
-            m, st = run(mode, 1)
+            m, st = run(mode, 1; stop_N_min = 1)
             @test st.status === :first_order
             @test truth(st) > 1e-2
-            # How it happened. The last batch has two observations, the bound
-            # holds on it, and no confirmation pass was ever paid for.
             @test st.solver_specific[:grad_sample_trajectory][end] == 2
             @test st.dual_feas + z * grad_standard_error(m) <= tol
             @test samples_used(m).confirm == 0
+            wrong_iter = st.iter
         end
 
-        # The control, over six oracle seeds on the same problem. Every
-        # :first_order that :full reports holds for the true gradient, and :full
-        # does report some, so the implication is not vacuous. We measured four
-        # of the six. On seed 1 itself :full ended :stalled and certified nothing.
-        res = [(test = run(:test, seed)[2], full = run(:full, seed)[2]) for seed in 1:6]
+        # The default, over six oracle seeds on the same problem. No mode reports
+        # a :first_order that the true gradient does not support, and every mode
+        # reports some, so the implication is not vacuous. We measured four of the
+        # six for each mode.
+        modes = (:test, :both, :full)
+        res = [NamedTuple{modes}(map(mode -> run(mode, seed), modes)) for seed in 1:6]
+        for r in res, mode in modes
+            st = r[mode][2]
+            @test st.status !== :first_order || truth(st) <= tol
+        end
+        for mode in modes
+            @test count(r -> r[mode][2].status === :first_order, res) >= 1
+        end
+        # On seed 1 the guarded runs go past the wrong stop. We measured them
+        # ending :stalled at iteration 341, as the :full run does.
+        for mode in (:test, :both)
+            @test res[1][mode][2].iter > wrong_iter
+        end
+        # The cost. :test stays free. :both never pays more than :full, because
+        # the two see the same iterates and :both skips a pass whenever the bound
+        # settles the candidate.
         for r in res
-            @test r.full.status !== :first_order || truth(r.full) <= tol
+            @test samples_used(r.test[1]).confirm == 0
+            @test samples_used(r.both[1]).confirm <= samples_used(r.full[1]).confirm
         end
-        @test count(r -> r.full.status === :first_order, res) >= 1
-        # And for some seed the two modes part ways on the same problem and the
-        # same random stream. :test certifies a point that is not critical and
-        # :full goes on to a critical point. We measured it on seeds 2 and 4.
-        parted = any(res) do r
-            r.test.status === :first_order && truth(r.test) > 1e-2 &&
-                r.full.status === :first_order && truth(r.full) <= tol
-        end
-        @test parted
     end
 
     @testset "the :test bound on a batch fitted with a margin" begin
@@ -247,14 +257,46 @@
         @test grad_standard_error(m) <= tol             # and reports no noise
         @test norm(true_gradient(p, x)) > 1e-2          # the population disagrees
 
-        confirm(mode) = TrustRegionRadius._confirm_stop(
-            m, x, norm(g), TRParams(tol = tol, true_stop = mode))
-        @test confirm(:test)
+        confirm(mode; kw...) = TrustRegionRadius._confirm_stop(
+            m, x, norm(g), TRParams(; tol = tol, true_stop = mode, kw...))
+
+        # Without the guard the bound accepts, and :both then skips its pass.
+        @test confirm(:test; stop_N_min = 1)
+        @test confirm(:both; stop_N_min = 1)
         @test samples_used(m).confirm == 0
-        @test confirm(:both)                            # accepted on the bound
-        @test samples_used(m).confirm == 0              # the pass was not taken
-        @test !confirm(:full)                           # the only mode not fooled
+        # The minimum is compared with the batch size. Two observations satisfy a
+        # minimum of two and not a minimum of three.
+        @test confirm(:test; stop_N_min = 2)
+        @test !confirm(:test; stop_N_min = 3)
+        # The default refuses. :test stays free, :both pays for its pass and gets
+        # the answer of :full.
+        @test !confirm(:test)
+        @test samples_used(m).confirm == 0
+        @test !confirm(:both)
         @test samples_used(m).confirm == population(p)
+        @test !confirm(:full)
+        @test samples_used(m).confirm == 2 * population(p)
+    end
+
+    @testset "stop_N_min is a parameter with a default, capped by the oracle" begin
+        @test TRParams().stop_N_min == 30
+        @test TRParams(stop_N_min = 5).stop_N_min == 5
+        @test :stop_N_min in propertynames(TRParams())
+        @test_throws ArgumentError TRParams(stop_N_min = 0)
+
+        # The minimum never asks for more than the largest batch the oracle
+        # allows. A population of ten is read at ten observations, where the batch
+        # is the population, and not at nine.
+        can(M, N) = begin
+            q = LogisticRegression(K = 3, M = M, seed = 1)
+            o = FiniteSumNLP(q, FixedSample(N); x0 = zeros(3), seed = 1)
+            resample!(o, 1, 1.0, 1.0)
+            TrustRegionRadius._batch_can_conclude(o, TRParams())
+        end
+        @test can(10, 10)
+        @test !can(10, 9)
+        @test can(2_000, 30)
+        @test !can(2_000, 29)
     end
 
     @testset "what each true_stop mode costs" begin

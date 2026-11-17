@@ -117,3 +117,17 @@ The large-`n` branch is a Lanczos iteration rather than a power iteration on
 `power_iters = 300` is an unsupported keyword. The default `lanczos_k = 40`
 costs fewer matrix-vector products than the thirty power steps it replaced and
 is more accurate; see the docstring for the measurements.
+
+## 8. `true_stop = :test` and `:both` wait for a batch of `stop_N_min`
+
+The confidence bound of `:test` and `:both` is now read only on a batch of at
+least `stop_N_min` observations, a new keyword of `TRParams` with a default of 30,
+or on the largest batch the oracle allows when that is smaller. Before, the bound
+was read on every batch, and a batch of two whose scores had all vanished could
+certify `:first_order` at a point that was not critical.
+
+**Silently reinterpreted.** A sampled run under `:test` or `:both` that used to
+stop on a batch of fewer than 30 observations no longer stops there. `:test` goes
+on, and `:both` takes its full pass. Runs under `:none` and `:full`, and every
+deterministic run, are unchanged. `TRParams(stop_N_min = 1)` reads the bound on
+every batch and restores the earlier behaviour.
