@@ -297,6 +297,15 @@ the base model, so [`true_gradient`](@ref) is available at every iterate; use it
 every reported number, and set `TRParams(true_stop = true)` when the *status* itself
 needs to mean something.
 
+`true_stop = true` is the `:full` mode, and the two cheaper modes do not replace it.
+`:test` and `:both` read the plug-in variance of the batch that produced `ĝ_k`. A
+batch whose per-observation scores have all vanished gives a zero variance as well
+as a zero gradient, so the confidence bound passes and certifies nothing. On a
+logistic regression sampled two observations at a time we measured both modes
+reporting `:first_order` at a point where `‖∇f‖ = 0.42`, with `tol = 1e-6`. The
+run is described under [`TRParams`](@ref). `:full` is the only mode that does not
+depend on the batch.
+
 Every finite sum has a truth, at one full pass. An expectation has one only when the
 construction supplies it — [`PerturbedExpectation`](@ref) does, a general one does not —
 so [`has_truth`](@ref) is a trait and `true_stop` on a problem without truth is an

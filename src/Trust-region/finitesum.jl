@@ -22,8 +22,10 @@ Trust-region solver for a [`FiniteSumNLP`](@ref).
 
 Every `TRParams(true_stop = …)` mode is available here: `has_truth` holds for the
 whole class, so `:full` and `:both` can confirm exactly, at the cost of one full
-pass per confirmation. `:both` pays that cost only when the batch cannot settle the
-question on its own, and is the mode to prefer.
+pass per confirmation. `:both` pays that cost only when the `:test` bound fails, and
+it accepts without a pass whatever `:test` accepts, the wrong stops described in
+[`TRParams`](@ref) included. `:full` is the mode whose status does not depend on the
+batch.
 
 !!! note "The full-batch reference"
     `FiniteSumNLP(prob, FullBatch())` under this solver is numerically identical to

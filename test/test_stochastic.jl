@@ -159,13 +159,102 @@
         @test unguarded.dual_feas <= 1e-6                       # the batch is happy
         @test norm(true_gradient(p, unguarded.solution)) > 1.0  # and it is wrong
 
-        # Every guard rejects it and reaches the actual minimiser.
+        # Every guard rejects it and reaches the actual minimiser. That holds on
+        # this problem, where the two terms of the batch cancel without vanishing.
+        # The next testset is the case where :test and :both do not reject.
         for mode in (:test, :full, :both)
             st = run(mode)
             @test st.status === :first_order
             @test norm(true_gradient(p, st.solution)) <= 1e-6
             @test st.iter > unguarded.iter
         end
+    end
+
+    @testset "a batch of vanished scores passes :test and :both" begin
+        # The limit of the guard tested above, pinned as we measured it and not as
+        # we would like it to be. :test reads the plug-in variance of the batch
+        # that produced ĝ. When every observation of that batch is fitted with a
+        # margin, each score vanishes on its own, the variance vanishes with the
+        # gradient, and ‖ĝ‖ + z·σ_g/√N ≤ tol holds whatever ∇f is doing. :both
+        # accepts on the same bound and never takes its pass. :full is the
+        # control, because its verdict is the exact gradient.
+        #
+        # No threshold here is tuned. tol is the tolerance of the runs, and 1e-2
+        # is four orders of magnitude above it and below every true gradient we
+        # measured at a wrong stop. When the confirmation logic is fixed, the
+        # :test and :both assertions of this testset are the ones to revise.
+        tol = 1e-6
+        p = LogisticRegression(K = 5, M = 2_000, seed = 2)
+        run(mode, seed) = begin
+            m = FiniteSumNLP(p, RadiusProportional(); x0 = zeros(5), seed = seed)
+            st = tr_solve(m; rule = RDelta(), model = BHHHModel(ridge = 1e-8),
+                          subsolver = SteihaugCG(), trace = true,
+                          params = TRParams(tol = tol, max_iterations = 1_000,
+                                            true_stop = mode))
+            (m, st)
+        end
+        truth(st) = norm(true_gradient(p, st.solution))
+        z = TRParams().stop_z
+
+        # The measured run, oracle seed 1. Both modes stop at iteration 33 on a
+        # batch of two with σ_g² = 8.1e-14, where the true ‖∇f‖ is 0.42.
+        for mode in (:test, :both)
+            m, st = run(mode, 1)
+            @test st.status === :first_order
+            @test truth(st) > 1e-2
+            # How it happened. The last batch has two observations, the bound
+            # holds on it, and no confirmation pass was ever paid for.
+            @test st.solver_specific[:grad_sample_trajectory][end] == 2
+            @test st.dual_feas + z * grad_standard_error(m) <= tol
+            @test samples_used(m).confirm == 0
+        end
+
+        # The control, over six oracle seeds on the same problem. Every
+        # :first_order that :full reports holds for the true gradient, and :full
+        # does report some, so the implication is not vacuous. We measured four
+        # of the six. On seed 1 itself :full ended :stalled and certified nothing.
+        res = [(test = run(:test, seed)[2], full = run(:full, seed)[2]) for seed in 1:6]
+        for r in res
+            @test r.full.status !== :first_order || truth(r.full) <= tol
+        end
+        @test count(r -> r.full.status === :first_order, res) >= 1
+        # And for some seed the two modes part ways on the same problem and the
+        # same random stream. :test certifies a point that is not critical and
+        # :full goes on to a critical point. We measured it on seeds 2 and 4.
+        parted = any(res) do r
+            r.test.status === :first_order && truth(r.test) > 1e-2 &&
+                r.full.status === :first_order && truth(r.full) <= tol
+        end
+        @test parted
+    end
+
+    @testset "the :test bound on a batch fitted with a margin" begin
+        # The same failure with no trajectory behind it. We draw two observations
+        # and take the minimum-norm x that puts each of them 40 units on the right
+        # side of its label. Their scores are then zero to rounding, so the batch
+        # gradient and the plug-in variance are both zero, while the other 1 998
+        # observations leave the true gradient at 0.40.
+        tol = 1e-6
+        p = LogisticRegression(K = 5, M = 2_000, seed = 2)
+        m = FiniteSumNLP(p, FixedSample(2); x0 = zeros(5), seed = 1, replace = false)
+        resample!(m, 1, 1.0, 1.0)
+        b  = m.batch_g
+        Xb = p.X[b, :]
+        x  = Xb' * ((Xb * Xb') \ (40.0 .* (2 .* p.y[b] .- 1)))
+        g  = zeros(5); grad!(m, x, g); update_variances!(m, x, g)
+
+        @test norm(g) <= tol                            # the batch is satisfied
+        @test grad_standard_error(m) <= tol             # and reports no noise
+        @test norm(true_gradient(p, x)) > 1e-2          # the population disagrees
+
+        confirm(mode) = TrustRegionRadius._confirm_stop(
+            m, x, norm(g), TRParams(tol = tol, true_stop = mode))
+        @test confirm(:test)
+        @test samples_used(m).confirm == 0
+        @test confirm(:both)                            # accepted on the bound
+        @test samples_used(m).confirm == 0              # the pass was not taken
+        @test !confirm(:full)                           # the only mode not fooled
+        @test samples_used(m).confirm == population(p)
     end
 
     @testset "what each true_stop mode costs" begin
