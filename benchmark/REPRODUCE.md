@@ -123,17 +123,22 @@ and `Manifest-benchmark.toml`, that of `benchmark/`, both resolved under Julia 1
 live `Manifest.toml` at the root and in `benchmark/` are ignored by git, so each machine
 resolves its own and the records cannot be overwritten by accident. The archives record a content hash of the root
 `Project.toml` and `Manifest.toml`, `f2aa70c00c0418a4` and `b5e9c5e29c995cb9` in all seven;
-`Project.toml` and `Manifest-root.toml` give exactly those values, so the root manifest
+`Project.toml` at the tag `v0.1.0`, the same file as at every campaign commit, and
+`Manifest-root.toml` give exactly those values, so the root manifest
 kept here is the one the campaigns ran with. The `benchmark` manifest, the environment
 actually active during the runs, was not hashed; it agrees with the root manifest on all
-21 packages they share. To check the root hash:
+21 packages they share. To check the two hashes:
 
 ```julia
 string(hash(read("benchmark/manifests/v0.1.0/Manifest-root.toml", String)); base = 16)   # b5e9c5e29c995cb9
+string(hash(read(`git show v0.1.0:Project.toml`, String)); base = 16)                    # f2aa70c00c0418a4
 ```
 
 The files are stored byte for byte, with line-ending conversion switched off in
 `.gitattributes`, and the value is the same under Julia 1.11 and 1.12.
+
+`Project.toml` on `main` has gained a dependency since the tag, `SpecialFunctions`, and no
+longer gives the recorded hash. A campaign is rerun at its own commit, where it does.
 
 ## Reading an archive
 

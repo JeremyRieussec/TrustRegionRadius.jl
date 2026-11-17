@@ -215,6 +215,8 @@
                           p -> [0.9, 0.6],  () -> GaussNewtonModel(ridge = 1e-8)),
             ("Logistic",  () -> LogisticRegression(K = 5, M = 2_000, seed = 2),
                           p -> zeros(p.n), () -> BHHHModel(ridge = 1e-8)),
+            ("Probit",    () -> Probit(K = 5, M = 2_000, seed = 2),
+                          p -> zeros(p.n), () -> BHHHModel(ridge = 1e-8)),
             ("MLP",       () -> MLPClassifier(Xm, ym, 3; hidden = 3, λ = 1e-4),
                           p -> init_params(p; seed = 1), () -> BHHHModel(ridge = 1e-6)),
         ]

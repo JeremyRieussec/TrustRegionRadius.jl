@@ -32,7 +32,9 @@ for this directory, because a checkout that turned LF into CRLF would change the
 ## Using them
 
 To rerun a campaign in its own environment, copy the two files to where Julia looks and
-instantiate without resolving. `benchmark/REPRODUCE.md` gives the full procedure.
+instantiate without resolving. Do it at the commit of the campaign, as
+`benchmark/REPRODUCE.md` sets out: the package on `main` has since gained a dependency,
+`SpecialFunctions`, which these manifests do not list for it.
 
 ```bash
 cp benchmark/manifests/v0.1.0/Manifest-root.toml Manifest.toml

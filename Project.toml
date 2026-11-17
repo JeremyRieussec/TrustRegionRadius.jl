@@ -11,6 +11,7 @@ NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SolverCore = "ff4d7338-4cf1-434d-91df-b86cb86fb843"
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [compat]
 Krylov = "0.10.8"
@@ -20,3 +21,4 @@ NLPModels = "0.21.4"
 Printf = "1.11.0"
 Random = "1.11.0"
 SolverCore = "0.3.10"
+SpecialFunctions = "2.3.1"

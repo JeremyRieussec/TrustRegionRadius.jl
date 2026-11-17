@@ -1093,7 +1093,7 @@ uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.11.3"
 
 [[deps.TrustRegionRadius]]
-deps = ["Krylov", "LinearAlgebra", "LinearOperators", "NLPModels", "Printf", "Random", "SolverCore"]
+deps = ["Krylov", "LinearAlgebra", "LinearOperators", "NLPModels", "Printf", "Random", "SolverCore", "SpecialFunctions"]
 path = ".."
 uuid = "b2e96d2e-59a1-40e6-a41d-1c10527a0261"
 version = "0.1.0"
