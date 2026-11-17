@@ -120,8 +120,8 @@ above apart, and they are what to compare.
 The repository keeps the manifests of the campaign environment under
 `benchmark/manifests/v0.1.0/`: `Manifest-root.toml`, the manifest of the repository root,
 and `Manifest-benchmark.toml`, that of `benchmark/`, both resolved under Julia 1.12.1. The
-live `Manifest.toml` files are ignored by git, so each machine resolves its own and the
-records cannot be overwritten by accident. The archives record a content hash of the root
+live `Manifest.toml` at the root and in `benchmark/` are ignored by git, so each machine
+resolves its own and the records cannot be overwritten by accident. The archives record a content hash of the root
 `Project.toml` and `Manifest.toml`, `f2aa70c00c0418a4` and `b5e9c5e29c995cb9` in all seven;
 `Project.toml` and `Manifest-root.toml` give exactly those values, so the root manifest
 kept here is the one the campaigns ran with. The `benchmark` manifest, the environment

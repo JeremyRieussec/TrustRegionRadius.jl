@@ -70,12 +70,15 @@ They are separate so that Plots, JLD2 and CUTEst are not dependencies of the pac
 
 ```bash
 julia --project=benchmark -e 'using Pkg; Pkg.develop(PackageSpec(path = pwd())); Pkg.instantiate()'
-julia --project=docs      -e 'using Pkg; Pkg.develop(PackageSpec(path = pwd())); Pkg.instantiate()'
+julia --project=docs      -e 'using Pkg; Pkg.instantiate()'
 ```
 
-`Manifest.toml` is ignored by git, so each machine resolves its own, and `Pkg.develop` is what
-records the package by path. An ignored manifest does not make the tree dirty, so
-`run_campaign.jl` still starts.
+The two environments differ. In `benchmark/` the manifest is ignored by git, so each machine
+resolves its own, and `Pkg.develop` is what records the package by path. An ignored manifest
+does not make the tree dirty, so `run_campaign.jl` still starts. In `docs/` the manifest is
+tracked and already records the package by `path = ".."`, so `Pkg.instantiate()` is enough. Do
+not `Pkg.develop` there: it rewrites the tracked manifest, and `run_campaign.jl` refuses to
+start from a dirty tree.
 
 To rerun an archived campaign in the environment that produced it, do not resolve. Copy the
 frozen manifests of `benchmark/manifests/v0.1.0/` into place and call `Pkg.instantiate()`
@@ -117,11 +120,13 @@ Two conventions worth following, because tooling depends on them:
 
 - **The repository must end in `.jl`** — `TrustRegionRadius.jl`. Documenter, TagBot and the
   General registry all assume it.
-- **The live manifests are ignored, the campaign manifests are frozen.** `Manifest.toml` is
-  ignored everywhere, so developing under one version of Julia never rewrites the environment
-  of another machine. What lets the campaigns be rerun in the environment that produced them
-  is `benchmark/manifests/v0.1.0/`: two frozen copies, at a path Pkg never writes to, of which
-  the root one hashes to the `manifest_hash` every archive records.
+- **The campaign manifests are frozen, and the live ones at the root and in `benchmark/` are
+  ignored.** Developing under one version of Julia then never rewrites the environment of
+  another machine. What lets the campaigns be rerun in the environment that produced them is
+  `benchmark/manifests/v0.1.0/`: two frozen copies, at a path Pkg never writes to, of which
+  the root one hashes to the `manifest_hash` every archive records. The `docs/` and
+  `notebooks/` manifests stay tracked; they are development environments, not campaign
+  records.
 
 ### 7. Continuous integration
 
@@ -213,7 +218,7 @@ cannot be reproduced two years from now cannot be diagnosed either.
 - [x] `docs/make.jl` builds locally with no warnings
 - [x] `LICENSE` present (MIT supplied; change if your institution requires otherwise)
 - [x] repository named `TrustRegionRadius.jl`
-- [x] campaign manifests frozen under `benchmark/manifests/v0.1.0/`; live `Manifest.toml` ignored
+- [x] campaign manifests frozen under `benchmark/manifests/v0.1.0/`; live `Manifest.toml` ignored at the root and in `benchmark/`, tracked in `docs/` and `notebooks/`
 - [x] workflows copied, `DOCUMENTER_KEY` set, Pages pointed at `gh-pages`
 - [x] `deploydocs` uncommented with the real repository
 - [x] CI green

@@ -2,7 +2,7 @@
 
 This directory keeps the dependency manifests of the campaigns as records. Julia never
 reads a manifest from here, so no Pkg command can rewrite one. The live `Manifest.toml`
-files are ignored by git, and each machine resolves its own.
+at the root and in `benchmark/` are ignored by git, and each machine resolves its own.
 
 ## `v0.1.0/`
 
