@@ -32,6 +32,9 @@
 #   GeometricSample        N_0 * rate^k, fixed in advance
 #   SequentialEstimation   noise small beside the predicted decrease
 #
+# The roster of rules and their parameters is SAMPLING_RULES in config.jl.
+# SAMPLERS below names the ones this script runs.
+#
 # Four things the grid answers.
 #
 #  (a) ALL THREE EXAMPLES RUN. One solver, one sampling layer; the problem type is
@@ -92,24 +95,22 @@ const EXAMPLES = [
 
 # --- the sampling rules ------------------------------------------------------
 
-const SAMPLERS = [
-    ("FixedSample(64)",      () -> FixedSample(64)),
-    ("RadiusProportional",   () -> RadiusProportional(κ_g = 1.0, κ_f = 1.0)),
-    ("NormTest(0.5)",        () -> NormTest(θ = 0.5)),
-    # ("InnerProduct(0.9)",    () -> InnerProductTest(θ = 0.9, N_min = 8)),
-    # ("Orthogonality(2.0)",   () -> OrthogonalityTest(ν = 2.0, N_min = 8)),
-    # ("Augmented(0.9,2.0)",   () -> AugmentedInnerProduct(θ = 0.9, ν = 2.0,
-    #                                                     N_min = 8)),
-    ("Geometric(8,1.06)",    () -> GeometricSample(N₀ = 8, rate = 1.06)),
-    # ("Sequential(0.25)",     () -> SequentialEstimation(κ = 0.25, α = 0.05,
-    #                                                   N_min = 8)),
-    # Certified decrease: N from the paired differences D_i = F(x_k,ξ_i) −
-    # F(x_k+s_k,ξ_i) under common random numbers. This is the rule whose cost is
-    # ‖g_k‖^{-2} with the step length cancelling, and the contrast with
-    # RadiusProportional (N ∼ Δ_k^{-2}) is the whole question of whether a
-    # sampling rule can see the radius rule.
-    ("Certified(0.9)",       () -> CertifiedDecrease(p = 0.9, N_min = 8)),
-]
+# Taken by name from the roster in config.jl, where each rule and its parameters
+# are written once. The rules this experiment leaves out stay in the roster: add
+# a name here to bring one in.
+#
+# Certified decrease draws N from the paired differences D_i = F(x_k,ξ_i) −
+# F(x_k+s_k,ξ_i) under common random numbers. This is the rule whose cost is
+# ‖g_k‖^{-2} with the step length cancelling, and the contrast with
+# RadiusProportional (N ∼ Δ_k^{-2}) is the whole question of whether a sampling
+# rule can see the radius rule.
+const SAMPLERS = sampling_rules(
+    "FixedSample(64)",
+    "RadiusProportional",
+    "NormTest(0.5)",
+    "Geometric(8,1.06)",
+    "Certified(0.9)",
+)
 
 # The two radius mechanisms this experiment varies. NOT `RULES`: that name is
 # config.jl's full list of eight, and redefining it here shadowed the mechanisms

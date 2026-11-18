@@ -181,10 +181,10 @@
         @test errs[end] > errs[1]                 # and with it the discarded term
     end
 
-    @testset "every example runs under every sampling rule" begin
+    @testset "every finite-sum problem under every sampling rule" begin
         # No N_max anywhere: every example below is a finite sum, where
         # check_population_cap rejects a user-supplied N_max because the cap is M.
-        # The examples have M ∈ {800, 2_000}, so the old N_max = 20_000 was
+        # The examples have M ∈ {500, 800, 2_000}, so the old N_max = 20_000 was
         # redundant in every case and dropping it changes nothing that is tested.
         samplers = [("FullBatch",    () -> FullBatch()),
                     ("Fixed",        () -> FixedSample(64)),
@@ -208,6 +208,15 @@
         ym = [argmax(view(2.0 .* hcat(Xm[:, 1].^2, sin.(3 .* Xm[:, 2]), Xm[:, 3]), i, :))
               for i in 1:800]
 
+        # Two finite sums that supply no per-observation scores: a perturbed
+        # quadratic, whose mean is exactly its base model, and a sum of squared
+        # distances given by closures.
+        qbase = ADNLPModel(z -> 0.5 * sum(collect(1.0:4) .* (z .- 1.0).^2), zeros(4))
+        centres = randn(MersenneTwister(3), 3, 500)
+        Fi(i, x)     = 0.5 * sum(abs2, x .- view(centres, :, i))
+        Gi!(i, x, g) = (g .+= x .- view(centres, :, i); nothing)
+        Hi(i, x)     = Matrix(1.0I, 3, 3)
+
         examples = [
             ("LS-linear", () -> linear_least_squares(n = 4, M = 2_000, seed = 2),
                           p -> zeros(p.n), () -> GaussNewtonModel(ridge = 1e-8)),
@@ -217,30 +226,56 @@
                           p -> zeros(p.n), () -> BHHHModel(ridge = 1e-8)),
             ("Probit",    () -> Probit(K = 5, M = 2_000, seed = 2),
                           p -> zeros(p.n), () -> BHHHModel(ridge = 1e-8)),
+            ("MNL",       () -> MultinomialLogit(K = 5, M = 2_000, J = 4, seed = 2),
+                          p -> zeros(p.n), () -> BHHHModel(ridge = 1e-8)),
             ("MLP",       () -> MLPClassifier(Xm, ym, 3; hidden = 3, λ = 1e-4),
                           p -> init_params(p; seed = 1), () -> BHHHModel(ridge = 1e-6)),
+            ("PerturbedSum", () -> PerturbedSum(qbase, 2_000; σg = 1.0, seed = 2),
+                          p -> zeros(p.n), () -> ExactHessian()),
+            ("FiniteSum", () -> FiniteSum(3, 500, Fi, Gi!, Hi),
+                          p -> zeros(p.n), () -> ExactHessian()),
         ]
+
+        # The same for the problems: a finite-sum problem type the package exports
+        # and this grid omits fails here.
+        @test Set(nameof(typeof(mk())) for (_, mk, _, _) in examples) ==
+              exported_concrete(FiniteSumProblem)
+
+        # Not every cell can run. A rule that reads the score matrix has nothing to
+        # read on a problem that supplies none, and such a cell is refused by name
+        # when the oracle is built. It never runs degraded.
+        refused = Set{Tuple{String, String}}()
 
         for (ename, mk, x0f, modelf) in examples, (sname, sf) in samplers
             @testset "$ename / $sname" begin
-                p   = mk()
-                nlp = FiniteSumNLP(p, sf(); x0 = x0f(p), seed = 1)
-                st  = tr_solve(nlp; rule = RDelta(), model = modelf(),
-                               subsolver = SteihaugCG(), trace = true,
-                               params = TRParams(tol = 1e-6, max_iterations = 40))
+                p = mk()
+                if needs_scores(sf()) && !has_scores(p)
+                    push!(refused, (ename, sname))
+                    @test_throws ArgumentError FiniteSumNLP(p, sf(); x0 = x0f(p), seed = 1)
+                else
+                    nlp = FiniteSumNLP(p, sf(); x0 = x0f(p), seed = 1)
+                    st  = tr_solve(nlp; rule = RDelta(), model = modelf(),
+                                   subsolver = SteihaugCG(), trace = true,
+                                   params = TRParams(tol = 1e-6, max_iterations = 40))
 
-                @test st.status in (:first_order, :max_iter, :stalled)
-                ss = st.solver_specific
-                @test haskey(ss, :samples_total)
-                @test haskey(ss, :grad_sample_trajectory)
-                N = ss[:grad_sample_trajectory]
-                @test length(N) == st.iter
-                @test all(>(0), N)
-                @test ss[:samples_total] > 0
-                # The exact gradient is available, so score on it rather than on ĝ.
-                @test isfinite(norm(true_gradient(p, st.solution)))
+                    @test st.status in (:first_order, :max_iter, :stalled)
+                    ss = st.solver_specific
+                    @test haskey(ss, :samples_total)
+                    @test haskey(ss, :grad_sample_trajectory)
+                    N = ss[:grad_sample_trajectory]
+                    @test length(N) == st.iter
+                    @test all(>(0), N)
+                    @test ss[:samples_total] > 0
+                    # The exact gradient is available, so score on it rather than on ĝ.
+                    @test isfinite(norm(true_gradient(p, st.solution)))
+                end
             end
         end
+
+        # The refused cells are the two unscored problems under the three rules of
+        # the inner-product family, and no others.
+        @test refused == Set((e, s) for e in ("PerturbedSum", "FiniteSum"),
+                                        s in ("InnerProduct", "Orthogonality", "Augmented"))
     end
 
     @testset "sample sizes actually vary under an adaptive rule" begin

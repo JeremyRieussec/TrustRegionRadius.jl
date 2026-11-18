@@ -57,6 +57,54 @@ const RRTRGRAD_CONFIG =
     ("RRTRGrad", () -> RRTRGrad(γ1 = G1, γ2 = G2, γ3 = G3, μ = 1.0, Δmin = 0.0))
 
 # -----------------------------------------------------------------------------
+# The sampling rules under comparison
+# -----------------------------------------------------------------------------
+# One roster for every sampled experiment, as RULES is one roster for the radius
+# mechanisms. A list kept inside a script falls behind the package without anyone
+# noticing: the parity test of the package once ran eight sampling rules of
+# eleven for that reason. The test suite loads this file and compares the roster
+# with the sampling rules the package exports, so a rule added to the package and
+# missing here fails there.
+#
+# The roster names every rule. A script takes the ones it runs with
+# `sampling_rules`, by name, so that the parameters are written once.
+#
+# No N_max anywhere. On a finite sum the cap is M, imposed by the problem, and a
+# rule that carries its own is rejected when the oracle is built.
+const SAMPLING_RULES = [
+    ("FixedSample(64)",     () -> FixedSample(64)),
+    ("RadiusProportional",  () -> RadiusProportional(κ_g = 1.0, κ_f = 1.0)),
+    ("NormTest(0.5)",       () -> NormTest(θ = 0.5)),
+    ("InnerProduct(0.9)",   () -> InnerProductTest(θ = 0.9, N_min = 8)),
+    ("Orthogonality(2.0)",  () -> OrthogonalityTest(ν = 2.0, N_min = 8)),
+    ("Augmented(0.9,2.0)",  () -> AugmentedInnerProduct(θ = 0.9, ν = 2.0, N_min = 8)),
+    ("Geometric(8,1.06)",   () -> GeometricSample(N₀ = 8, rate = 1.06)),
+    ("Sequential(0.25)",    () -> SequentialEstimation(κ = 0.25, α = 0.05, N_min = 8)),
+    ("Certified(0.9)",      () -> CertifiedDecrease(p = 0.9, N_min = 8)),
+    ("Smoothed(Certified)", () -> SmoothedSize(CertifiedDecrease(p = 0.9, N_min = 8))),
+    ("FullBatch",           () -> FullBatch()),
+]
+
+"""
+    sampling_rules(names...) -> Vector
+
+The entries of `SAMPLING_RULES` with these names, in the order given. A name the
+roster does not hold is an error, so that a typing mistake cannot shrink an
+experiment silently.
+"""
+function sampling_rules(names::AbstractString...)
+    out = eltype(SAMPLING_RULES)[]
+    for nm in names
+        i = findfirst(p -> p[1] == nm, SAMPLING_RULES)
+        i === nothing && throw(ArgumentError(
+            "sampling_rules: SAMPLING_RULES holds no rule named $nm. It holds " *
+            join((p[1] for p in SAMPLING_RULES), ", ") * "."))
+        push!(out, SAMPLING_RULES[i])
+    end
+    return out
+end
+
+# -----------------------------------------------------------------------------
 # Second-order anchoring
 #
 # Same mechanisms, criticality measured by τ = max{‖g‖, −λ_min(B)} instead of
