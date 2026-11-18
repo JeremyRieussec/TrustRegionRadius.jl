@@ -28,6 +28,8 @@
         @test LikelihoodProblem     <: ScoredProblem
         @test NLSProblem            <: LikelihoodProblem
         @test LogisticRegression    <: LikelihoodProblem
+        @test Probit                <: LikelihoodProblem
+        @test MultinomialLogit      <: LikelihoodProblem
         @test MLPClassifier         <: LikelihoodProblem
         @test LeastSquares          <: NLSProblem
         # An expectation is not a finite sum with a large M, and vice versa.

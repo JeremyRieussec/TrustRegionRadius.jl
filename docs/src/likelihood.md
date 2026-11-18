@@ -69,6 +69,43 @@ the Hessian badly, it is not approximating it at all.
 `B` and `W` differ by exactly the rank-one `ḡḡᵀ`, so they coincide at a stationary
 point and can differ sharply away from one.
 
+## Two links on one design
+
+[`Probit`](@ref) and [`LogisticRegression`](@ref) draw the same design matrix and the
+same `β*` from one seed, so the identity can be measured for both links on the same
+data. This block is executed when the page is built.
+
+```@example likelihood
+using Printf
+
+for M in (2_000, 32_000), (name, make) in (("logit", LogisticRegression), ("probit", Probit))
+    p = make(K = 5, M = M, seed = 1)
+    β = β_true(p)
+    @printf("%-6s  M = %6d   at β*: %.3f   at β* + 1.5: %6.3f\n", name, M,
+            information_identity_error(p, β).B_err,
+            information_identity_error(p, β .+ 1.5).B_err)
+end
+```
+
+At `β*` the error shrinks with `M` under both links, and away from it under neither.
+The displaced error is several times larger for the probit, and the reason is in the
+score. The logit residual `p − y` is bounded by 1. The probit score carries the inverse
+Mills ratio `φ/Φ`, which grows linearly in the index of an observation the current `β`
+gets wrong, and `B` squares it, while the weight of the exact Hessian never exceeds 1.
+Far from the solution BHHH therefore overstates the curvature of a probit by a factor
+that grows with the distance.
+
+The two links differ in a second way. The logit link is canonical, so its
+per-observation Hessian `p(1−p) xxᵀ` does not involve the outcome. The probit Hessian
+does: it is the *observed* information, random in the outcomes, and the Fisher
+information is its expectation over `y` given `x`. On a probit the identity ties three
+matrices together in expectation, the outer product of the scores, the observed
+information and the Fisher information, where the logit has two.
+
+`Probit(noise = σ)` generates the outcomes from coefficients that vary across
+observations. The generating process is then a heteroscedastic probit, the fitted model
+is misspecified, and the identity fails at `β*` itself at every sample size.
+
 ## The blind spot
 
 `B ⪰ 0` always. The model therefore **cannot report negative curvature**, so a run
@@ -146,6 +183,7 @@ LikelihoodNLP
 residuals
 jacobian
 LogisticRegression
+Probit
 MultinomialLogit
 MLPClassifier
 LeastSquares

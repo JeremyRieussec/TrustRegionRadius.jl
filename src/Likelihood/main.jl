@@ -7,9 +7,11 @@
 #
 #   likelihood.jl     BHHH, BHHH-2, Gauss-Newton, OuterProductOperator
 #   least_squares.jl  LeastSquares <: NLSProblem
-#   models.jl         LogisticRegression, MLPClassifier <: LikelihoodProblem
+#   models.jl         LogisticRegression, MultinomialLogit, MLPClassifier
+#   probit.jl         Probit; after models.jl, which declares β_true
 # =============================================================================
 
 include("likelihood.jl")
 include("least_squares.jl")
 include("models.jl")
+include("probit.jl")

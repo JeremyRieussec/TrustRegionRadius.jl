@@ -1,12 +1,14 @@
 # =============================================================================
 # src/Likelihood/models.jl
 #
-# Two concrete `ScoredProblem`s.
+# Three concrete `ScoredProblem`s. `Probit` has its own file, probit.jl.
 #
 #   LogisticRegression   correctly specified by construction, so the information
 #                        identity holds and BHHH is justified. The controlled case.
+#   MultinomialLogit     `J` alternatives, convex, correctly specified unless
+#                        `noise > 0`.
 #
-# Both are `LikelihoodProblem`s, which is what makes `BHHHModel` legal over them:
+# All are `LikelihoodProblem`s, which is what makes `BHHHModel` legal over them:
 # the requirement is a statement about f being a negative log-likelihood, and the
 # type carries it. Whether the model is *correctly specified* — the other half of
 # the justification — is a property of the data that no type can assert, which is
@@ -15,7 +17,7 @@
 #                        Misspecified by construction, so it is not. The realistic
 #                        case, and the contrast is the point.
 #
-# Both report per-observation scores, so BHHH, BHHH-2, the exact Hessian and the
+# All report per-observation scores, so BHHH, BHHH-2, the exact Hessian and the
 # quasi-Newton models can all be run on the same problem and compared.
 # =============================================================================
 
