@@ -297,6 +297,24 @@
         @test !can(10, 9)
         @test can(2_000, 30)
         @test !can(2_000, 29)
+
+        # The price of the guard. With σg = 0 every term of the sum has the
+        # gradient of the base model, so at its minimiser a batch of eight has a
+        # zero gradient and a zero variance, and this time the stop is real. :test
+        # withholds it, a minimum of eight lets it through, and :both pays for one
+        # pass to accept it.
+        q = PerturbedSum(quad(), 2_000; σg = 0.0, seed = 3)
+        o = FiniteSumNLP(q, FixedSample(8); seed = 1)
+        resample!(o, 1, 1.0, 1.0)
+        x = ones(4); g = zeros(4); grad!(o, x, g); update_variances!(o, x, g)
+        @test norm(true_gradient(q, x)) <= 1e-6
+        ok(mode; kw...) = TrustRegionRadius._confirm_stop(
+            o, x, norm(g), TRParams(; tol = 1e-6, true_stop = mode, kw...))
+        @test !ok(:test)
+        @test ok(:test; stop_N_min = 8)
+        @test samples_used(o).confirm == 0
+        @test ok(:both)
+        @test samples_used(o).confirm == population(q)
     end
 
     @testset "what each true_stop mode costs" begin
