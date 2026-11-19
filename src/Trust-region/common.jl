@@ -17,7 +17,7 @@
 
 """
     TRParams{T}(; η, η1, η2, Δ0, Δmin, Δmax, max_iterations, tol, tol_H,
-                  max_time, true_stop, stop_z)
+                  max_time, true_stop, stop_z, stop_N_min)
 
 Solver parameters, shared by all three solvers.
 
@@ -33,6 +33,7 @@ Solver parameters, shared by all three solvers.
 - `max_time`: wall-clock budget in seconds                         (default `Inf`)
 - `true_stop`: how a satisfied stopping test is confirmed          (default `:none`)
 - `stop_z`: confidence multiplier for the statistical modes        (default 2)
+- `stop_N_min`: smallest batch on which those modes may conclude   (default 30)
 
 # Confirming the stopping test
 
@@ -45,7 +46,7 @@ what has to hold before that stop is believed.
 | value | cost per candidate stop | accepts the stop when |
 |:--|:--|:--|
 | `:none` | none | always (the batch test is the test) |
-| `:test` | none | `‖ĝ_k‖ + z·σ_g/√N_k ≤ tol` |
+| `:test` | none | `N_k ≥ N_min` and `‖ĝ_k‖ + z·σ_g/√N_k ≤ tol` |
 | `:full` | one cap-sized pass | `‖g‖ ≤ tol` on the largest batch allowed |
 | `:both` | a pass only when `:test` refuses | `:test`, else `:full` |
 
@@ -59,22 +60,35 @@ the paragraph above. On a finite sum the standard error is zero at `N_k = M`, wh
 the batch is the population, so the test is then exact. Below that, it can refuse to
 stop for a long time when `N_k` is held down by the sampling rule.
 
-`:test` does not guarantee that the stop is real. The variance is estimated on the
-very batch whose gradient is being tested, and a batch says nothing about the
+The bound alone does not guarantee that the stop is real. The variance is estimated
+on the very batch whose gradient is being tested, and a batch says nothing about the
 observations it did not draw. When every observation in the batch is fitted with a
 margin, each per-observation score vanishes on its own. `‖ĝ_k‖` and `σ_g` then vanish
 together, the bound reads `0 + z·0 ≤ tol`, and it certifies nothing. Small batches on
-a binary-choice likelihood produce this readily. With
+a binary-choice likelihood produce this readily.
+
+`stop_N_min` is the guard against that case. The bound is read only on a batch of at
+least `N_min = stop_N_min` observations, or on the largest batch the oracle allows
+when that is smaller. Below it `:test` refuses and `:both` takes its pass. With
 `p = LogisticRegression(K = 5, M = 2_000, seed = 2)`, the oracle
 `FiniteSumNLP(p, RadiusProportional(); x0 = zeros(5), seed = 1)`, `RDelta()`,
-`BHHHModel(ridge = 1e-8)`, `SteihaugCG()` and `tol = 1e-6`, both `:test` and `:both`
-report `:first_order` at iteration 33, on a batch of two with `σ_g² = 8.1e-14`, at a
-point where `‖∇f‖ = 0.42`. The test suite pins that run.
+`BHHHModel(ridge = 1e-8)`, `SteihaugCG()` and `tol = 1e-6`, the unguarded bound
+(`stop_N_min = 1`) reports `:first_order` at iteration 33, on a batch of two with
+`σ_g² = 8.1e-14`, at a point where `‖∇f‖ = 0.42`. With the default that stop is
+refused under `:test` and under `:both`, and the run goes on to end `:stalled` at
+iteration 341, as it does under `:full`. The test suite pins the wrong stop and its
+refusal.
+
+The default of 30 is the usual convention for a bound that rests on a normal
+approximation. It is not a theorem. A batch of `N_min` fitted observations remains
+possible and only becomes less likely as `N_min` grows. The guard also has a price.
+Under a sampling rule that never reaches `N_min`, `:test` cannot conclude at all, and
+`:both` pays one pass per candidate stop, as `:full` does. `stop_N_min = 1` reads the
+bound on every batch, which is the behaviour before the guard existed.
 
 `:both` tries `:test` first and takes the full pass only when `:test` refuses. It
-saves the passes that `:full` would spend on well-resolved candidates, and it
-inherits every wrong acceptance of `:test`, because a bound that passes on vanished
-scores never triggers the pass.
+saves the passes that `:full` would spend on candidates the bound settles, and it
+still accepts whatever `:test` accepts.
 
 `:full` is exact and always pays. It is the only mode whose verdict does not depend
 on the batch, and the mode to use when the status has to mean something. See
@@ -121,6 +135,7 @@ struct TRParams{T}
     max_time::Float64
     true_stop::Symbol
     stop_z::T
+    stop_N_min::Int
     curv_nmax::Int
     curv_lanczos_k::Int
 end
@@ -174,6 +189,7 @@ function TRParams{T}(; η::Union{Real, Nothing} = nothing,
                        max_time::Real = Inf,
                        true_stop::Union{Bool, Symbol} = :none,
                        stop_z::Real = 2,
+                       stop_N_min::Int = 30,
                        curv_nmax::Int = 200,
                        curv_lanczos_k::Int = 40) where {T}
     e1 = _pick("η1", η1, η₁, T(0.1))
@@ -193,13 +209,15 @@ function TRParams{T}(; η::Union{Real, Nothing} = nothing,
         "tol_H = -1 to disable it; got $tol_H"))
     mode = _stop_mode(true_stop)
     stop_z > 0 || throw(ArgumentError("TRParams: need stop_z > 0, got $stop_z"))
+    stop_N_min >= 1 || throw(ArgumentError(
+        "TRParams: need stop_N_min ≥ 1, got $stop_N_min"))
     curv_nmax > 0 || throw(ArgumentError(
         "TRParams: need curv_nmax > 0, got $curv_nmax"))
     curv_lanczos_k > 0 || throw(ArgumentError(
         "TRParams: need curv_lanczos_k > 0, got $curv_lanczos_k"))
     return TRParams{T}(T(ea), T(e1), T(e2), T(d0), T(Δmin), T(Δmax),
                        max_iterations, T(tol), T(tol_H), Float64(max_time),
-                       mode, T(stop_z), curv_nmax, curv_lanczos_k)
+                       mode, T(stop_z), stop_N_min, curv_nmax, curv_lanczos_k)
 end
 
 TRParams(; kwargs...) = TRParams{Float64}(; kwargs...)
@@ -213,7 +231,7 @@ end
 
 Base.propertynames(::TRParams) =
     (:η, :η1, :η2, :Δ0, :Δmin, :Δmax, :max_iterations, :tol, :tol_H,
-     :max_time, :true_stop, :stop_z, :curv_nmax, :curv_lanczos_k,
+     :max_time, :true_stop, :stop_z, :stop_N_min, :curv_nmax, :curv_lanczos_k,
      :η₁, :η₂, :Δ₀)
 
 function Base.show(io::IO, p::TRParams{T}) where {T}
@@ -229,7 +247,8 @@ function Base.show(io::IO, p::TRParams{T}) where {T}
         println(io, "  tol_H disabled")
     if confirms_stop(p)
         println(io, "  true_stop = :", p.true_stop, "   (stopping test confirmed",
-                p.true_stop === :full ? "" : ", z = $(p.stop_z)", ")")
+                p.true_stop === :full ? "" :
+                    ", z = $(p.stop_z), N_min = $(p.stop_N_min)", ")")
     else
         println(io, "  true_stop disabled: ‖ĝ‖ ≤ tol is a claim about one batch")
     end

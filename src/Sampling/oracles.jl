@@ -520,8 +520,10 @@ used to decide whether a stop is *believable*, never to decide the step.
 
 A batch in which every per-observation gradient has vanished gives `σ_g² = 0` and a
 standard error of zero. That zero describes the batch and says nothing about the
-observations outside it, which is how `:test` and `:both` come to accept a stop that
-is not real. See the section on confirming the stopping test in [`TRParams`](@ref).
+observations outside it, which is how a bound built on it can accept a stop that is
+not real. `:test` and `:both` therefore read it only on a batch of at least
+`stop_N_min` observations. See the section on confirming the stopping test in
+[`TRParams`](@ref).
 
 # The finite population correction is not optional here
 
