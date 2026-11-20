@@ -197,7 +197,7 @@ function Probit(; K::Int = 5, M::Int = 2_000,
     X = randn(rng, M, K)
     intercept && (X[:, 1] .= 1.0)
     z = X * β
-    # βₙ = β* + σεₙ adds xₙᵀεₙ to the index. At noise = 0 nothing is drawn and the
+    # βₙ = β* + σεₙ adds σ xₙᵀεₙ to the index. At noise = 0 nothing is drawn and the
     # model is correctly specified.
     noise > 0 && (z .+= noise .* vec(sum(X .* randn(rng, M, K); dims = 2)))
     y = Float64.(z .+ randn(rng, M) .> 0)

@@ -67,6 +67,13 @@ julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
 julia --project=benchmark benchmark/quick_check.jl exp_2026-08-29_02-28-45_comparison
 ```
 
+The package on `main` has since gained a dependency, `SpecialFunctions`, which the
+manifests of the campaigns do not list for it. With those manifests in place the package
+no longer loads on `main`. Either run `Pkg.resolve()` once in the `benchmark` environment,
+which leaves the campaign environment, or run the check at `f804762`, the last commit of
+`main` whose `Project.toml` is that of the campaigns. `quick_check.jl` is absent at the
+campaign commits themselves.
+
 It re-solves every problem of the comparison on which all archived runs ended inside the
 time budget and in under one second on the campaign machine: 176 of the 196 problems,
 1056 runs, under the six rules that `RULES` still holds (`RRTR` and `RAdaptiveStep` were
@@ -134,11 +141,15 @@ string(hash(read("benchmark/manifests/v0.1.0/Manifest-root.toml", String)); base
 string(hash(read(`git show v0.1.0:Project.toml`, String)); base = 16)                    # f2aa70c00c0418a4
 ```
 
-The files are stored byte for byte, with line-ending conversion switched off in
-`.gitattributes`, and the value is the same under Julia 1.11 and 1.12.
+The two manifests are stored byte for byte, with line-ending conversion switched off in
+`.gitattributes`, and the values are the same under Julia 1.11 and 1.12. `Project.toml` is
+not protected in that way, so the second line reads it from git and not from the working
+copy.
 
 `Project.toml` on `main` has gained a dependency since the tag, `SpecialFunctions`, and no
-longer gives the recorded hash. A campaign is rerun at its own commit, where it does.
+longer gives the recorded hash. A campaign is rerun at its own commit, where it does,
+provided the checkout keeps LF line endings. A Windows checkout with `core.autocrlf` on
+carries CRLF, and a run there records another `project_hash`.
 
 ## Reading an archive
 

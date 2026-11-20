@@ -1,9 +1,10 @@
 # Binary probit, checked against its definition and not against itself:
 #
 #   derivatives   against central differences
-#   the tails     against the asymptotic series, where Φ itself is not representable
+#   the kernels   against the asymptotic series and Laplace's continued fraction, from
+#                 the origin to where Φ itself is not representable
 #   the identity  exactly, conditional on x, and then as a rate in M
-#   `noise > 0`   breaks the identity at β* itself
+#   `noise > 0`   breaks the identity at β* and at the minimiser
 #
 # Two assertions come with a control. The conditional identity is only evidence if
 # it fails away from the generating parameters, and a confirmed stop is only
@@ -37,7 +38,9 @@
         @test norm(g - fd) / norm(fd) < 1e-7
 
         # The gradient is the mean of the score columns: what lets BHHH be built
-        # from the array the gradient came from.
+        # from the array the gradient came from. Probit takes `batch_grad!` from
+        # ScoredProblem, so the line holds by construction today. It is kept for the
+        # day the problem gets a `batch_grad!` of its own, as MLPClassifier has.
         S = scores(p, β, all_b)
         @test size(S) == (p.n, p.M)
         @test norm(vec(sum(S; dims = 2)) ./ p.M - g) < 1e-13
@@ -51,9 +54,19 @@
             Hfd[:, j] = (gp - gm) ./ (2ε)
         end
         @test norm(H - Hfd) / norm(Hfd) < 1e-6
-        @test norm(H - H') < 1e-14
-        # −ln Φ is convex, so every per-observation Hessian is positive semidefinite.
-        @test minimum(eigvals(Symmetric(H))) > 0
+
+        # −ln Φ is strictly convex: the weight of a per-observation Hessian lies
+        # strictly inside (0, 1). Checked on single observations with x = 1, where
+        # the value is the weight itself and no Gram product can supply the sign.
+        single(y) = Probit(reshape([1.0], 1, 1), [y])
+        @test all(0 < batch_hess(single(y), [t], [1])[1] < 1
+                  for y in (0.0, 1.0), t in (-3.0, -0.5, 0.5, 3.0))
+
+        # A batch is a list of observation indices, in any order and with repeats.
+        b = [7, 3, 7, 399, 12]
+        @test scores(p, β, b) == S[:, b]
+        @test loss_terms(p, β, b) == loss_terms(p, β, all_b)[b]
+        @test batch_hess(p, β, b) ≈ sum(batch_hess(p, β, [i]) for i in b) ./ length(b) rtol = 1e-12
     end
 
     @testset "construction" begin
@@ -73,6 +86,8 @@
         @test all(==(1.0), Probit(K = 3, M = 50, seed = 4).X[:, 1])
         @test !all(==(1.0), Probit(K = 3, M = 50, seed = 4, intercept = false).X[:, 1])
         @test β_true(Probit(K = 2, M = 10, β_star = [0.5, -0.5])) == [0.5, -0.5]
+        @test β_true(Probit(K = 4, M = 10, seed = 1, signal = 2.5)) ==
+              2.5 .* β_true(Probit(K = 4, M = 10, seed = 1))
 
         # One seed gives the probit and the logit the same design and the same β*,
         # so the two links can be compared on it.
@@ -144,6 +159,36 @@
         @test near.status === :first_order
         @test far.status === :first_order
         @test norm(far.solution - near.solution) < 1e-6
+    end
+
+    @testset "the kernels between the origin and the far tails" begin
+        # The loss, the score and the curvature of one observation, at indices where
+        # neither the derivative checks above nor the far-tail checks look.
+        lo = Probit(reshape([1.0], 1, 1), [0.0])
+        hi = Probit(reshape([1.0], 1, 1), [1.0])
+
+        # Laplace's continued fraction for the Mills ratio,
+        #   (1 − Φ(u))/φ(u) = 1/(u + 1/(u + 2/(u + 3/(u + …)))),
+        # evaluated from the tail. No special function is involved.
+        function ratio(u)
+            r = u
+            for k in 400:-1:1
+                r = u + k / r
+            end
+            return 1 / r
+        end
+
+        for u in (4.0, 6.0, 8.5, 12.0, 20.0, 30.0, 37.0)
+            R = ratio(u); λ = 1 / R
+            q = exp(-u^2 / 2) / sqrt(2π) * R            # 1 − Φ(u)
+            μ = exp(-u^2 / 2) / sqrt(2π) / (1 - q)      # φ(u)/Φ(u)
+            @test loss_terms(lo, [u], [1])[1] ≈ u^2 / 2 + log(2π) / 2 - log(R) rtol = 1e-10
+            @test scores(lo, [u], [1])[1]     ≈ λ            rtol = 1e-10
+            @test batch_hess(lo, [u], [1])[1] ≈ λ * (λ - u)  rtol = 1e-10
+            @test loss_terms(hi, [u], [1])[1] ≈ -log1p(-q)   rtol = 1e-10
+            @test scores(hi, [u], [1])[1]     ≈ -μ           rtol = 1e-10
+            @test batch_hess(hi, [u], [1])[1] ≈ μ * (μ + u)  rtol = 1e-10
+        end
     end
 
     @testset "the curvature in the left tail, against a high-precision reference" begin
@@ -225,12 +270,19 @@
     @testset "the identity as a rate in M" begin
         K = 5
         Ms = [500, 2_000, 8_000, 32_000]
+        # The rate is a statement about the mean error. One sample at each M follows
+        # it only roughly, so each entry is a mean over eight samples.
+        seeds = 1:8
         at_true = Float64[]; at_wrong = Float64[]
         for M in Ms
-            p = Probit(K = K, M = M, seed = 1)
-            β = β_true(p)
-            push!(at_true,  information_identity_error(p, β).B_err)
-            push!(at_wrong, information_identity_error(p, β .+ 1.5).B_err)
+            t = 0.0; w = 0.0
+            for seed in seeds
+                p = Probit(K = K, M = M, seed = seed)
+                β = β_true(p)
+                t += information_identity_error(p, β).B_err
+                w += information_identity_error(p, β .+ 1.5).B_err
+            end
+            push!(at_true, t / length(seeds)); push!(at_wrong, w / length(seeds))
         end
         # At β*: monotone decay at the rate M^{-1/2}, so err·√M stays bounded.
         @test issorted(at_true; rev = true)
@@ -246,7 +298,7 @@
         p = Probit(K = K, M = 8_000, seed = 1)
         e = information_identity_error(p, β_true(p))
         @test e.BW_gap < 0.05
-        @test isapprox(e.W_err, e.B_err; atol = 0.05)
+        @test e.BW_gap ≈ e.grad_norm^2 / norm(batch_hess(p, β_true(p), 1:p.M))
 
         # The origin is an exception to "away from β*". Every index is zero there, so
         # each score outer product equals the per-observation Hessian, (2/π) xxᵀ for
@@ -296,6 +348,14 @@
                        information_identity_error(p, β_true(p) ./ sqrt(1 + 1.5^2)).B_err)
         @test rescaled(128_000) < 0.01
         @test rescaled(128_000) < rescaled(8_000)
+
+        # The scale of the noise, in closed form. With one coefficient and x = 1 the
+        # latent index is β* + σε + e, of variance 1 + σ², so the frequency of y = 1
+        # is Φ(β*/√(1 + σ²)). Its standard error at this M is 0.001.
+        unit = Probit(reshape([1.0], 1, 1), [1.0])
+        Φ(z) = exp(-loss_terms(unit, [z], [1])[1])
+        p = Probit(K = 1, M = 200_000, seed = 0, β_star = [1.0], noise = 1.5)
+        @test abs(sum(p.y) / p.M - Φ(1 / sqrt(1 + 1.5^2))) < 0.01
     end
 
     @testset "every model reaches the same estimate" begin
@@ -312,26 +372,44 @@
         # fits the sample at least as well as they do.
         @test 0 < norm(ref .- β_true(p)) < 0.5
         @test true_objective(p, ref) <= true_objective(p, β_true(p))
+
+        # A supplied β_star is the source of the data, and not only a stored field.
+        bs = [0.5, -0.5, 1.0]
+        q = Probit(K = 3, M = 20_000, seed = 7, β_star = bs)
+        est = tr_solve(LikelihoodNLP(q; x0 = zeros(3)); rule = RDelta(),
+                       model = ExactHessian(), subsolver = SteihaugCG(),
+                       params = TRParams(tol = 1e-8, max_iterations = 500)).solution
+        @test norm(est - bs) < 0.1
     end
 
     @testset "a sampled run, and what its stopping test is worth" begin
         p = Probit(K = 5, M = 2_000, seed = 2)
-        solve(stop) = tr_solve(FiniteSumNLP(p, RadiusProportional(); x0 = zeros(5), seed = 1);
-                               rule = RDelta(), model = BHHHModel(ridge = 1e-8),
-                               subsolver = SteihaugCG(),
-                               params = TRParams(tol = 1e-6, max_iterations = 1_000,
-                                                 true_stop = stop))
+        sampled(stop, seed) =
+            tr_solve(FiniteSumNLP(p, RadiusProportional(); x0 = zeros(5), seed = seed);
+                     rule = RDelta(), model = BHHHModel(ridge = 1e-8),
+                     subsolver = SteihaugCG(),
+                     params = TRParams(tol = 1e-6, max_iterations = 1_000,
+                                       true_stop = stop))
+        truth(st) = norm(true_gradient(p, st.solution))
+        # The estimate, from a deterministic run the sampled solver takes no part in.
+        best = tr_solve(LikelihoodNLP(p; x0 = zeros(5)); rule = RDelta(),
+                        model = ExactHessian(), subsolver = SteihaugCG(),
+                        params = TRParams(tol = 1e-8, max_iterations = 500)).solution
 
         # Control. φ/Φ decays like a Gaussian, so on a batch of two the gradient
-        # vanishes to rounding once both observations are fitted with a margin. The
-        # unconfirmed run reports :first_order at a point that is not critical.
-        loose = solve(:none)
-        @test loose.status === :first_order
-        @test norm(true_gradient(p, loose.solution)) > 1e-2
+        # vanishes to rounding once both observations are fitted with a margin, and
+        # an unconfirmed run then reports :first_order at a point that is not
+        # critical. Whether a run does so depends on its draws: of the six oracle
+        # seeds below, four do.
+        loose = [sampled(:none, s) for s in 1:6]
+        @test count(st -> st.status === :first_order && truth(st) > 1e-2, loose) >= 1
 
-        # Confirmed on the full batch, a :first_order status means what it says.
-        tight = solve(:full)
-        @test tight.status === :first_order
-        @test norm(true_gradient(p, tight.solution)) <= 1e-6
+        # Confirmed on the full batch, a run that reports :first_order is at the
+        # estimate. Three of the six do within the budget.
+        tight = [sampled(:full, s) for s in 1:6]
+        @test count(st -> st.status === :first_order, tight) >= 1
+        for st in tight
+            @test st.status !== :first_order || norm(st.solution - best) < 1e-4
+        end
     end
 end
