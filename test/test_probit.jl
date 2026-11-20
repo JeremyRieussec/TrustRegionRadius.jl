@@ -116,13 +116,17 @@
         @test abs(scores(hi, [t], [1])[1]) < 1e-300
         @test abs(batch_hess(hi, [t], [1])[1]) < 1e-300
 
-        # Much further out, where λ + t cancels: finite, and the curvature stays in [0, 1].
-        for far in (1e3, 1e6)
-            for q in (lo, hi)
-                @test isfinite(loss_terms(q, [far], [1])[1])
-                @test isfinite(scores(q, [far], [1])[1])
-                @test 0 <= batch_hess(q, [far], [1])[1] <= 1
-            end
+        # Much further out the curvature tends to 1 on the left and is 0 on the right.
+        # The reference on the left is the series 1 − 1/t² + 6/t⁴, whose next term is
+        # of size 50/t⁶, 5e-17 at t = 1e3. An interval such as [0, 1] is no reference
+        # here: a clamp satisfies it whatever the value.
+        for far in (1e3, 1e6, 1e8, 1e12)
+            @test isfinite(loss_terms(lo, [far], [1])[1])
+            @test isfinite(scores(lo, [far], [1])[1])
+            @test abs(batch_hess(lo, [far], [1])[1] - (1 - 1/far^2 + 6/far^4)) < 1e-14
+            @test isfinite(loss_terms(hi, [far], [1])[1])
+            @test isfinite(scores(hi, [far], [1])[1])
+            @test batch_hess(hi, [far], [1])[1] == 0
         end
 
         # A run started where Φ underflows for a large part of the sample still
@@ -140,6 +144,38 @@
         @test near.status === :first_order
         @test far.status === :first_order
         @test norm(far.solution - near.solution) < 1e-6
+    end
+
+    @testset "the curvature in the left tail, against a high-precision reference" begin
+        # With u = −t, Laplace's continued fraction gives λ(t) + t = 1/d with
+        # d = u + 2/(u + 3/(u + …)), and λ = u + 1/d. Evaluated in BigFloat to a depth
+        # far beyond what convergence needs, it shares no arithmetic with the code.
+        function reference(u)
+            b = big(u); d = b
+            for k in 400:-1:2
+                d = b + k / d
+            end
+            return (b + 1 / d) / d
+        end
+
+        worst = 0.0
+        for u in exp10.(range(1, 12; length = 600))
+            r = reference(u)
+            w = TrustRegionRadius._probit_curvature(-u)
+            worst = max(worst, Float64(abs(w - r) / r))
+        end
+        @test worst < 8eps()
+
+        # Control. λ(λ + t) formed as written subtracts two numbers of size u whose
+        # difference is 1/u. It returns 0 at u = 1e8, where the curvature is 1.
+        direct(t) = (λ = TrustRegionRadius._mills(t); clamp(λ * (λ + t), 0.0, 1.0))
+        @test abs(direct(-1e8) - reference(1e8)) > 0.5
+        @test abs(TrustRegionRadius._probit_curvature(-1e8) - reference(1e8)) < 8eps()
+
+        # The two branches meet at t = −10 without a step.
+        below = TrustRegionRadius._probit_curvature(prevfloat(-10.0))
+        above = TrustRegionRadius._probit_curvature(nextfloat(-10.0))
+        @test abs(below - above) < 1e-12
     end
 
     @testset "the identity is exact conditional on x" begin
@@ -211,9 +247,21 @@
         e = information_identity_error(p, β_true(p))
         @test e.BW_gap < 0.05
         @test isapprox(e.W_err, e.B_err; atol = 0.05)
+
+        # The origin is an exception to "away from β*". Every index is zero there, so
+        # each score outer product equals the per-observation Hessian, (2/π) xxᵀ for
+        # the probit and ¼ xxᵀ for the logit, and B is the exact Hessian whatever the
+        # data, misspecified or not.
+        for q in (Probit(K = K, M = 2_000, seed = 1),
+                  Probit(K = K, M = 2_000, seed = 1, noise = 1.5),
+                  LogisticRegression(K = K, M = 2_000, seed = 1))
+            @test information_identity_error(q, zeros(K)).B_err < 1e-14
+        end
+        q = Probit(K = K, M = 2_000, seed = 1)
+        @test batch_hess(q, zeros(K), 1:q.M) ≈ (2 / π) .* (q.X' * q.X) ./ q.M rtol = 1e-13
     end
 
-    @testset "noise breaks the identity at β*" begin
+    @testset "noise breaks the identity" begin
         err(M, σ) = (p = Probit(K = 6, M = M, seed = 3, noise = σ);
                      information_identity_error(p, β_true(p)).B_err)
         # Random coefficients make the generating process heteroscedastic. The
@@ -223,6 +271,31 @@
         # The correctly specified problem is the one whose error shrinks.
         @test err(32_000, 0.0) < err(4_000, 0.0)
         @test Probit(K = 3, M = 20, noise = 0.5).noise == 0.5
+
+        # β* is then far from the minimiser of f, so the error at β* mixes two
+        # things. At the minimiser itself the identity still fails: the error
+        # levels off as M grows, where the correctly specified one keeps shrinking.
+        function at_minimiser(M, σ)
+            p = Probit(K = 5, M = M, seed = 3, noise = σ)
+            st = tr_solve(LikelihoodNLP(p; x0 = zeros(p.n)); rule = RDelta(),
+                          model = ExactHessian(), subsolver = SteihaugCG(),
+                          params = TRParams(tol = 1e-8, max_iterations = 500))
+            @test st.status === :first_order
+            return information_identity_error(p, st.solution).B_err
+        end
+        small_ok, large_ok   = at_minimiser(8_000, 0.0), at_minimiser(512_000, 0.0)
+        small_mis, large_mis = at_minimiser(8_000, 1.5), at_minimiser(512_000, 1.5)
+        @test large_ok < small_ok / 2
+        @test large_mis > small_mis / 2
+        @test large_mis > 3 * large_ok
+
+        # With K = 1 and an intercept every xₙ is 1, the added variance is the same
+        # for all observations, and the noise only rescales the coefficient: the
+        # model is correctly specified at β*/√(1 + σ²), and the error there shrinks.
+        rescaled(M) = (p = Probit(K = 1, M = M, seed = 1, noise = 1.5);
+                       information_identity_error(p, β_true(p) ./ sqrt(1 + 1.5^2)).B_err)
+        @test rescaled(128_000) < 0.01
+        @test rescaled(128_000) < rescaled(8_000)
     end
 
     @testset "every model reaches the same estimate" begin

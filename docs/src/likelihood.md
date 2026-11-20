@@ -87,13 +87,25 @@ for M in (2_000, 32_000), (name, make) in (("logit", LogisticRegression), ("prob
 end
 ```
 
-At `β*` the error shrinks with `M` under both links, and away from it under neither.
-The displaced error is several times larger for the probit, and the reason is in the
-score. The logit residual `p − y` is bounded by 1. The probit score carries the inverse
-Mills ratio `φ/Φ`, which grows linearly in the index of an observation the current `β`
-gets wrong, and `B` squares it, while the weight of the exact Hessian never exceeds 1.
-Far from the solution BHHH therefore overstates the curvature of a probit by a factor
-that grows with the distance.
+At `β*` the error shrinks with `M` under both links, and at the displaced point under
+neither. The displaced error is several times larger for the probit, and the reason is
+in the score. The logit residual `p − y` is bounded by 1. The probit score carries the
+inverse Mills ratio `φ/Φ`, which grows linearly in the index of an observation the
+current `β` gets wrong, and `B` squares it, while the weight of the exact Hessian never
+exceeds 1. Far from the solution BHHH therefore overstates the curvature of a probit by
+a factor that grows with the distance.
+
+The origin is a special point for both links. At `β = 0` every index is zero, so each
+score outer product equals the per-observation Hessian, `¼ xxᵀ` for the logit and
+`(2/π) xxᵀ` for the probit, and `B` is the exact Hessian whatever the data:
+
+```@example likelihood
+[information_identity_error(make(K = 5, M = 2_000, seed = 1), zeros(5)).B_err
+ for make in (LogisticRegression, Probit)]
+```
+
+Runs start at zero by default. The first BHHH model of such a run is therefore exact,
+which says nothing about the models that follow.
 
 The two links differ in a second way. The logit link is canonical, so its
 per-observation Hessian `p(1−p) xxᵀ` does not involve the outcome. The probit Hessian
@@ -104,7 +116,9 @@ information and the Fisher information, where the logit has two.
 
 `Probit(noise = σ)` generates the outcomes from coefficients that vary across
 observations. The generating process is then a heteroscedastic probit, the fitted model
-is misspecified, and the identity fails at `β*` itself at every sample size.
+is misspecified, and the identity fails at `β*` itself at every sample size. The
+minimiser of `f` is then far from `β*`. At that minimiser the identity fails by much
+less, and the gap still does not vanish as `M` grows.
 
 ## The blind spot
 
