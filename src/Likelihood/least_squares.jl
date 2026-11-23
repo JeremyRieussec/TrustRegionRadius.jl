@@ -141,6 +141,9 @@ track `residual`: small at a well-fitting solution, `O(1)` when the model cannot
 fit the data. That is a different failure mode from BHHH's — it depends on the
 *fit*, not on the *specification* — and it is worth measuring rather than
 assuming, for the same reason.
+
+On a [`LinearRegression`](@ref) the residuals are standardised, so `residual` is
+in units of the error standard deviation, and `GN_err` is exactly zero.
 """
 function gauss_newton_error(p::NLSProblem, x; batch = full_batch(p))
     b = collect(batch)

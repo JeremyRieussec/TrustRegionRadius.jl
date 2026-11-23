@@ -313,10 +313,13 @@ the batch. The run and the cost of the guard are described under [`TRParams`](@r
 An exact model makes the batch test weaker still. On a [`LinearRegression`](@ref) the
 objective on a batch is a quadratic, and under [`ExactHessian`](@ref) or
 [`GaussNewtonModel`](@ref) the model is that quadratic. Whenever the objective and the
-gradient share the batch, the ratio is then 1 to rounding and a step inside the region
-lands where the batch gradient vanishes. With three observations for five coefficients
-we measured an unconfirmed `:first_order` at iteration 4, at a point where
-`‖∇f‖ = 1.03`, with `tol = 1e-6`. Both `:test` and `:full` refuse that stop. The cells
+gradient share the batch, the ratio is then 1 to rounding. A step that solves the
+subproblem inside the region lands where the batch gradient vanishes, and the batch
+test is met there. With three observations for five coefficients we measured an
+unconfirmed `:first_order` at iteration 4, at a point where `‖∇f‖ = 1.03`, with
+`tol = 1e-6`. Both `:test` and `:full` refuse that stop. Under [`SteihaugCG`](@ref) we
+saw it on batches of up to 8 observations and not on 16 or 64. Under [`ExactMS`](@ref)
+we saw it at every batch size we tried, 64 included, by the third iteration. The cells
 of a sampled comparison that pair this problem with an exact model are therefore a
 control for the sampling rule, and say nothing about a radius driven by the ratio.
 

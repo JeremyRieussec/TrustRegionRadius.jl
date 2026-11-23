@@ -208,11 +208,26 @@ from 1. No sample size removes it. With `σ` carried the same data leave the sam
 error alone.
 
 `LinearRegression(noise = ν)` generates the outcomes from coefficients that vary across
-observations, as `Probit(noise = σ)` does. The errors then have a variance that changes
-with `xₙ` while the model holds it at `σ²`, and the identity fails at `β*` at every
+observations, as `Probit(noise = σ)` does. The errors then have variance
+`σ² + ν²‖xₙ‖²` while the model holds it at `σ²`, and the identity fails at `β*` at every
 sample size. The errors keep mean zero given `x`, so `β*` remains the minimiser of the
-population objective, which under the probit it does not. Here the knob breaks the
-identity and nothing else.
+population objective, which under the probit it does not.
+
+Most of that failure is a wrong scale, the same thing as the previous block. The next
+one poses the noisy data a second time, with the scale of their own residuals.
+
+```@example likelihood
+noisy = LinearRegression(K = 6, M = 32_000, seed = 3, noise = 0.5)
+s = sqrt(sum(abs2, noisy.y - noisy.X * (noisy.X \ noisy.y)) / noisy.M)
+reposed = LinearRegression(noisy.X, noisy.y; σ = s, β_star = β_true(noisy), noise = 0.5)
+@printf("posed with σ = 1:     %.3f\n", information_identity_error(noisy, β_true(noisy)).B_err)
+@printf("posed with σ = %.3f: %.3f\n", s, information_identity_error(reposed, β_true(noisy)).B_err)
+```
+
+What is left in the second line is the heteroscedasticity, the part of the gap that
+comes from `‖xₙ‖` varying across observations and that no single scale removes. With
+`K = 1` and an intercept every `xₙ` is 1, nothing is left, and the noisy data are a
+correctly specified regression with a larger `σ`.
 
 ### What the three share
 

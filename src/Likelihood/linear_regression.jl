@@ -95,6 +95,9 @@ E\\bigl[B - H \\mid X\\bigr] = \\frac{1}{M\\sigma^4} \\sum_n
   like `‖δ‖²/σ²`.
 - A wrong `σ` leaves `vₙ − σ²`. Data whose errors have variance `σ₀²`, posed with
   `σ`, give `E[B | X] = (σ₀²/σ²) H` at `β*`.
+- At `β = 0`, where a run starts by default, the residual is the outcome and the
+  gap is of the order of `‖β*‖²/σ²` times the Hessian. The two binary models have
+  an exact BHHH model at the origin, and this one does not.
 
 [`information_identity_error`](@ref) measures all of this against the closed-form
 Hessian.
@@ -102,11 +105,18 @@ Hessian.
 !!! warning "`noise > 0` breaks the identity and leaves `β*` where it is"
     `noise = ν` draws a separate coefficient vector `βₙ = β* + εₙ` with
     `εₙ ~ N(0, ν²I)` for each observation, as in [`Probit`](@ref). The errors then
-    have variance `σ² + ν²‖xₙ‖²`, which changes with `xₙ`, while the model holds it
-    at `σ²`. At `β*` the expected gap is `(ν²/(Mσ⁴)) Σ ‖xₙ‖² xₙxₙᵀ` at every sample
-    size. The mean of `yₙ` given `xₙ` is still `xₙᵀβ*`, so [`β_true`](@ref) remains
-    the minimiser as `M → ∞`. In the probit the same keyword moves the minimiser as
-    well.
+    have variance `σ² + ν²‖xₙ‖²` while the model holds it at `σ²`. At `β*` the
+    expected gap is `(ν²/(Mσ⁴)) Σ ‖xₙ‖² xₙxₙᵀ` at every sample size. The mean of
+    `yₙ` given `xₙ` is still `xₙᵀβ*`, so [`β_true`](@ref) remains the minimiser as
+    `M → ∞`. In the probit the same keyword moves the minimiser as well.
+
+    Most of that gap is a wrong scale and not heteroscedasticity. With `m` the mean
+    of `‖xₙ‖²`, it is `(ν²m/σ²) H` plus a remainder weighted by `‖xₙ‖² − m`. The
+    first part is what a wrong `σ` produces, and posing the same data with the
+    scale `√(RSS/M)` of their residuals removes it. The remainder is the
+    heteroscedasticity. It vanishes where `‖xₙ‖` does not vary: with `K = 1` and an
+    intercept every `xₙ` is 1, and the noisy data are a correctly specified
+    regression of standard deviation `√(σ² + ν²)`.
 
 !!! warning "`noise` is not the error standard deviation"
     In [`linear_least_squares`](@ref) the keyword `noise` is the standard deviation
@@ -115,14 +125,26 @@ Hessian.
     and the losses and scores of `LinearRegression(A, b; σ = 1)` are the same
     numbers. When the errors do not have unit variance, its outer product at the
     solution is their variance times the Hessian. Carrying `σ` is what repairs that.
+    The generating coefficients are read with [`β_true`](@ref) here, as for the
+    likelihood siblings, and [`x_true`](@ref) is not defined.
 
 !!! note "Under sampling an exact model has a ratio of 1"
     The objective on a batch is itself a quadratic with Hessian `X_bᵀX_b/(Nσ²)`.
     With [`ExactHessian`](@ref) or [`GaussNewtonModel`](@ref) the model is the batch
     objective. Whenever the objective and the gradient share the batch, the ratio is
-    then 1 to rounding and says nothing about the sample, and the step lands on the
-    least-squares point of the batch, where the batch gradient vanishes. Confirm the
-    stopping test with `TRParams(true_stop = :full)`.
+    then 1 to rounding and says nothing about the sample. Three things follow.
+
+    - Every step is read as fully successful, so the radius never shrinks and under
+      a rule that expands on success it grows without bound. Give the rule a `Δmax`.
+    - A step that solves the subproblem inside the region lands on the least-squares
+      point of the batch, where the batch gradient vanishes, and a stopping test
+      read on the batch is then met far from the solution. [`ExactMS`](@ref) does
+      this at any batch size, [`SteihaugCG`](@ref) on batches of a few
+      observations. Confirm the stop with `TRParams(true_stop = :full)`.
+    - With `ExactMS` and fewer observations than coefficients, the batch Hessian is
+      singular and the step takes a component as long as the radius in its null
+      space, so the iterates leave. Use `GaussNewtonModel` with a ridge, or a batch
+      of at least `K` observations.
 
 # What a finite sum rules out
 
@@ -180,6 +202,9 @@ function LinearRegression(; K::Int = 5, M::Int = 2_000,
     # the model is correctly specified.
     noise > 0 && (z .+= noise .* vec(sum(X .* randn(rng, M, K); dims = 2)))
     y = z .+ σ .* randn(rng, M)
+    all(isfinite, y) || throw(ArgumentError(
+        "LinearRegression: the generated outcomes are not finite, check signal, " *
+        "noise and β_star"))
     return LinearRegression(K, M, X, y, β, float(noise), float(σ))
 end
 
