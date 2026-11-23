@@ -67,7 +67,9 @@ H_n = \\frac{x_n x_n^\\top}{\\sigma^2} .
 and `X_bᵀX_b/(Nσ²)` on a batch of `N`. The objective is a convex quadratic, and its
 minimiser is the least-squares estimate `X \\ y` whatever `σ` is. Every `rₙ` is
 linear in `β`, so [`GaussNewtonModel`](@ref) discards nothing and is the exact
-Hessian.
+Hessian. `batch_hess` forms it as `JᵀJ/N` from the Jacobian of the standardised
+residuals, the expression `GaussNewtonModel` evaluates, so without a ridge the two
+matrices are equal to the last bit.
 
 # The BHHH error in closed form
 
@@ -96,8 +98,9 @@ E\\bigl[B - H \\mid X\\bigr] = \\frac{1}{M\\sigma^4} \\sum_n
 - A wrong `σ` leaves `vₙ − σ²`. Data whose errors have variance `σ₀²`, posed with
   `σ`, give `E[B | X] = (σ₀²/σ²) H` at `β*`.
 - At `β = 0`, where a run starts by default, the residual is the outcome and the
-  gap is of the order of `‖β*‖²/σ²` times the Hessian. The two binary models have
-  an exact BHHH model at the origin, and this one does not.
+  gap is of the order of the signal-to-noise ratio `mean((xₙᵀβ*)²)/σ²` times the
+  Hessian. On the generated design that ratio is close to `‖β*‖²/σ²`. The two
+  binary models have an exact BHHH model at the origin, and this one does not.
 
 [`information_identity_error`](@ref) measures all of this against the closed-form
 Hessian.
@@ -110,11 +113,13 @@ Hessian.
     `yₙ` given `xₙ` is still `xₙᵀβ*`, so [`β_true`](@ref) remains the minimiser as
     `M → ∞`. In the probit the same keyword moves the minimiser as well.
 
-    Most of that gap is a wrong scale and not heteroscedasticity. With `m` the mean
+    Part of that gap is a wrong scale and not heteroscedasticity. With `m` the mean
     of `‖xₙ‖²`, it is `(ν²m/σ²) H` plus a remainder weighted by `‖xₙ‖² − m`. The
     first part is what a wrong `σ` produces, and posing the same data with the
     scale `√(RSS/M)` of their residuals removes it. The remainder is the
-    heteroscedasticity. It vanishes where `‖xₙ‖` does not vary: with `K = 1` and an
+    heteroscedasticity. On the generated design the first part is the larger one
+    from three coefficients on, and without an intercept the remainder is `2/K`
+    of it. The remainder vanishes where `‖xₙ‖` does not vary: with `K = 1` and an
     intercept every `xₙ` is 1, and the noisy data are a correctly specified
     regression of standard deviation `√(σ² + ν²)`.
 
@@ -132,19 +137,28 @@ Hessian.
     The objective on a batch is itself a quadratic with Hessian `X_bᵀX_b/(Nσ²)`.
     With [`ExactHessian`](@ref) or [`GaussNewtonModel`](@ref) the model is the batch
     objective. Whenever the objective and the gradient share the batch, the ratio is
-    then 1 to rounding and says nothing about the sample. Three things follow.
+    then 1 to rounding and says nothing about the sample. Four things follow.
 
-    - Every step is read as fully successful, so the radius never shrinks and under
-      a rule that expands on success it grows without bound. Give the rule a `Δmax`.
+    - Every step is read as fully successful. Under [`RDelta`](@ref) and
+      [`RDeltaStep`](@ref) the radius is then multiplied by `γ3` at every iteration
+      and never shrinks, so give the rule a `Δmax`. Under [`RRTR`](@ref) it never
+      shrinks either, and grows only with the longest step taken. The other rules
+      set it from the step, from the norm of the batch gradient, or from a
+      comparison of the radius with that norm, and still move it both ways.
     - A step that solves the subproblem inside the region lands on the least-squares
       point of the batch, where the batch gradient vanishes, and a stopping test
       read on the batch is then met far from the solution. [`ExactMS`](@ref) does
-      this at any batch size, [`SteihaugCG`](@ref) on batches of a few
-      observations. Confirm the stop with `TRParams(true_stop = :full)`.
+      this at any batch size. [`SteihaugCG`](@ref) does it when its recurrence runs
+      to termination, which takes few observations or few coefficients. Confirm
+      the stop with `TRParams(true_stop = :full)`.
+    - With `ExactMS`, a rule that scales the radius by the gradient norm reads that
+      vanished batch gradient and sets the radius to rounding. A run whose stop is
+      confirmed can then end `:stalled` far from the solution.
     - With `ExactMS` and fewer observations than coefficients, the batch Hessian is
       singular and the step takes a component as long as the radius in its null
-      space, so the iterates leave. Use `GaussNewtonModel` with a ridge, or a batch
-      of at least `K` observations.
+      space, so the iterates leave. A ridge repairs that case. A batch of about `K`
+      observations is not singular and can be nearly so, which a ridge does not
+      repair. Use batches of several times `K` observations, or a `Δmax`.
 
 # What a finite sum rules out
 
@@ -169,15 +183,19 @@ function LinearRegression(X::AbstractMatrix, y::AbstractVector; σ::Real,
                           β_star = nothing, noise::Real = 0.0)
     size(X, 1) == length(y) || throw(DimensionMismatch(
         "LinearRegression: X has $(size(X, 1)) rows but y has $(length(y)) entries"))
-    all(isfinite, y) || throw(ArgumentError("LinearRegression: y must be finite"))
-    0 < σ < Inf || throw(ArgumentError("LinearRegression: need 0 < σ < Inf, got $σ"))
-    noise >= 0 || throw(ArgumentError("LinearRegression: need noise ≥ 0"))
+    # The checks read what is stored. A number outside the Float64 range is finite
+    # as given and is not once converted.
+    yf = Vector{Float64}(y)
+    σf = Float64(σ)
+    νf = Float64(noise)
+    all(isfinite, yf) || throw(ArgumentError("LinearRegression: y must be finite"))
+    0 < σf < Inf || throw(ArgumentError("LinearRegression: need 0 < σ < Inf, got $σ"))
+    νf >= 0 || throw(ArgumentError("LinearRegression: need noise ≥ 0"))
     β_star === nothing || length(β_star) == size(X, 2) || throw(DimensionMismatch(
         "LinearRegression: β_star must have length $(size(X, 2))"))
-    return LinearRegression(size(X, 2), size(X, 1), Matrix{Float64}(X),
-                            Vector{Float64}(y),
+    return LinearRegression(size(X, 2), size(X, 1), Matrix{Float64}(X), yf,
                             β_star === nothing ? nothing : Vector{Float64}(β_star),
-                            float(noise), float(σ))
+                            νf, σf)
 end
 
 function LinearRegression(; K::Int = 5, M::Int = 2_000,
@@ -186,13 +204,15 @@ function LinearRegression(; K::Int = 5, M::Int = 2_000,
                             signal::Real = 1.0, noise::Real = 0.0, σ::Real = 1.0)
     K >= 1 || throw(ArgumentError("LinearRegression: need K ≥ 1"))
     M >= 1 || throw(ArgumentError("LinearRegression: need M ≥ 1"))
-    noise >= 0 || throw(ArgumentError("LinearRegression: need noise ≥ 0"))
-    0 < σ < Inf || throw(ArgumentError("LinearRegression: need 0 < σ < Inf, got $σ"))
+    σf = Float64(σ)
+    νf = Float64(noise)
+    νf >= 0 || throw(ArgumentError("LinearRegression: need noise ≥ 0"))
+    0 < σf < Inf || throw(ArgumentError("LinearRegression: need 0 < σ < Inf, got $σ"))
     rng = MersenneTwister(seed)
     # β*, then X, then the coefficient perturbations, then the errors: the order in
     # which Probit draws them. One seed then gives the three likelihoods the same
     # design, and at σ = 1 the outcome here is the probit's latent variable.
-    β = β_star === nothing ? signal .* randn(rng, K) : Vector{Float64}(β_star)
+    β = β_star === nothing ? Float64(signal) .* randn(rng, K) : Vector{Float64}(β_star)
     length(β) == K || throw(DimensionMismatch(
         "LinearRegression: β_star must have length K = $K"))
     X = randn(rng, M, K)
@@ -200,12 +220,12 @@ function LinearRegression(; K::Int = 5, M::Int = 2_000,
     z = X * β
     # βₙ = β* + νεₙ adds ν xₙᵀεₙ to the outcome. At noise = 0 nothing is drawn and
     # the model is correctly specified.
-    noise > 0 && (z .+= noise .* vec(sum(X .* randn(rng, M, K); dims = 2)))
-    y = z .+ σ .* randn(rng, M)
+    νf > 0 && (z .+= νf .* vec(sum(X .* randn(rng, M, K); dims = 2)))
+    y = z .+ σf .* randn(rng, M)
     all(isfinite, y) || throw(ArgumentError(
         "LinearRegression: the generated outcomes are not finite, check signal, " *
-        "noise and β_star"))
-    return LinearRegression(K, M, X, y, β, float(noise), float(σ))
+        "noise, σ and β_star"))
+    return LinearRegression(K, M, X, y, β, νf, σf)
 end
 
 population(p::LinearRegression) = p.M
@@ -244,8 +264,8 @@ end
 `X_bᵀX_b/(Nσ²)`, the exact Hessian, which involves neither `x` nor the outcomes.
 
 Formed as `JᵀJ/N` from the Jacobian of the standardised residuals. That is the
-expression [`GaussNewtonModel`](@ref) evaluates, so the two matrices are equal to
-the last bit and not only to rounding.
+expression [`GaussNewtonModel`](@ref) evaluates, so without a ridge the two
+matrices are equal to the last bit and not only to rounding.
 """
 function batch_hess(p::LinearRegression, x, batch)
     J = jacobian(p, x, batch)

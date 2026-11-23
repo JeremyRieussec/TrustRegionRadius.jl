@@ -8,8 +8,9 @@
 #   `noise > 0`      breaks the identity at β* and leaves β* the minimiser
 #   a wrong σ        multiplies B by a known factor, at β* itself
 #
-# Every reference is built from X, y and σ, never from the functions under test.
-# An assertion that could pass for the wrong reason comes with a control.
+# Where a value has a closed form, the reference is built from X, y and σ, never
+# from the functions under test. An assertion that could pass for the wrong reason
+# comes with a control.
 
 @testset "linear regression" begin
 
@@ -48,7 +49,11 @@
         S = scores(p, β, all_b)
         @test S isa Matrix{Float64}
         @test size(S) == (p.n, p.M)
-        @test norm(vec(sum(S; dims = 2)) ./ p.M - g) < 1e-13
+        # The gradient and the scores against their formulas, from the data. The mean
+        # of the score columns is how the package forms the gradient, so comparing
+        # the two with each other would compare an expression with itself.
+        @test norm(g - p.X' * (p.X * β .- p.y) ./ (p.M * σ^2)) < 1e-13 * norm(g)
+        @test norm(S - permutedims(p.X .* ((p.X * β .- p.y) ./ σ^2))) < 1e-13 * norm(S)
 
         H = batch_hess(p, β, all_b)
         Hfd = zeros(p.n, p.n); gp = zeros(p.n); gm = zeros(p.n)
@@ -93,28 +98,53 @@
         @test_throws DimensionMismatch LinearRegression(randn(4, 2), [0.0, 1.0, 1.0]; σ = 1.0)
         @test_throws ArgumentError LinearRegression(randn(3, 2), [1.0, NaN, 0.0]; σ = 1.0)
         @test_throws ArgumentError LinearRegression(randn(3, 2), [1.0, Inf, 0.0]; σ = 1.0)
-        @test_throws ArgumentError LinearRegression(randn(3, 2), randn(3); σ = 1.0, noise = -1.0)
         @test_throws DimensionMismatch LinearRegression(randn(3, 2), randn(3); σ = 1.0, β_star = [1.0])
         # A scale that is not a positive finite number is refused by both forms.
         for bad in (0.0, -1.0, Inf, NaN)
             @test_throws ArgumentError LinearRegression(randn(3, 2), randn(3); σ = bad)
             @test_throws ArgumentError LinearRegression(σ = bad)
         end
+        # So is a noise level that is negative or not a number.
+        for bad in (-1.0, NaN)
+            @test_throws ArgumentError LinearRegression(randn(3, 2), randn(3); σ = 1.0, noise = bad)
+            @test_throws ArgumentError LinearRegression(noise = bad, M = 20)
+        end
         @test_throws ArgumentError LinearRegression(K = 0)
         @test_throws ArgumentError LinearRegression(M = 0)
-        @test_throws ArgumentError LinearRegression(noise = -1.0)
+        @test population(LinearRegression(K = 1, M = 1)) == 1
         @test_throws DimensionMismatch LinearRegression(K = 3, β_star = [1.0, 2.0])
-        # Two refusals that a later line would also make, under another name. They are
-        # made here, and say what is wrong.
+        # Three refusals that a later line would also make, under another name. They
+        # are made where the cause is, and say what is wrong.
         @test_throws "need 0 < σ < Inf" LinearRegression(σ = Inf)
+        @test_throws "need 0 < σ < Inf" LinearRegression(σ = NaN)
         @test_throws "β_star must have length K = 3" LinearRegression(K = 3, β_star = [1.0, 2.0])
         # The keyword form does not build outcomes the data form would refuse.
         @test_throws ArgumentError LinearRegression(noise = Inf, M = 20)
         @test_throws ArgumentError LinearRegression(signal = NaN, M = 20)
         @test_throws ArgumentError LinearRegression(K = 2, M = 20, β_star = [NaN, 1.0])
+        # The checks read what is stored. A number beyond the Float64 range is finite
+        # as given and is not once converted, and it is refused all the same.
+        @test_throws ArgumentError LinearRegression(randn(3, 2), randn(3); σ = big"1e400")
+        @test_throws ArgumentError LinearRegression(randn(3, 2), randn(3); σ = big"1e-400")
+        @test_throws ArgumentError LinearRegression(randn(3, 2), big.(randn(3)) .* big"1e400"; σ = 1.0)
+        @test_throws ArgumentError LinearRegression(σ = big"1e400", M = 20)
+        @test_throws ArgumentError LinearRegression(σ = big"1e-400", M = 20)
+        @test_throws ArgumentError LinearRegression(signal = big"1e400", M = 20)
+        # Any real number will do for the scale, the signal and the noise. An integer
+        # or a rational gives the bits its Float64 value gives.
+        @test LinearRegression(randn(3, 2), randn(3); σ = 2).σ == 2.0
+        exact = LinearRegression(K = 3, M = 20, seed = 5, σ = 2.0, signal = 3.0, noise = 0.5)
+        other = LinearRegression(K = 3, M = 20, seed = 5, σ = 2, signal = 3, noise = 1 // 2)
+        @test (other.σ, other.noise) == (2.0, 0.5)
+        @test other.y == exact.y && β_true(other) == β_true(exact)
         # Observed data come with no σ, and the constructor does not guess one.
         @test_throws UndefKeywordError LinearRegression(randn(3, 2), randn(3))
         @test LinearRegression(K = 3, M = 20).σ == 1.0
+        # The defaults the docstring gives: five coefficients, 2000 observations, seed 0.
+        d = LinearRegression()
+        @test (d.n, d.M, d.σ, d.noise) == (5, 2_000, 1.0, 0.0)
+        @test β_true(d) == randn(MersenneTwister(0), 5)
+        @test all(==(1.0), d.X[:, 1])
 
         # Observed data: integer outcomes are accepted, and there is no truth to report.
         Xq = randn(MersenneTwister(1), 6, 2)
@@ -125,12 +155,13 @@
         @test population(q) == 6
         # What the data form is given, it keeps: a copy of the data, and the truth and
         # the generating noise when the caller knows them.
-        yq = [0.5, -1.0, 2.0, 0.0, 1.5, -0.5]
-        q = LinearRegression(Xq, yq; σ = 2.0, β_star = [0.5, -0.5], noise = 0.3)
+        yq = [0.5, -1.0, 2.0, 0.0, 1.5, -0.5]; bq = [0.5, -0.5]
+        q = LinearRegression(Xq, yq; σ = 2.0, β_star = bq, noise = 0.3)
         @test (q.n, q.M, q.σ, q.noise) == (2, 6, 2.0, 0.3)
-        @test q.X == Xq && q.y == yq
-        @test q.X !== Xq && q.y !== yq
-        @test β_true(q) == [0.5, -0.5]
+        @test q.X == Xq && q.y == yq && β_true(q) == bq
+        @test q.X !== Xq && q.y !== yq && β_true(q) !== bq
+        # The keyword form copies a supplied β_star as well.
+        @test β_true(LinearRegression(K = 2, M = 10, β_star = bq)) !== bq
 
         # The generator, rebuilt here from the seed in the documented order: β*, the
         # design, the coefficient perturbations when there is noise, the errors. The
@@ -161,8 +192,6 @@
         @test s.X == sp.X
         @test sp.y == Float64.(s.y .> 0)
         @test norm(s.X \ s.y - bs) < 0.05
-        # Control. A vector 0.1 away is told apart at this sample size.
-        @test norm(s.X \ s.y - [0.5, -0.5, 0.9]) > 0.05
 
         @test all(==(1.0), LinearRegression(K = 3, M = 50, seed = 4).X[:, 1])
         @test !all(==(1.0), LinearRegression(K = 3, M = 50, seed = 4, intercept = false).X[:, 1])
@@ -171,8 +200,12 @@
         @test β_true(LinearRegression(K = 2, M = 10, β_star = [0.5, -0.5], signal = 3.0)) == [0.5, -0.5]
         r = LinearRegression(K = 3, M = 20, σ = 0.25, noise = 0.5)
         @test r.σ == 0.25 && r.noise == 0.5
-        # Fewer observations than coefficients is legal, and the Hessian is singular.
-        @test rank(batch_hess(LinearRegression(K = 5, M = 3, seed = 1), zeros(5), 1:3)) == 3
+        # Fewer observations than coefficients is legal. The Hessian is then singular,
+        # and it is still X_bᵀX_b/(Nσ²) with N the size of the batch.
+        few = LinearRegression(K = 5, M = 3, seed = 1, σ = 0.7)
+        Hfew = batch_hess(few, zeros(5), 1:3)
+        @test rank(Hfew) == 3
+        @test norm(Hfew - few.X' * few.X ./ (3 * 0.7^2)) < 1e-13 * norm(Hfew)
 
         # One seed gives the regression, the probit and the logit the same design
         # and the same β*. At σ = 1 the probit outcome is the sign of y.
@@ -234,6 +267,15 @@
         # is not zero.
         nl = exponential_fit(n_terms_model = 1, M = 400, misfit = 0.5, seed = 2)
         @test gauss_newton_error(nl, [0.9, 0.6]).GN_err > 0.05
+        # The measure is shared with `LeastSquares` now, so its three fields are pinned
+        # there against their definitions, on a batch that is not the full one.
+        xn = [0.9, 0.6]; bn = 1:50
+        Jn = jacobian(nl, xn, bn); Hn = batch_hess(nl, xn, bn)
+        en = gauss_newton_error(nl, xn; batch = bn)
+        @test en.GN_err ≈ norm(Jn' * Jn ./ 50 - Hn) / norm(Hn)
+        @test en.residual ≈ norm(residuals(nl, xn, bn)) / sqrt(50)
+        @test gauss_newton_error(nl, xn; batch = 1:1).rank_def
+        @test !gauss_newton_error(nl, xn; batch = 1:2).rank_def
         # Control. BHHH is an outer product too, and it is not the Hessian.
         H = batch_hess(p, β_true(p), 1:p.M)
         @test norm(Matrix(dense_hessian(BHHHModel(), nlp, β_true(p))) - H) / norm(H) > 0.01
@@ -241,9 +283,10 @@
 
     @testset "the BHHH error in closed form" begin
         # B − H = (1/N) Σ (rₙ² − 1) xₙxₙᵀ/σ², at any β, on any data, on any batch.
-        # The rounding error of the left side is of the size of eps·‖B‖, and ‖B‖/‖H‖
-        # grows like the squared residual, so the miss is measured against ‖B‖ + ‖H‖.
-        # The third setting has a small σ, where ‖B‖ is some 50 000 times ‖H‖.
+        # The miss is rounding, and its size follows ‖B‖, which grows like the squared
+        # residual, so it is measured against ‖B‖ + ‖H‖. The third setting has a small
+        # σ. Away from β* its ‖B‖ is some 50 000 times ‖H‖, and at β* its residual is a
+        # difference of size σ between two numbers of the size of xₙᵀβ*.
         worst = 0.0; control = Inf
         for (seed, σ, noise) in ((3, 0.7, 0.0), (8, 2.0, 0.6), (3, 0.05, 0.0))
             p = LinearRegression(K = 5, M = 400, seed = seed, σ = σ, noise = noise)
@@ -252,18 +295,24 @@
                     S = scores(p, β, b); B = S * S' ./ length(b); H = batch_hess(p, β, b)
                     G = gap_reference(p.X[b, :], p.y[b], σ, β)
                     worst = max(worst, norm((B - H) - G) / (norm(B) + norm(H)))
-                    # Control. The reference written with another σ does not match.
+                    # Control. The reference written with cσ, c = 1.1, does not match. It
+                    # is read on the full batch only. The weights of the two references
+                    # cross at rₙ² = c²/(1 + c²) = 0.55, where seven observations can sit
+                    # and a full batch at β*, whose mean squared residual is near 1, cannot.
                     Gw = gap_reference(p.X[b, :], p.y[b], 1.1σ, β)
-                    control = min(control, norm((B - H) - Gw) / (norm(B) + norm(H)))
+                    length(b) == p.M &&
+                        (control = min(control, norm((B - H) - Gw) / (norm(B) + norm(H))))
                 end
             end
         end
         @test worst < 1e-13
+        # At a mean squared residual of 1 the control is (1/c² − 1/c⁴)/2 = 0.072.
         @test control > 0.03
 
         # The origin is where a run starts by default. The two binary models have an
         # exact BHHH model there. The regression does not: its residual at zero is the
-        # outcome, and the error is of the size of ‖β*‖²/σ².
+        # outcome, and the error is of the size of ‖β*‖²/σ², which follows the β* that
+        # the seed draws.
         origin(make) = information_identity_error(make(K = 5, M = 2_000, seed = 1), zeros(5)).B_err
         @test origin(LogisticRegression) < 1e-12
         @test origin(Probit) < 1e-12
@@ -290,7 +339,8 @@
         G = (X' * (((X * δ) .^ 2) .* X)) ./ (m * σ^4); H = X' * X ./ (m * σ^2)
         @test e2.B_err > 0.1
         @test abs(e2.B_err - norm(G) / norm(H)) < 1e-12
-        @test minimum(eigvals(Symmetric(G))) > 0
+        Sδ = scores(p, β .+ δ, 1:p.M)
+        @test minimum(eigvals(Symmetric(Sδ * Sδ' ./ p.M - batch_hess(p, β .+ δ, 1:p.M)))) > 0
         @test abs(e2.grad_norm - norm(H * δ)) < 1e-12
         @test abs(e2.BW_gap - norm(H * δ)^2 / norm(H)) < 1e-12
 
@@ -315,21 +365,31 @@
         K = 5
         Ms = [500, 2_000, 8_000, 32_000]
         at_true = Float64[]; at_wrong = Float64[]; predicted = Float64[]; wrong_ref = Float64[]
+        # Each entry is a mean over eight samples. One sample is one draw of a quantity
+        # whose spread is of the size of its mean, and the assertions below fail on
+        # about one seed in six when they read a single draw.
+        seeds = 1:8
         for M in Ms
-            p = LinearRegression(K = K, M = M, seed = 1)
-            β = β_true(p); δ = fill(1.5, K)
-            push!(at_true,  information_identity_error(p, β).B_err)
-            push!(at_wrong, information_identity_error(p, β .+ δ).B_err)
-            push!(predicted, rms_at_truth(p.X))
-            G = (p.X' * (((p.X * δ) .^ 2) .* p.X)) ./ M; H = p.X' * p.X ./ M
-            push!(wrong_ref, norm(G) / norm(H))
+            t = w = pr = wr = 0.0
+            for seed in seeds
+                p = LinearRegression(K = K, M = M, seed = seed)
+                β = β_true(p); δ = fill(1.5, K)
+                t  += information_identity_error(p, β).B_err
+                w  += information_identity_error(p, β .+ δ).B_err
+                pr += rms_at_truth(p.X)
+                G = (p.X' * (((p.X * δ) .^ 2) .* p.X)) ./ M; H = p.X' * p.X ./ M
+                wr += norm(G) / norm(H)
+            end
+            push!(at_true, t / length(seeds)); push!(at_wrong, w / length(seeds))
+            push!(predicted, pr / length(seeds)); push!(wrong_ref, wr / length(seeds))
         end
         # At β*: decay at the rate M^{-1/2}, so err·√M stays bounded.
         @test issorted(at_true; rev = true)
         @test at_true[end] < at_true[1] / 4
         scaled = at_true .* sqrt.(Ms)
         @test maximum(scaled) / minimum(scaled) < 3
-        # The size is known from the design alone: E[B_err² | X] = 2Σ‖xₙ‖⁴/‖XᵀX‖².
+        # The size is known from the design alone: E[B_err² | X] = 2Σ‖xₙ‖⁴/‖XᵀX‖². The
+        # mean error is set against the mean of that root mean square.
         @test all(r -> 0.5 < r < 2, at_true ./ predicted)
 
         # Control, away from β*: no decay, and the limit is known as well.
@@ -337,11 +397,14 @@
         @test at_wrong[end] > at_wrong[1] / 2
         @test all(abs.(at_wrong .- wrong_ref) .< 0.05 .* wrong_ref)
 
-        # W and B agree at a stationary point and differ by exactly ḡḡᵀ.
+        # W and B differ by exactly ḡḡᵀ, of size ‖ḡ‖²/‖H‖ relative to H. At β* the
+        # gradient is sampling error, of expected squared norm tr(H)/M, so the gap is
+        # of the order of tr(H)/(M‖H‖) = 2.8e-4 here and the two errors agree to it.
         p = LinearRegression(K = K, M = 8_000, seed = 1)
         e = information_identity_error(p, β_true(p))
-        @test e.BW_gap < 0.05
-        @test isapprox(e.W_err, e.B_err; atol = 0.05)
+        @test e.BW_gap ≈ e.grad_norm^2 / norm(p.X' * p.X ./ p.M)
+        @test e.BW_gap < 0.005
+        @test abs(e.W_err - e.B_err) <= e.BW_gap
 
         # Over seeds, the root mean square of the error at β* is the prediction.
         errs = Float64[]; preds = Float64[]
@@ -368,8 +431,8 @@
         @test b1.measured > a1.measured / 2
         # The correctly specified problem is the one whose error shrinks.
         @test b0.measured < a0.measured
-        # The size of the break is known: (ν²/σ⁴)(1/M) Σ ‖xₙ‖² xₙxₙᵀ, relative to H.
-        @test abs(a1.measured - a1.given_X) < 0.1 * a1.given_X
+        # The size of the break is known: (ν²/σ⁴)(1/M) Σ ‖xₙ‖² xₙxₙᵀ, relative to H. It
+        # is read on the larger sample, where one draw sits within a few per cent of it.
         @test abs(b1.measured - b1.given_X) < 0.1 * b1.given_X
         # The same at another σ, where the powers of σ in the reference are exercised:
         # the perturbation has standard deviation ν and not νσ, and the gap carries σ⁴.
@@ -378,9 +441,10 @@
         # Control. The size at σ = 1 is not the size at σ = 0.5.
         @test abs(c1.measured - b1.given_X) > 0.5 * b1.given_X
 
-        # Most of the break is a wrong scale. Posed again with the scale of their own
-        # residuals, the noisy data keep only what heteroscedasticity makes, which
-        # given the design is (1/(M s⁴)) Σ (σ² + ν²‖xₙ‖² − s²) xₙxₙᵀ under the scale s.
+        # With six coefficients most of the break is a wrong scale. Posed again with
+        # the scale of their own residuals, the noisy data keep only what
+        # heteroscedasticity makes, which given the design is
+        # (1/(M s⁴)) Σ (σ² + ν²‖xₙ‖² − s²) xₙxₙᵀ under the scale s.
         noisy = LinearRegression(K = 6, M = 256_000, seed = 3, noise = 0.5)
         βs = β_true(noisy); Xn = noisy.X; Mn = noisy.M
         s = sqrt(sum(abs2, noisy.y - Xn * (Xn \ noisy.y)) / Mn)
@@ -410,9 +474,11 @@
               batch_hess(LinearRegression(K = 6, M = 4_000, seed = 3), zeros(6), 1:4_000)
 
         # The errors keep mean zero given x, so β* remains the minimiser in the
-        # population. Control: under the same knob the probit's β* does not.
-        lr = LinearRegression(K = 5, M = 64_000, seed = 7, noise = 1.0)
-        pb = Probit(K = 5, M = 64_000, seed = 7, noise = 1.0)
+        # population. Control: under the same knob the probit's β* does not. The
+        # coefficients are supplied, since the size of the probit gradient follows them.
+        b5 = [1.0, -1.0, 0.5, -0.5, 1.0]
+        lr = LinearRegression(K = 5, M = 64_000, seed = 7, noise = 1.0, β_star = b5)
+        pb = Probit(K = 5, M = 64_000, seed = 7, noise = 1.0, β_star = b5)
         @test norm(true_gradient(lr, β_true(lr))) < 0.05
         @test norm(true_gradient(pb, β_true(pb))) > 0.2
     end

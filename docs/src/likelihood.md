@@ -88,8 +88,10 @@ for M in (2_000, 32_000), (name, make) in (("logit", LogisticRegression), ("prob
 end
 ```
 
-At `β*` the error shrinks with `M` under both links, and at the displaced point under
-neither. The displaced error is several times larger for the probit, and the reason is
+At `β*` the error shrinks with `M` under both links, and at the displaced point it keeps
+its size under both. The lower values printed there for the larger sample are one
+sample differing from another, as the section on the third likelihood measures. The
+displaced error is several times larger for the probit, and the reason is
 in the score. The logit residual `p − y` is bounded by 1. The probit score carries the
 inverse Mills ratio `φ/Φ`, which grows linearly in the index of an observation the
 current `β` gets wrong, and `B` squares it, while the weight of the exact Hessian never
@@ -140,8 +142,13 @@ for M in (2_000, 32_000),
 end
 ```
 
-At `β*` the error shrinks with `M` under all three, and at the displaced point under
-none. The displaced error is largest for the regression. Its score is linear in the
+At `β*` the error is divided by about four under all three, which is the rate
+`M^{-1/2}` for a sample sixteen times larger. At the displaced point it keeps its size.
+The values printed there for the larger sample are lower by 3 to 11 per cent, and that
+is one sample differing from another and not a decay: over twenty seeds the larger
+sample gave the smaller value 12, 11 and 9 times for the three likelihoods.
+
+The displaced error is largest for the regression. Its score is linear in the
 residual, so the outer product grows with the square of the distance to `β*`, while the
 weight of its Hessian is the constant `1/σ²`.
 
@@ -208,13 +215,14 @@ from 1. No sample size removes it. With `σ` carried the same data leave the sam
 error alone.
 
 `LinearRegression(noise = ν)` generates the outcomes from coefficients that vary across
-observations, as `Probit(noise = σ)` does. The errors then have variance
+observations, as the `noise` keyword of [`Probit`](@ref) does. The errors then have variance
 `σ² + ν²‖xₙ‖²` while the model holds it at `σ²`, and the identity fails at `β*` at every
 sample size. The errors keep mean zero given `x`, so `β*` remains the minimiser of the
 population objective, which under the probit it does not.
 
-Most of that failure is a wrong scale, the same thing as the previous block. The next
-one poses the noisy data a second time, with the scale of their own residuals.
+Part of that failure is a wrong scale, the same thing as the previous block, and with
+six coefficients it is most of it. The next block poses the noisy data a second time,
+with the scale of their own residuals.
 
 ```@example likelihood
 noisy = LinearRegression(K = 6, M = 32_000, seed = 3, noise = 0.5)

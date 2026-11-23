@@ -130,7 +130,8 @@ approximating nothing in particular.
     score `rₙ∇rₙ` is the log-likelihood score up to `σ²`. So BHHH applies to it as
     well as Gauss–Newton, and the two can be compared on one problem — worth having,
     since they discard different terms and fail for different reasons: BHHH on
-    *specification*, Gauss–Newton on *fit*.
+    *specification*, Gauss–Newton on *fit*. The factor `σ²` matters to BHHH, and
+    [`LinearRegression`](@ref) is the least-squares problem that carries it.
 
 Belonging to `LikelihoodProblem` asserts that `f` is a negative log-likelihood. It
 does **not** assert correct specification, which is a property of the data that no
