@@ -31,16 +31,20 @@ for this directory, because a checkout that turned LF into CRLF would change the
 
 ## Using them
 
-To rerun a campaign in its own environment, copy the two files to where Julia looks and
-instantiate without resolving. Do it at the commit of the campaign, as
-`benchmark/REPRODUCE.md` sets out: the package on `main` has since gained a dependency,
-`SpecialFunctions`, which these manifests do not list for it.
+To rerun a campaign in its own environment, check out its commit, copy the two files to
+where Julia looks and instantiate without resolving. This directory is absent at the
+campaign commits, so the files are read from `main`. `benchmark/REPRODUCE.md` gives the
+full procedure.
 
 ```bash
-cp benchmark/manifests/v0.1.0/Manifest-root.toml Manifest.toml
-cp benchmark/manifests/v0.1.0/Manifest-benchmark.toml benchmark/Manifest.toml
+git checkout 5b959ce        # the commit of the campaign, from the table in REPRODUCE.md
+git show main:benchmark/manifests/v0.1.0/Manifest-root.toml > Manifest.toml
+git show main:benchmark/manifests/v0.1.0/Manifest-benchmark.toml > benchmark/Manifest.toml
 julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
 ```
+
+On `main` itself these manifests no longer serve as they are: the package has since gained
+a dependency, `SpecialFunctions`, which they do not list for it.
 
 Use Julia 1.12 for this, the minor version the manifests were resolved for. Under another
 one the standard-library versions they record do not match, and resolving again leaves the

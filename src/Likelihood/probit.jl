@@ -53,12 +53,27 @@ ratio is returned as zero, which is its limit.
 `λ(t)(λ(t) + t)`, the second derivative of `−ln Φ` at `t`.
 
 It lies strictly between 0 and 1, tending to 1 on the left and to 0 on the right.
-The sum `λ + t` cancels in the far left tail, where `λ ≈ −t`, so the result is
-clamped to the interval the mathematics gives it.
+
+On the left the sum `λ + t` subtracts two numbers of size `|t|` whose difference is
+`1/|t|`, so the product formed as written loses accuracy in proportion to `t²`. By
+`t = −5e7` nothing is left of it, and it returns 0 where the curvature is 1. Below
+`t = −10` the sum is therefore taken from Laplace's continued fraction for the Mills
+ratio,
+
+    λ(t) + t = 1 / (u + 2/(u + 3/(u + …))),    u = −t,
+
+which contains no subtraction. Twenty levels give it to rounding from `u = 10` on.
+The clamp is left to absorb the last unit of rounding at the two ends.
 """
 @inline function _probit_curvature(t::Real)
     λ = _mills(t)
-    return clamp(λ * (λ + t), 0.0, 1.0)
+    t > -10 && return clamp(λ * (λ + t), 0.0, 1.0)
+    u = -t
+    d = u
+    for k in 20:-1:2
+        d = u + k / d
+    end
+    return clamp(λ / d, 0.0, 1.0)
 end
 
 """
@@ -116,17 +131,26 @@ E\\bigl[s s^\\top \\mid x\\bigr] = E\\bigl[H \\mid x\\bigr]
 
 so the information identity holds and BHHH is justified, as for the logit. In a
 sample of `M` the two sides agree to `O(M^{-1/2})`, which
-[`information_identity_error`](@ref) measures. Away from `β*` the first equality
-fails and the gap does not shrink with `M`.
+[`information_identity_error`](@ref) measures. At a general `β` away from `β*` the
+first equality fails and the gap does not shrink with `M`.
+
+The origin is the exception. At `β = 0` every index is zero, so `sₙsₙᵀ` and `Hₙ` are
+both `(2/π) xₙxₙᵀ`, and the outer product of the scores equals the exact Hessian
+whatever the data. The same holds for the logit, where both are `¼ xₙxₙᵀ`. A run
+started at zero therefore meets a BHHH model that is exact at its first iterate.
 
 !!! warning "`noise > 0` breaks the identity"
     `noise = σ` draws a separate coefficient vector `βₙ = β* + εₙ` with
     `εₙ ~ N(0, σ²I)` for each observation and generates its outcome from it. The
-    index then carries the extra term `xₙᵀεₙ`, whose variance `σ²‖xₙ‖²` changes
-    with `xₙ`. The generating process is a heteroscedastic probit while the fitted
-    model has unit variance. That is misspecification: the identity fails at every
-    `β`, [`β_true`](@ref) is no longer the minimiser of `f` even as `M → ∞`, and
-    the gap does not shrink with `M`.
+    index then carries the extra term `xₙᵀεₙ`, of variance `σ²‖xₙ‖²`. Where `‖xₙ‖`
+    varies across observations, the generating process is a heteroscedastic probit
+    while the fitted model has unit variance. That is misspecification: the
+    identity fails at `β*` and at the minimiser of `f`, [`β_true`](@ref) is no
+    longer that minimiser even as `M → ∞`, and the gap does not shrink with `M`.
+
+    With `K = 1` and an intercept every `xₙ` is 1, the added variance is the same
+    for all observations, and the noise only rescales the coefficient. The fitted
+    model is then correctly specified, at `β*/√(1 + σ²)`.
 
     The default is `noise = 0.0`. Set it deliberately, and read
     [`information_identity_error`](@ref) instead of assuming either way.
@@ -173,7 +197,7 @@ function Probit(; K::Int = 5, M::Int = 2_000,
     X = randn(rng, M, K)
     intercept && (X[:, 1] .= 1.0)
     z = X * β
-    # βₙ = β* + σεₙ adds xₙᵀεₙ to the index. At noise = 0 nothing is drawn and the
+    # βₙ = β* + σεₙ adds σ xₙᵀεₙ to the index. At noise = 0 nothing is drawn and the
     # model is correctly specified.
     noise > 0 && (z .+= noise .* vec(sum(X .* randn(rng, M, K); dims = 2)))
     y = Float64.(z .+ randn(rng, M) .> 0)
