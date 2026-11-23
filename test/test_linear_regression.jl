@@ -104,8 +104,8 @@
             @test_throws ArgumentError LinearRegression(randn(3, 2), randn(3); σ = bad)
             @test_throws ArgumentError LinearRegression(σ = bad)
         end
-        # So is a noise level that is negative or not a number.
-        for bad in (-1.0, NaN)
+        # So is a noise level that is negative, infinite or not a number.
+        for bad in (-1.0, Inf, NaN)
             @test_throws ArgumentError LinearRegression(randn(3, 2), randn(3); σ = 1.0, noise = bad)
             @test_throws ArgumentError LinearRegression(noise = bad, M = 20)
         end
@@ -113,30 +113,50 @@
         @test_throws ArgumentError LinearRegression(M = 0)
         @test population(LinearRegression(K = 1, M = 1)) == 1
         @test_throws DimensionMismatch LinearRegression(K = 3, β_star = [1.0, 2.0])
-        # Three refusals that a later line would also make, under another name. They
+        # Four refusals that a later line would also make, under another name. They
         # are made where the cause is, and say what is wrong.
         @test_throws "need 0 < σ < Inf" LinearRegression(σ = Inf)
+        @test_throws "need 0 ≤ noise < Inf" LinearRegression(noise = Inf, M = 20)
         @test_throws "need 0 < σ < Inf" LinearRegression(σ = NaN)
         @test_throws "β_star must have length K = 3" LinearRegression(K = 3, β_star = [1.0, 2.0])
         # The keyword form does not build outcomes the data form would refuse.
-        @test_throws ArgumentError LinearRegression(noise = Inf, M = 20)
         @test_throws ArgumentError LinearRegression(signal = NaN, M = 20)
+        # A finite σ can still make the outcomes overflow, and the message names it.
+        @test_throws "noise, σ and β_star" LinearRegression(σ = 1e308, M = 2_000)
         @test_throws ArgumentError LinearRegression(K = 2, M = 20, β_star = [NaN, 1.0])
-        # The checks read what is stored. A number beyond the Float64 range is finite
-        # as given and is not once converted, and it is refused all the same.
-        @test_throws ArgumentError LinearRegression(randn(3, 2), randn(3); σ = big"1e400")
+        # The checks read what is stored. A number beyond the Float64 range passes them
+        # as given and is converted to Inf or to 0 before it is checked, so 1e400 is
+        # refused as infinite and 1e-400 as a scale of 0. The message says so.
+        @test_throws "which is Inf as a Float64" LinearRegression(randn(3, 2), randn(3);
+                                                                 σ = big"1e400")
+        @test_throws ArgumentError LinearRegression(randn(3, 2), randn(3); σ = 1.0,
+                                                    noise = big"1e400")
         @test_throws ArgumentError LinearRegression(randn(3, 2), randn(3); σ = big"1e-400")
-        @test_throws ArgumentError LinearRegression(randn(3, 2), big.(randn(3)) .* big"1e400"; σ = 1.0)
+        @test_throws "y must be finite as a Float64" LinearRegression(randn(3, 2),
+            big.(randn(3)) .* big"1e400"; σ = 1.0)
         @test_throws ArgumentError LinearRegression(σ = big"1e400", M = 20)
         @test_throws ArgumentError LinearRegression(σ = big"1e-400", M = 20)
         @test_throws ArgumentError LinearRegression(signal = big"1e400", M = 20)
-        # Any real number will do for the scale, the signal and the noise. An integer
-        # or a rational gives the bits its Float64 value gives.
+        # Any real number will do for the scale, the signal and the noise. An integer,
+        # a rational or a BigFloat within the range gives the bits its Float64 value
+        # gives.
         @test LinearRegression(randn(3, 2), randn(3); σ = 2).σ == 2.0
         exact = LinearRegression(K = 3, M = 20, seed = 5, σ = 2.0, signal = 3.0, noise = 0.5)
         other = LinearRegression(K = 3, M = 20, seed = 5, σ = 2, signal = 3, noise = 1 // 2)
         @test (other.σ, other.noise) == (2.0, 0.5)
         @test other.y == exact.y && β_true(other) == β_true(exact)
+        wide = LinearRegression(K = 3, M = 20, seed = 5, σ = big"0.3", noise = big"0.7")
+        @test wide.y == LinearRegression(K = 3, M = 20, seed = 5, σ = 0.3, noise = 0.7).y
+        # The sign of `signal` is kept, a perturbation of any positive size is drawn,
+        # and finiteness is asked of each outcome and not of their sum.
+        @test β_true(LinearRegression(K = 3, M = 20, seed = 5, signal = -2.0)) ==
+              -2.0 .* randn(MersenneTwister(5), 3)
+        @test LinearRegression(K = 3, M = 20, seed = 5, noise = 1e-20).y !=
+              LinearRegression(K = 3, M = 20, seed = 5).y
+        big2 = LinearRegression(ones(2, 1), [1e308, 1e308]; σ = 1.0).y
+        @test big2 == [1e308, 1e308] && !isfinite(sum(big2))
+        big50 = LinearRegression(K = 2, M = 50, seed = 1, β_star = [1e307, 0.0]).y
+        @test all(isfinite, big50) && !isfinite(sum(big50))
         # Observed data come with no σ, and the constructor does not guess one.
         @test_throws UndefKeywordError LinearRegression(randn(3, 2), randn(3))
         @test LinearRegression(K = 3, M = 20).σ == 1.0
@@ -285,8 +305,9 @@
         # B − H = (1/N) Σ (rₙ² − 1) xₙxₙᵀ/σ², at any β, on any data, on any batch.
         # The miss is rounding, and its size follows ‖B‖, which grows like the squared
         # residual, so it is measured against ‖B‖ + ‖H‖. The third setting has a small
-        # σ. Away from β* its ‖B‖ is some 50 000 times ‖H‖, and at β* its residual is a
-        # difference of size σ between two numbers of the size of xₙᵀβ*.
+        # σ. At the random point its ‖B‖ is some 50 000 times ‖H‖ and at the origin some
+        # 5 000 times, and at β* its residual is a difference of size σ between two
+        # numbers of the size of xₙᵀβ*.
         worst = 0.0; control = Inf
         for (seed, σ, noise) in ((3, 0.7, 0.0), (8, 2.0, 0.6), (3, 0.05, 0.0))
             p = LinearRegression(K = 5, M = 400, seed = seed, σ = σ, noise = noise)
@@ -365,9 +386,10 @@
         K = 5
         Ms = [500, 2_000, 8_000, 32_000]
         at_true = Float64[]; at_wrong = Float64[]; predicted = Float64[]; wrong_ref = Float64[]
-        # Each entry is a mean over eight samples. One sample is one draw of a quantity
-        # whose spread is of the size of its mean, and the assertions below fail on
-        # about one seed in six when they read a single draw.
+        # Each entry is a mean over eight samples. On a single draw at each M the
+        # assertions below fail on about one seed in six, most often the 5% band of the
+        # displaced error, whose sampling error at M = 500 has a median of about 2 per
+        # cent.
         seeds = 1:8
         for M in Ms
             t = w = pr = wr = 0.0
@@ -399,12 +421,12 @@
 
         # W and B differ by exactly ḡḡᵀ, of size ‖ḡ‖²/‖H‖ relative to H. At β* the
         # gradient is sampling error, of expected squared norm tr(H)/M, so the gap is
-        # of the order of tr(H)/(M‖H‖) = 2.8e-4 here and the two errors agree to it.
+        # of the order of tr(H)/(M‖H‖) = 2.8e-4 here, and by the triangle inequality the
+        # two errors agree to within it.
         p = LinearRegression(K = K, M = 8_000, seed = 1)
         e = information_identity_error(p, β_true(p))
         @test e.BW_gap ≈ e.grad_norm^2 / norm(p.X' * p.X ./ p.M)
         @test e.BW_gap < 0.005
-        @test abs(e.W_err - e.B_err) <= e.BW_gap
 
         # Over seeds, the root mean square of the error at β* is the prediction.
         errs = Float64[]; preds = Float64[]

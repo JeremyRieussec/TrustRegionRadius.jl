@@ -117,11 +117,11 @@ Hessian.
     of `‖xₙ‖²`, it is `(ν²m/σ²) H` plus a remainder weighted by `‖xₙ‖² − m`. The
     first part is what a wrong `σ` produces, and posing the same data with the
     scale `√(RSS/M)` of their residuals removes it. The remainder is the
-    heteroscedasticity. On the generated design the first part is the larger one
-    from three coefficients on, and without an intercept the remainder is `2/K`
-    of it. The remainder vanishes where `‖xₙ‖` does not vary: with `K = 1` and an
-    intercept every `xₙ` is 1, and the noisy data are a correctly specified
-    regression of standard deviation `√(σ² + ν²)`.
+    heteroscedasticity. In expectation over the generated design, the first part is
+    the larger one from three coefficients on, and without an intercept the
+    remainder is `2/K` of it. The remainder vanishes where `‖xₙ‖` does not vary:
+    with `K = 1` and an intercept every `xₙ` is 1, and the noisy data are a
+    correctly specified regression of standard deviation `√(σ² + ν²)`.
 
 !!! warning "`noise` is not the error standard deviation"
     In [`linear_least_squares`](@ref) the keyword `noise` is the standard deviation
@@ -137,28 +137,33 @@ Hessian.
     The objective on a batch is itself a quadratic with Hessian `X_bᵀX_b/(Nσ²)`.
     With [`ExactHessian`](@ref) or [`GaussNewtonModel`](@ref) the model is the batch
     objective. Whenever the objective and the gradient share the batch, the ratio is
-    then 1 to rounding and says nothing about the sample. Four things follow.
+    then 1 up to the rounding of the decrease, and says nothing about the sample.
+    Four things follow.
 
-    - Every step is read as fully successful. Under [`RDelta`](@ref) and
-      [`RDeltaStep`](@ref) the radius is then multiplied by `γ3` at every iteration
-      and never shrinks, so give the rule a `Δmax`. Under [`RRTR`](@ref) it never
-      shrinks either, and grows only with the longest step taken. The other rules
-      set it from the step, from the norm of the batch gradient, or from a
-      comparison of the radius with that norm, and still move it both ways.
+    - Every step whose decrease is resolved is read as fully successful. Under
+      [`RDelta`](@ref) and [`RDeltaStep`](@ref) the radius is then multiplied by
+      `γ3` at every iteration and never shrinks, so give the rule a `Δmax`. Under
+      [`RRTR`](@ref) it never shrinks either, and grows only with the longest step
+      taken. The other rules set it from the step, from the norm of the batch
+      gradient, or from a comparison of the radius with that norm, and still move it
+      both ways.
     - A step that solves the subproblem inside the region lands on the least-squares
       point of the batch, where the batch gradient vanishes, and a stopping test
       read on the batch is then met far from the solution. [`ExactMS`](@ref) does
       this at any batch size. [`SteihaugCG`](@ref) does it when its recurrence runs
       to termination, which takes few observations or few coefficients. Confirm
       the stop with `TRParams(true_stop = :full)`.
-    - With `ExactMS`, a rule that scales the radius by the gradient norm reads that
-      vanished batch gradient and sets the radius to rounding. A run whose stop is
-      confirmed can then end `:stalled` far from the solution.
+    - A rule that scales the radius by the gradient norm then reads that vanished
+      batch gradient and sets the radius to rounding, under `ExactMS` and under
+      `SteihaugCG` on few observations. A run whose stop is confirmed can then end
+      `:stalled` far from the solution.
     - With `ExactMS` and fewer observations than coefficients, the batch Hessian is
       singular and the step takes a component as long as the radius in its null
       space, so the iterates leave. A ridge repairs that case. A batch of about `K`
-      observations is not singular and can be nearly so, which a ridge does not
-      repair. Use batches of several times `K` observations, or a `Δmax`.
+      draws can still hold fewer than `K` distinct rows, since
+      [`FiniteSumNLP`](@ref) draws with replacement unless `replace = false`, and
+      `K` distinct rows can be nearly singular, which a ridge does not repair. Use
+      batches of several times `K` observations, or a `Δmax`.
 
 # What a finite sum rules out
 
@@ -179,18 +184,25 @@ struct LinearRegression <: NLSProblem
     σ::Float64                  # the error standard deviation the model holds fixed
 end
 
+# A value as it was given, and as the Float64 it became when the two differ, for the
+# messages of the checks below.
+_as_given(v, vf) = isequal(v, vf) ? string(v) : "$v, which is $vf as a Float64"
+
 function LinearRegression(X::AbstractMatrix, y::AbstractVector; σ::Real,
                           β_star = nothing, noise::Real = 0.0)
     size(X, 1) == length(y) || throw(DimensionMismatch(
         "LinearRegression: X has $(size(X, 1)) rows but y has $(length(y)) entries"))
-    # The checks read what is stored. A number outside the Float64 range is finite
-    # as given and is not once converted.
+    # The checks read what is stored, after the conversion to Float64, where a number
+    # beyond the range becomes Inf or 0.
     yf = Vector{Float64}(y)
     σf = Float64(σ)
     νf = Float64(noise)
-    all(isfinite, yf) || throw(ArgumentError("LinearRegression: y must be finite"))
-    0 < σf < Inf || throw(ArgumentError("LinearRegression: need 0 < σ < Inf, got $σ"))
-    νf >= 0 || throw(ArgumentError("LinearRegression: need noise ≥ 0"))
+    all(isfinite, yf) || throw(ArgumentError(
+        "LinearRegression: y must be finite as a Float64"))
+    0 < σf < Inf || throw(ArgumentError(
+        "LinearRegression: need 0 < σ < Inf, got $(_as_given(σ, σf))"))
+    0 <= νf < Inf || throw(ArgumentError(
+        "LinearRegression: need 0 ≤ noise < Inf, got $(_as_given(noise, νf))"))
     β_star === nothing || length(β_star) == size(X, 2) || throw(DimensionMismatch(
         "LinearRegression: β_star must have length $(size(X, 2))"))
     return LinearRegression(size(X, 2), size(X, 1), Matrix{Float64}(X), yf,
@@ -206,8 +218,10 @@ function LinearRegression(; K::Int = 5, M::Int = 2_000,
     M >= 1 || throw(ArgumentError("LinearRegression: need M ≥ 1"))
     σf = Float64(σ)
     νf = Float64(noise)
-    νf >= 0 || throw(ArgumentError("LinearRegression: need noise ≥ 0"))
-    0 < σf < Inf || throw(ArgumentError("LinearRegression: need 0 < σ < Inf, got $σ"))
+    0 <= νf < Inf || throw(ArgumentError(
+        "LinearRegression: need 0 ≤ noise < Inf, got $(_as_given(noise, νf))"))
+    0 < σf < Inf || throw(ArgumentError(
+        "LinearRegression: need 0 < σ < Inf, got $(_as_given(σ, σf))"))
     rng = MersenneTwister(seed)
     # β*, then X, then the coefficient perturbations, then the errors: the order in
     # which Probit draws them. One seed then gives the three likelihoods the same
