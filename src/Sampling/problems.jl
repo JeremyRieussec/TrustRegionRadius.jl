@@ -5,9 +5,9 @@
 #
 #   ExpectationProblem       PerturbedExpectation
 #   FiniteSumProblem         FiniteSum, PerturbedSum
-#     └── ScoredProblem      (LogisticRegression, Probit, MultinomialLogit,
-#                             MLPClassifier, LeastSquares, all
-#                             in Likelihood/)
+#     └── ScoredProblem      (LogisticRegression, Probit, LinearRegression,
+#                             MultinomialLogit, MLPClassifier, LeastSquares,
+#                             all in Likelihood/)
 #
 # A "batch" is whatever the class means by one:
 #

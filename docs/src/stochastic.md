@@ -310,6 +310,16 @@ the run above is no longer stopped there. The guard makes the wrong stop unlikel
 and does not exclude it, so `:full` remains the only mode that does not depend on
 the batch. The run and the cost of the guard are described under [`TRParams`](@ref).
 
+An exact model makes the batch test weaker still. On a [`LinearRegression`](@ref) the
+objective on a batch is a quadratic, and under [`ExactHessian`](@ref) or
+[`GaussNewtonModel`](@ref) the model is that quadratic. Whenever the objective and the
+gradient share the batch, the ratio is then 1 to rounding and a step inside the region
+lands where the batch gradient vanishes. With three observations for five coefficients
+we measured an unconfirmed `:first_order` at iteration 4, at a point where
+`‖∇f‖ = 1.03`, with `tol = 1e-6`. Both `:test` and `:full` refuse that stop. The cells
+of a sampled comparison that pair this problem with an exact model are therefore a
+control for the sampling rule, and say nothing about a radius driven by the ratio.
+
 Every finite sum has a truth, at one full pass. An expectation has one only when the
 construction supplies it — [`PerturbedExpectation`](@ref) does, a general one does not —
 so [`has_truth`](@ref) is a trait and `true_stop` on a problem without truth is an

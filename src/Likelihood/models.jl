@@ -1,7 +1,8 @@
 # =============================================================================
 # src/Likelihood/models.jl
 #
-# Three concrete `ScoredProblem`s. `Probit` has its own file, probit.jl.
+# Three concrete `ScoredProblem`s. `Probit` and `LinearRegression` have their own
+# files, probit.jl and linear_regression.jl.
 #
 #   LogisticRegression   correctly specified by construction, so the information
 #                        identity holds and BHHH is justified. The controlled case.

@@ -39,7 +39,8 @@ approximating nothing in particular. See [Problem classes](problem_classes.md).
     Least squares *is* maximum likelihood under i.i.d. Gaussian errors, and the score
     `rₙ∇rₙ` is the log-likelihood score up to `σ²`. So BHHH applies to a least-squares
     problem as well as Gauss–Newton, and the two can be compared on one — which is
-    the comparison worth making.
+    the comparison worth making. The factor `σ²` matters to BHHH, and
+    [`LinearRegression`](@ref) is the least-squares problem that carries it.
 
 Belonging to `LikelihoodProblem` asserts that `f` is a negative log-likelihood. It
 does **not** assert correct specification, which is a property of the data that no
@@ -120,6 +121,122 @@ is misspecified, and the identity fails at `β*` itself at every sample size. Th
 minimiser of `f` is then far from `β*`. At that minimiser the identity fails by much
 less, and the gap still does not vanish as `M` grows.
 
+## A third likelihood, with a closed-form reference
+
+[`LinearRegression`](@ref) is the Gaussian likelihood of a linear model whose error
+standard deviation `σ` is known. One seed gives it the design matrix and the `β*` of the
+two binary models, and at `σ = 1` its outcome is the latent variable whose sign the
+probit observes. The loop of the previous section then runs over three likelihoods.
+
+```@example likelihood
+for M in (2_000, 32_000),
+    (name, make) in (("logit", LogisticRegression), ("probit", Probit),
+                     ("linear", LinearRegression))
+    p = make(K = 5, M = M, seed = 1)
+    β = β_true(p)
+    @printf("%-6s  M = %6d   at β*: %.3f   at β* + 1.5: %6.3f\n", name, M,
+            information_identity_error(p, β).B_err,
+            information_identity_error(p, β .+ 1.5).B_err)
+end
+```
+
+At `β*` the error shrinks with `M` under all three, and at the displaced point under
+none. The displaced error is largest for the regression. Its score is linear in the
+residual, so the outer product grows with the square of the distance to `β*`, while the
+weight of its Hessian is the constant `1/σ²`.
+
+What the regression adds is a reference known before anything is run. Its Hessian is the
+constant `XᵀX/(Mσ²)`, and with `rₙ = (xₙᵀβ − yₙ)/σ` the standardised residual,
+
+```math
+B - H = \frac1M \sum_n \bigl(r_n^2 - 1\bigr)\, \frac{x_n x_n^\top}{\sigma^2}
+```
+
+at every `β` and for any data. The identity is therefore a statement about the second
+moment of the standardised residuals, and normality plays no part in it. At `β*` the gap
+has mean zero given the design, and under Gaussian errors its root-mean-square size is a
+function of the design alone. At `β* + δ` its mean is `(1/M) Σ (xₙᵀδ)² xₙxₙᵀ/σ⁴`, which
+no sample size removes. The next block computes both from `X` and sets them beside the
+measured error.
+
+```@example likelihood
+using LinearAlgebra
+
+p = LinearRegression(K = 5, M = 2_000, seed = 1)
+β = β_true(p); δ = fill(1.5, 5)
+H = p.X' * p.X ./ p.M
+at_truth  = sqrt(2 * sum(sum(abs2, view(p.X, i, :))^2 for i in 1:p.M)) / norm(p.X' * p.X)
+displaced = norm(p.X' * (((p.X * δ) .^ 2) .* p.X) ./ p.M) / norm(H)
+@printf("at β*:        measured %6.3f   root mean square from the design %6.3f\n",
+        information_identity_error(p, β).B_err, at_truth)
+@printf("at β* + 1.5:  measured %6.3f   mean from the design             %6.3f\n",
+        information_identity_error(p, β .+ δ).B_err, displaced)
+```
+
+At `β*` the two numbers agree in size and not in value, as one draw and a root mean
+square should. At the displaced point they agree to within one per cent.
+
+The origin is not the special point it is for the two links. At `β = 0` the residual is
+the outcome itself, and the error is of the order of `‖β*‖²/σ²`. The block prints the
+two.
+
+```@example likelihood
+(information_identity_error(p, zeros(5)).B_err, sum(abs2, β_true(p)) / p.σ^2)
+```
+
+A run started at zero therefore meets a BHHH model that is exact under the two binary
+links and far from exact under the regression.
+
+### The scale
+
+The Hessian divides by `σ²` and the outer product of the scores by `σ⁴`, so the two can
+agree for one value of `σ` only. [`linear_least_squares`](@ref) minimises the same sum
+of squares with the scale fixed at 1, whatever generated the data. Its default errors
+have standard deviation 0.1, and the block below poses its data a second time with that
+value carried.
+
+```@example likelihood
+ls = linear_least_squares()
+re = LinearRegression(ls.t, ls.y; σ = 0.1, β_star = x_true(ls))
+@printf("σ fixed at 1:    %.3f\n", information_identity_error(ls, x_true(ls)).B_err)
+@printf("σ = 0.1 carried: %.3f\n", information_identity_error(re, β_true(re)).B_err)
+```
+
+With the scale fixed at 1 the outer product at the solution is the error variance times
+the Hessian, 0.01 times here, and the error of 0.99 is the distance of that factor
+from 1. No sample size removes it. With `σ` carried the same data leave the sampling
+error alone.
+
+`LinearRegression(noise = ν)` generates the outcomes from coefficients that vary across
+observations, as `Probit(noise = σ)` does. The errors then have a variance that changes
+with `xₙ` while the model holds it at `σ²`, and the identity fails at `β*` at every
+sample size. The errors keep mean zero given `x`, so `β*` remains the minimiser of the
+population objective, which under the probit it does not. Here the knob breaks the
+identity and nothing else.
+
+### What the three share
+
+The logit, the probit and the regression are single-index likelihoods on one design
+matrix. The loss of an observation is a function `ℓ` of the index `z = xᵀβ` and of the
+outcome, so the score is `ℓ′ x`, the Hessian is `ℓ″ xxᵀ`, and
+
+```math
+B - H = \frac1N \sum_n \bigl(\ell_n'^2 - \ell_n''\bigr)\, x_n x_n^\top .
+```
+
+The information identity is then the scalar statement `E[ℓ′² − ℓ″ | x] = 0` at `β*`.
+
+| likelihood | `ℓ′` | `ℓ″` | `ℓ″` depends on |
+|---|---|---|---|
+| logit | `p − y` | `p(1 − p)` | the index |
+| probit | `−q λ(qz)` | `λ(qz)(λ(qz) + qz)` | the index and the outcome |
+| regression | `(z − y)/σ²` | `1/σ²` | neither |
+
+Here `p` is the logistic function of `z`, `q = 2y − 1` and `λ = φ/Φ`. The last column is
+what separates them. The regression is the control, with a curvature that nothing
+moves. The logit has a curvature that moves with `β`, and the probit one that moves with
+the outcomes as well.
+
 ## The blind spot
 
 `B ⪰ 0` always. The model therefore **cannot report negative curvature**, so a run
@@ -171,7 +288,8 @@ rule, and reports per-observation scores — meaning `GaussNewtonModel`, `BHHHMo
 `ExactHessian` can all be compared on one problem.
 
 - [`linear_least_squares`](@ref): `∇²rₙ = 0`, so **Gauss–Newton is exact**, not merely
-  accurate, whatever the residual size. The control.
+  accurate, whatever the residual size. The control. [`LinearRegression`](@ref) is
+  the same problem read as a likelihood, with the scale of the errors carried.
 - [`exponential_fit`](@ref): sum-of-exponentials fitting with a `misfit` knob that adds
   a component the model cannot represent, moving the problem continuously from
   small-residual to large-residual.
@@ -198,6 +316,7 @@ residuals
 jacobian
 LogisticRegression
 Probit
+LinearRegression
 MultinomialLogit
 MLPClassifier
 LeastSquares
