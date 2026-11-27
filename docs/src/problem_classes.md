@@ -157,6 +157,7 @@ FiniteSumProblem
 ScoredProblem
 LikelihoodProblem
 NLSProblem
+scores(::NLSProblem, ::Any, ::Any)
 problem_class
 population
 n_terms

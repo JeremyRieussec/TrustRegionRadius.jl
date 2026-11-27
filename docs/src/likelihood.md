@@ -338,11 +338,21 @@ LikelihoodNLP
 residuals
 jacobian
 LogisticRegression
+batch_hess(::LogisticRegression, ::Any, ::Any)
 Probit
+scores(::Probit, ::Any, ::Any)
+batch_hess(::Probit, ::Any, ::Any)
 LinearRegression
+batch_hess(::LinearRegression, ::Any, ::Any)
 MultinomialLogit
+scores(::MultinomialLogit, ::Any, ::Any)
+batch_hess(::MultinomialLogit, ::Any, ::Any)
 MLPClassifier
+scores(::MLPClassifier, ::Any, ::Any)
+batch_grad!(::MLPClassifier, ::Any, ::Any, ::Any)
+batch_hess(::MLPClassifier, ::Any, ::Any)
 LeastSquares
+batch_hess(::LeastSquares, ::Any, ::Any)
 linear_least_squares
 exponential_fit
 gauss_newton_error

@@ -102,6 +102,7 @@ at solver construction. Both default to the permissive answer.
 ```@docs
 ModelHessian
 ExactHessian
+dense_hessian(::ExactHessian, ::Any, ::Any)
 LBFGSModel
 SR1Model
 ScaledIdentity
