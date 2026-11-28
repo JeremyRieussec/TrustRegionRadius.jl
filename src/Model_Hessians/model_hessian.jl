@@ -13,7 +13,7 @@
 # A concrete `M <: ModelHessian` implements
 #
 #     reset_model!(m, n)            -- clear state for dimension n
-#     hessian_op(m, nlp, x)         -- object supporting `*` and `mul!`
+#     hessian_op(m, nlp, x)         -- n × n operator with `*`, `mul!`, `size`, `eltype`
 #     update_model!(m, s, y)        -- absorb the pair (s_k, y_k = g_{k+1} - g_k)
 #
 # and optionally
@@ -58,8 +58,17 @@ update_model!(::ModelHessian, s, y) = nothing
 """
     hessian_op(model, nlp, x)
 
-Return an object `B` supporting `B * v` and `mul!(y, B, v)`, representing `H_k`
-at `x`.
+Return an operator `B` representing `H_k` at `x`. With `n = length(x)`, it must
+support `B * v`, `mul!(y, B, v)` and `size(B) == (n, n)`, and `eltype(B)` should
+be the element type of `x`.
+
+The products alone are not enough. The Krylov.jl routines behind
+[`KrylovCG`](@ref) and [`KrylovCR`](@ref) take their workspace dimensions from
+`size(B)` before the first product, and compare `eltype(B)` with the element type
+of the right-hand side, warning on every call when the two differ. A
+`UniformScaling` such as `c * I` has no size, so it does not qualify.
+[`ScaledIdentity`](@ref) used to return one, and every pairing of it with a Krylov
+subsolver raised a `MethodError`.
 """
 function hessian_op end
 
@@ -285,7 +294,9 @@ struct ScaledIdentity <: ModelHessian
     end
 end
 
-hessian_op(m::ScaledIdentity, nlp, x) = m.c * I     # UniformScaling; `_apply_op!` has a method
+# A sized operator in the element type of `x`, not `m.c * I`. A `UniformScaling` has
+# no `size`, which the Krylov wrappers read; see `hessian_op`.
+hessian_op(m::ScaledIdentity, nlp, x) = (T = eltype(x); T(m.c) * opEye(T, length(x)))
 dense_hessian(m::ScaledIdentity, nlp, x) =
     Matrix(m.c * I, nlp.meta.nvar, nlp.meta.nvar)
 reports_negative_curvature(::ScaledIdentity) = false

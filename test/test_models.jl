@@ -6,13 +6,36 @@
     v = [1.0, 0.0]
 
     @testset "operator contract" begin
-        for m in (ExactHessian(), LBFGSModel(mem = 3), SR1Model(mem = 3),
-                  ScaledIdentity(c = 2.0))
-            reset_model!(m, 2)
-            B = hessian_op(m, nlp, x)
-            @test length(B * v) == 2
-            @test all(isfinite, B * v)
+        # `size` and `eltype` as well as `*` and `mul!`, because the Krylov.jl routines
+        # behind KrylovCG and KrylovCR read both before the first product. This loop
+        # checked `*` alone, and ScaledIdentity passed it while returning `c * I`,
+        # which has no size, so every Krylov pairing of that model raised.
+        lr = FullBatchNLP(LinearRegression(K = 2, M = 50, seed = 1))
+        cases = ((ExactHessian(), nlp), (LBFGSModel(mem = 3), nlp),
+                 (SR1Model(mem = 3), nlp), (ScaledIdentity(c = 2.0), nlp),
+                 (SPDTarget(target = [0.0, 0.0]), nlp),
+                 # the outer-product models need scores, and `dense_max = 1`
+                 # selects their matrix-free branch
+                 (BHHHModel(), lr), (BHHH2Model(), lr), (GaussNewtonModel(), lr),
+                 (BHHHModel(dense_max = 1), lr), (BHHH2Model(dense_max = 1), lr),
+                 (GaussNewtonModel(dense_max = 1), lr))
+        @test Set(nameof(typeof(m)) for (m, _) in cases) == exported_concrete(ModelHessian)
+        for (m, p) in cases
+            @testset "$m" begin
+                reset_model!(m, 2)
+                B = hessian_op(m, p, x)
+                @test size(B) == (2, 2)
+                @test eltype(B) === Float64
+                Bv = B * v
+                @test length(Bv) == 2
+                @test all(isfinite, Bv)
+                y = fill(NaN, 2)
+                mul!(y, B, v)
+                @test y ≈ Bv
+            end
         end
+        # The scaled identity takes the element type of the problem.
+        @test eltype(hessian_op(ScaledIdentity(), nlp, Float32[1, 1])) === Float32
     end
 
     @testset "ExactHessian is exact" begin
