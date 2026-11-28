@@ -98,7 +98,7 @@ export sample_schemes, sample_scheme
 
 # likelihood and least-squares problems
 export residuals, jacobian, information_identity_error
-export LogisticRegression, Probit, MultinomialLogit, MLPClassifier
+export LogisticRegression, Probit, LinearRegression, MultinomialLogit, MLPClassifier
 export init_params, accuracy, β_true
 export LeastSquares, linear_least_squares, exponential_fit, x_true, gauss_newton_error
 

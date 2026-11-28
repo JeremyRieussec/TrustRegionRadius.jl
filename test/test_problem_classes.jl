@@ -32,6 +32,7 @@
         @test MultinomialLogit      <: LikelihoodProblem
         @test MLPClassifier         <: LikelihoodProblem
         @test LeastSquares          <: NLSProblem
+        @test LinearRegression      <: NLSProblem
         # An expectation is not a finite sum with a large M, and vice versa.
         @test !(ExpectationProblem <: FiniteSumProblem)
         @test !(FiniteSumProblem <: ExpectationProblem)

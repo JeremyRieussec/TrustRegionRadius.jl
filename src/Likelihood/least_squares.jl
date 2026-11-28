@@ -125,7 +125,7 @@ function batch_hess(p::LeastSquares, x, batch)
 end
 
 """
-    gauss_newton_error(p::LeastSquares, x; batch = full_batch(p)) -> NamedTuple
+    gauss_newton_error(p::NLSProblem, x; batch = full_batch(p)) -> NamedTuple
 
 How much the Gauss–Newton approximation discards at `x`:
 
@@ -141,8 +141,11 @@ track `residual`: small at a well-fitting solution, `O(1)` when the model cannot
 fit the data. That is a different failure mode from BHHH's — it depends on the
 *fit*, not on the *specification* — and it is worth measuring rather than
 assuming, for the same reason.
+
+On a [`LinearRegression`](@ref) the residuals are standardised, so `residual` is
+in units of the error standard deviation, and `GN_err` is exactly zero.
 """
-function gauss_newton_error(p::LeastSquares, x; batch = full_batch(p))
+function gauss_newton_error(p::NLSProblem, x; batch = full_batch(p))
     b = collect(batch)
     J = jacobian(p, x, b); r = residuals(p, x, b); N = length(b)
     GN = (J' * J) ./ N
@@ -171,6 +174,10 @@ size, which is the property that distinguishes "Gauss–Newton is exact" from
 
 The keyword form generates `A` with independent normal entries and
 `b = A x* + noise·ε`.
+
+Read as a likelihood, this is [`LinearRegression`](@ref) with `σ = 1`. The keyword
+`noise` here is the standard deviation of the errors, which `LinearRegression`
+calls `σ` and carries in the objective.
 """
 function linear_least_squares(A::AbstractMatrix, b::AbstractVector; x_star = nothing)
     n = size(A, 2)

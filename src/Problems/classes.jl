@@ -162,7 +162,8 @@ abstract type LikelihoodProblem <: ScoredProblem end
 
 Placed under [`LikelihoodProblem`](@ref) because it *is* one: least squares is
 maximum likelihood under i.i.d. Gaussian errors of known variance, and the score
-`r_i ∇r_i` is the log-likelihood score up to `σ²`. So BHHH applies here as well as
+`r_i ∇r_i` is the log-likelihood score up to `σ²`, a factor that
+[`LinearRegression`](@ref) carries. So BHHH applies here as well as
 Gauss-Newton, and the two can be compared on one problem — which is worth having,
 since they discard different terms and fail for different reasons.
 
