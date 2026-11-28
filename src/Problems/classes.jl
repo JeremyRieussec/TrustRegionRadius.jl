@@ -283,7 +283,7 @@ function check_model_problem(model, nlp)
         throw(ArgumentError(
             "$(nameof(typeof(model))) is defined only for $(nameof(R)), but the " *
             "problem is a plain $(nameof(typeof(nlp))) with no problem class. " *
-            "Wrap a $(nameof(R)) in FullBatchNLP, FiniteSumNLP or ExpectationNLP, " *
+            "Wrap a $(nameof(R)) in FullBatchNLP or FiniteSumNLP, " *
             "or use ExactHessian or a quasi-Newton model."))
     end
     prob isa R || throw(ArgumentError(
