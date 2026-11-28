@@ -338,6 +338,7 @@ so [`has_truth`](@ref) is a trait and `true_stop` on a problem without truth is 
 ```@docs
 FiniteSum
 PerturbedSum
+batch_hess(::PerturbedSum, ::Any, ::Any)
 PerturbedExpectation
 GaussianDraw
 batch_obj

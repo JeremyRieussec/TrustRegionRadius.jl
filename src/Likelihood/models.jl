@@ -294,8 +294,9 @@ Overrides the `ScoredProblem` default so that the penalty enters the gradient
 once, after averaging, rather than being folded into every score column.
 
 One batched forward and backward pass, not `|batch|` unbatched ones. This used to
-call [`scores`](@ref) and sum the result, which built the whole `n × |batch|`
-score matrix in order to reduce it away immediately — the cost [`scores`](@ref)'s
+call [`scores`](@ref scores(::MLPClassifier, ::Any, ::Any)) and sum the result,
+which built the whole `n × |batch|` score matrix in order to reduce it away
+immediately — the cost [`scores`](@ref scores(::MLPClassifier, ::Any, ::Any))'s
 own docstring warns about, paid on every gradient rather than only where the
 per-observation terms are actually wanted. On the `n = 1156` network of
 experiment 11 that is 1.7 million entries materialised per gradient, and

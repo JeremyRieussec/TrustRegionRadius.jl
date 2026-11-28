@@ -104,6 +104,7 @@ ExactMS
 KrylovCG
 KrylovCR
 solve_subproblem!
+solve_subproblem!(::SubproblemSolver, ::ModelHessian, ::TrustRegionRadius.NLPModels.AbstractNLPModel{T, V}, ::V, ::V, ::T, ::V, ::V) where {T, V}
 cg_step_info
 returns_hprod
 needs_eigenvector
