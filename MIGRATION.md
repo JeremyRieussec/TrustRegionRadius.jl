@@ -118,16 +118,59 @@ The large-`n` branch is a Lanczos iteration rather than a power iteration on
 costs fewer matrix-vector products than the thirty power steps it replaced and
 is more accurate; see the docstring for the measurements.
 
-## 8. `true_stop = :test` and `:both` wait for a batch of `stop_N_min`
+## 8. `true_stop = :test` and `:both` read their bound on the largest batch
 
-The confidence bound of `:test` and `:both` is now read only on a batch of at
-least `stop_N_min` observations, a new keyword of `TRParams` with a default of 30,
-or on the largest batch the oracle allows when that is smaller. Before, the bound
-was read on every batch, and a batch of two whose scores had all vanished could
-certify `:first_order` at a point that was not critical.
+The confidence bound of `:test` and `:both` is now read only on the largest batch
+the oracle allows, unless the new `TRParams` keyword `stop_N_min` names a smaller
+one. The largest batch is the smallest of the rule's `N_max`, the oracle's
+`budget` and, on a finite sum, the population. Before, the bound was read on every
+batch, and a batch of two whose scores had all vanished could certify
+`:first_order` at a point that was not critical.
 
 **Silently reinterpreted.** A sampled run under `:test` or `:both` that used to
-stop on a batch of fewer than 30 observations no longer stops there. `:test` goes
-on, and `:both` takes its full pass. Runs under `:none` and `:full`, and every
-deterministic run, are unchanged. `TRParams(stop_N_min = 1)` reads the bound on
-every batch and restores the earlier behaviour.
+stop on a smaller batch no longer stops there. `:test` refuses, `:both` takes its
+full pass, and section 9 describes what the run does next. `TRParams(stop_N_min = 1)`
+reads the bound on every batch, as before, except a batch on which the step has just
+stalled. Nor is the bound read any longer on the initial batch, whose variance has not
+been estimated yet, unless that batch is the population. A minimum between the two
+gives no guarantee. With `stop_N_min = 30`, 4 of 12 probit runs whose rule never draws fewer
+than 32 observations still stopped wrongly on batches of 32. The setting is
+described under `TRParams`.
+
+## 9. A confirming mode moves the run to the largest batch
+
+Under `:test`, `:both` and `:full`, three things change on a sampled run.
+
+- A refused stop raises a floor under the sample size, at the largest batch, for the
+  rest of the run, whatever the sampling rule asks for. `FixedSample` and
+  `GeometricSample` are no exception. `TRParams(on_refusal = :continue)` keeps the
+  earlier behaviour.
+- A stall on a smaller batch no longer ends the run. The iteration is kept as a
+  rejected step, traced and handed to the callback, and the run moves to the largest
+  batch. No keyword turns this off.
+- A stall on the largest batch still ends the run, but its batch is first offered to
+  the stopping test, and the run reports `:first_order` (`:second_order` under
+  `tol_H`) when it passes. A stalled batch is judged only exactly, when it is the
+  population or by a full pass, so under `:test` a stall on a largest batch that is a
+  sample still ends `:stalled`.
+
+**Silently reinterpreted.** Statuses, iteration counts and sample counts of these runs
+change. On a logistic regression and a probit, 24 runs that gave 18 correct stops, 5
+stalls on batches of two and one `max_iter` now give 24 correct stops in every mode,
+and `:full` draws 3 926 976 samples against 19 934 099. On an expectation whose
+largest batch cannot resolve `tol`, a `:test` run that used to reach `max_iter`
+cheaply now spends its remaining iterations on that batch. `TRParams` gives the
+numbers. A traced run under a confirming mode carries a new key, `:sample_floor_from`,
+the first iteration drawn under the floor.
+`:sample_cap_hits` still counts only the iterations at which the rule itself asked for
+the cap.
+
+**Throws.** `FiniteSumTRSolver` refuses a confirming mode on an oracle with
+`scheme = :nested` and `replace = true` whose largest batch is the population,
+because a batch of `M` drawn that way repeats some observations and misses others.
+Pass `replace = false`, or use `:independent` or `:prefix`. `ExpectationTRSolver`
+refuses a confirming mode on an oracle whose budget is `typemax(Int)` and whose rule
+has no `N_max`, since there is then no largest batch to move to.
+
+Runs under `:none`, and every deterministic run, are unchanged. We compared 91 of
+them, traces included, bit for bit against the previous version.
