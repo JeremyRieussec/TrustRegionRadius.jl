@@ -12,8 +12,12 @@ which vanishes only where the model is genuinely second-order critical.
 
 Replacing one by the other is the whole of the upgrade: **the update logic does not
 change**. That is why [`SecondOrder`](@ref) is a wrapper rather than a new family of
-rules — it forwards `update_radius!` to the rule it wraps and overrides only
-[`criticality`](@ref).
+rules. It forwards `update_radius!` to the rule it wraps and changes the answer to two
+queries. [`criticality`](@ref) returns `τ` rather than `‖g‖`, and
+[`needs_curvature`](@ref) returns `true` where every rule it accepts returns `false`.
+Unless `tol_H > 0` or the subsolver is an [`EigenPoint`](@ref), that second answer is
+the only thing that makes the solver estimate `λ_min`, and without the estimate `τ`
+falls back to `‖g‖`.
 
 ```@example secondorder
 using TrustRegionRadius, ADNLPModels

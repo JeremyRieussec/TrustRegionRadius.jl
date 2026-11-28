@@ -3,10 +3,19 @@
 #
 # The model-Hessian axis.
 #
-# The solver never forms a matrix: it needs only the operator action H·v, which
-# is what `hessian_op` returns and what every Krylov subsolver consumes. This
-# keeps large CUTEst problems feasible and lets quasi-Newton models be supplied
-# as LinearOperators without changing a line of the solver loop.
+# The solver need not form a matrix. It asks the model for an operator that
+# applies H·v, which is what `hessian_op` returns and what every Krylov
+# subsolver consumes. This keeps large CUTEst problems feasible and lets
+# quasi-Newton models be supplied as LinearOperators without changing a line of
+# the solver loop.
+#
+# Several paths do form a dense matrix, among them the exact subproblem solver
+# `ExactMS`, the λ_min estimate up to `curv_nmax` variables (200 by default) and
+# the outer-product models up to `dense_max` variables (5,000 by default). So
+# does `ExactHessian`, the default model, over the package's own oracles
+# (`FullBatchNLP`, `FiniteSumNLP`, `ExpectationNLP`). There it forms and caches
+# the dense Hessian of the current batch at every iterate, with no matrix-free
+# fallback.
 #
 # Interface contract
 # ------------------
@@ -66,7 +75,9 @@ function hessian_op end
 """
     dense_hessian(model, nlp, x) -> Matrix
 
-Dense representation, for diagnostics on small problems only.
+Dense representation, for small problems only. [`ExactMS`](@ref) computes every
+step from it, and [`lambda_min_estimate`](@ref) and [`model_hessian_norm`](@ref)
+use it up to their `nmax`.
 """
 function dense_hessian end
 

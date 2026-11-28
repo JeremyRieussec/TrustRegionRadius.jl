@@ -1,8 +1,15 @@
 # Model Hessians
 
-The solver never forms a matrix: it needs only the operator action `H·v`, which is what
-[`hessian_op`](@ref) returns. This keeps large problems feasible and lets quasi-Newton models
-be supplied as `LinearOperators` without changing the solver loop.
+The solver need not form a matrix. It asks the model for an operator that applies `H·v`,
+which is what [`hessian_op`](@ref) returns. This keeps large problems feasible and lets
+quasi-Newton models be supplied as `LinearOperators` without changing the solver loop.
+
+Several paths do form a dense matrix, among them the exact subproblem solver
+[`ExactMS`](@ref), the `λ_min` estimate up to `curv_nmax` variables (200 by default) and
+the outer-product models up to `dense_max` variables (5,000 by default). So does
+`ExactHessian`, the default model, over the package's own oracles ([`FullBatchNLP`](@ref),
+[`FiniteSumNLP`](@ref), [`ExpectationNLP`](@ref)). There it forms and caches the dense
+Hessian of the current batch at every iterate, with no matrix-free fallback.
 
 | model | curvature | can be indefinite? |
 |---|---|---|
@@ -76,7 +83,7 @@ stats.solution     # the saddle
 struct MyModel <: ModelHessian end
 
 TrustRegionRadius.hessian_op(::MyModel, nlp, x) = # anything supporting B * v
-TrustRegionRadius.dense_hessian(::MyModel, nlp, x) = # Matrix, for ExactMS and diagnostics
+TrustRegionRadius.dense_hessian(::MyModel, nlp, x) = # Matrix, for ExactMS, the λ_min estimate and diagnostics
 ```
 
 Add `reset_model!` and `update_model!` if the model carries state; both default to no-ops.

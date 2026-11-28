@@ -13,11 +13,15 @@
 # radius is measured against.
 #
 # That is why `SecondOrder` is a wrapper rather than a family of new rules. It
-# forwards `update_radius!` to the rule it wraps, unchanged, and overrides only
-# `criticality`. The solver asks the rule which measure it wants, computes it,
-# and passes it in the slots that carried ‖g_k‖ and ‖g_{k+1}‖ before — so no
-# rule signature changes and every criticality-anchored mechanism acquires a
-# second-order variant for free.
+# forwards `update_radius!` to the rule it wraps, unchanged, and changes the
+# answer to two queries. `criticality` returns τ rather than ‖g‖, and
+# `needs_curvature` returns true where every rule it accepts returns false.
+# Unless `tol_H > 0` or the subsolver asks for an eigenvector (`EigenPoint`),
+# that second answer is the only thing that makes the solver estimate λ_min, and
+# without the estimate τ falls back to ‖g‖. The solver asks the rule which
+# measure it wants, computes it, and passes it in the slots that carried ‖g_k‖
+# and ‖g_{k+1}‖ before, so no rule signature changes and every
+# criticality-anchored mechanism acquires a second-order variant for free.
 #
 # Contents
 #   criticality, needs_curvature      the interface the solver dispatches on

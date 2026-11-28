@@ -20,9 +20,9 @@
 #     without bound and `N_max` is a *budget the user chooses*. A finite sum has
 #     exactly M terms, so N_k ≤ M is imposed by the problem, and a user-supplied
 #     `N_max` is either redundant or a deliberate sub-population budget — two
-#     different intentions that should not share a keyword. The finite-sum solver
-#     therefore rejects a rule carrying a user `N_max` and takes `budget`
-#     explicitly.
+#     different intentions that should not share a keyword. The finite-sum oracle,
+#     `FiniteSumNLP`, therefore rejects a rule carrying a user `N_max` and takes
+#     `budget` explicitly.
 #
 #   * The full-batch limit. At N_k = M a finite-sum iteration is *exactly*
 #     deterministic: ρ̂ = ρ, the stopping test is the real one, and no accuracy
@@ -105,7 +105,7 @@ Consequences the type carries:
 
 - `population(p) == M`, so `N_k ≤ M` is imposed by the problem. A sampling rule
   used here must **not** carry a user-supplied `N_max`; pass `budget` to
-  [`FiniteSumTRSolver`](@ref) if a sub-population cap is genuinely wanted.
+  [`FiniteSumNLP`](@ref) if a sub-population cap is genuinely wanted.
 - `N_k = M` is an exact iteration. [`FullBatch`](@ref) reaches it deliberately, and
   `:full_batch_trajectory` records when it happened.
 - [`true_objective`](@ref) and [`true_gradient`](@ref) are always available, at one
@@ -283,7 +283,7 @@ function check_model_problem(model, nlp)
         throw(ArgumentError(
             "$(nameof(typeof(model))) is defined only for $(nameof(R)), but the " *
             "problem is a plain $(nameof(typeof(nlp))) with no problem class. " *
-            "Wrap a $(nameof(R)) in FullBatchNLP, FiniteSumNLP or ExpectationNLP, " *
+            "Wrap a $(nameof(R)) in FullBatchNLP or FiniteSumNLP, " *
             "or use ExactHessian or a quasi-Newton model."))
     end
     prob isa R || throw(ArgumentError(
@@ -341,7 +341,7 @@ For a finite sum the cap is `M`, imposed by the problem. A user `N_max` there is
 either redundant (`≥ M`) or a deliberate sub-population budget (`< M`), and those
 are different intentions that should not share a keyword — the first hides a
 misunderstanding, the second is a legitimate experiment. Pass `budget` to
-[`FiniteSumTRSolver`](@ref) for the second.
+[`FiniteSumNLP`](@ref) for the second.
 
 On an [`ExpectationProblem`](@ref) nothing is checked: there the population is
 unbounded and the cap *is* the user's budget.
@@ -352,7 +352,7 @@ function check_population_cap(rule, prob::FiniteSumProblem)
     throw(ArgumentError(
         "$(nameof(typeof(rule))) was given N_max = $cap, but on a finite-sum " *
         "problem the cap is imposed by the problem: N_k ≤ M = $(population(prob)). " *
-        "Drop N_max. If a sub-population budget is intended, pass it to the solver " *
+        "Drop N_max. If a sub-population budget is intended, pass it to FiniteSumNLP " *
         "as `budget = $cap`, which records it as an experimental choice rather " *
         "than a property of the rule."))
 end
