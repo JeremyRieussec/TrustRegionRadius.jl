@@ -226,6 +226,8 @@
                           p -> zeros(p.n), () -> BHHHModel(ridge = 1e-8)),
             ("Probit",    () -> Probit(K = 5, M = 2_000, seed = 2),
                           p -> zeros(p.n), () -> BHHHModel(ridge = 1e-8)),
+            ("LinearReg", () -> LinearRegression(K = 5, M = 2_000, seed = 2),
+                          p -> zeros(p.n), () -> BHHHModel(ridge = 1e-8)),
             ("MNL",       () -> MultinomialLogit(K = 5, M = 2_000, J = 4, seed = 2),
                           p -> zeros(p.n), () -> BHHHModel(ridge = 1e-8)),
             ("MLP",       () -> MLPClassifier(Xm, ym, 3; hidden = 3, λ = 1e-4),

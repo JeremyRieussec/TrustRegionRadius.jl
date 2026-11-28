@@ -39,6 +39,7 @@ exported_concrete(T::Type) = Set(
     include("test_stochastic.jl")
     include("test_likelihood.jl")
     include("test_probit.jl")
+    include("test_linear_regression.jl")
     include("test_sampling.jl")
     include("test_sampling_features.jl")
     include("test_benchmark_roster.jl")
