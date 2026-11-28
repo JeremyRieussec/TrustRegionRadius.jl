@@ -17,7 +17,7 @@
 
 """
     TRParams{T}(; η, η1, η2, Δ0, Δmin, Δmax, max_iterations, tol, tol_H,
-                  max_time, true_stop, stop_z, stop_N_min)
+                  max_time, true_stop, stop_z, stop_N_min, on_refusal)
 
 Solver parameters, shared by all three solvers.
 
@@ -33,7 +33,8 @@ Solver parameters, shared by all three solvers.
 - `max_time`: wall-clock budget in seconds                         (default `Inf`)
 - `true_stop`: how a satisfied stopping test is confirmed          (default `:none`)
 - `stop_z`: confidence multiplier for the statistical modes        (default 2)
-- `stop_N_min`: smallest batch on which those modes may conclude   (default 30)
+- `stop_N_min`: smallest batch on which those modes may conclude   (default: the largest batch)
+- `on_refusal`: what a refused stop does to the sample size        (default `:cap`)
 
 # Confirming the stopping test
 
@@ -50,15 +51,15 @@ what has to hold before that stop is believed.
 | `:full` | one cap-sized pass | `‖g‖ ≤ tol` on the largest batch allowed |
 | `:both` | a pass only when `:test` refuses | `:test`, else `:full` |
 
-`:test` is free. `σ_g` is the plug-in standard deviation of the per-observation
-gradients on the current batch, and the bound above is a one-sided confidence bound
-on `‖∇f‖` built from the standard error `σ_g/√N_k`. What it guarantees is conditional
-on that estimate. The stop is refused whenever the dispersion the batch itself shows
-is too large for `N_k` observations to resolve `tol`. That catches the batch whose
-terms cancel in the mean while each of them stays far from zero, which is the case of
-the paragraph above. On a finite sum the standard error is zero at `N_k = M`, where
-the batch is the population, so the test is then exact. Below that, it can refuse to
-stop for a long time when `N_k` is held down by the sampling rule.
+`:test` pays no confirmation pass. `σ_g` is the plug-in standard deviation of the
+per-observation gradients on the current batch, and the bound above is a one-sided
+confidence bound on `‖∇f‖` built from the standard error `σ_g/√N_k`. What it
+guarantees is conditional on that estimate. The stop is refused whenever the
+dispersion the batch itself shows is too large for `N_k` observations to resolve
+`tol`. That catches the batch whose terms cancel in the mean while each of them stays
+far from zero, which is the case of the paragraph above. On a finite sum the standard
+error is zero at `N_k = M`, where the batch is the population, so the test is then
+exact.
 
 The bound alone does not guarantee that the stop is real. The variance is estimated
 on the very batch whose gradient is being tested, and a batch says nothing about the
@@ -67,33 +68,95 @@ margin, each per-observation score vanishes on its own. `‖ĝ_k‖` and `σ_g` 
 together, the bound reads `0 + z·0 ≤ tol`, and it certifies nothing. Small batches on
 a binary-choice likelihood produce this readily.
 
-`stop_N_min` is the guard against that case. The bound is read only on a batch of at
-least `N_min = stop_N_min` observations, or on the largest batch the oracle allows
-when that is smaller. Below it `:test` refuses and `:both` takes its pass. With
-`p = LogisticRegression(K = 5, M = 2_000, seed = 2)`, the oracle
-`FiniteSumNLP(p, RadiusProportional(); x0 = zeros(5), seed = 1)`, `RDelta()`,
-`BHHHModel(ridge = 1e-8)`, `SteihaugCG()` and `tol = 1e-6`, the unguarded bound
-(`stop_N_min = 1`) reports `:first_order` at iteration 33, on a batch of two with
-`σ_g² = 8.1e-14`, at a point where `‖∇f‖ = 0.42`. With the default that stop is
-refused under `:test` and under `:both`, and the run goes on to end `:stalled` at
-iteration 341, as it does under `:full`. The test suite pins the wrong stop and its
-refusal.
+`stop_N_min = N_min` is the guard against that case. The bound is read only on a
+batch of at least `N_min` observations, or on the largest batch the oracle allows when
+that is smaller, and below it `:test` refuses and `:both` takes its pass. The largest
+batch is the smallest of the rule's `N_max`, the oracle's `budget` and, on a finite
+sum, the population `M`. By default `N_min` is that batch, so on a finite sum without
+a budget the bound is read only on the population. Nor is the bound read before the
+variance has been estimated on the batch in hand, so not on the initial batch unless
+it is the population. With `p = LogisticRegression(K = 5, M = 2_000, seed = 2)`, the
+oracle `FiniteSumNLP(p, RadiusProportional(); x0 = zeros(5), seed = 1)`, `RDelta()`,
+`BHHHModel(ridge = 1e-8)`, `SteihaugCG()`, `tol = 1e-6` and
+`max_iterations = 1_000`, the bound read on every batch (`stop_N_min = 1`) reports
+`:first_order` at iteration 33, on a batch of two with `σ_g² = 8.1e-14`, at a point
+where `‖∇f‖ = 0.42`. With the default that stop is refused under `:test` and under
+`:both`. The test suite pins the wrong stop and its refusal.
 
-The default of 30 is the usual convention for a bound that rests on a normal
-approximation. It is not a theorem. A batch of `N_min` fitted observations remains
-possible and only becomes less likely as `N_min` grows. The guard also has a price.
-Under a sampling rule that never reaches `N_min`, `:test` cannot conclude at all, and
-`:both` pays one pass per candidate stop, as `:full` does. `stop_N_min = 1` reads the
-bound on every batch, which is the behaviour before the guard existed.
+A smaller `N_min` is cheaper and gives no guarantee. A batch of `N_min` fitted
+observations remains possible however large `N_min` is, and only becomes less likely.
+With the solver settings above on `Probit(K = 5, M = 2_000)`, problem seeds 2 and 3,
+oracle seeds 1 to 6 and `RadiusProportional(N_min = 32)`, `stop_N_min = 30` let
+`:test` stop wrongly in 4 of the 12 runs, all on batches of 32, at points where
+`‖∇f‖` lay between 0.52 and 1.47. The default stopped none of them wrongly.
+`stop_N_min = 1` reads the bound on every batch except the initial batch, unless it is
+the population, and a batch on which the step has just stalled (see below).
+Before the guard existed the initial batch was read on the placeholder `σ_g² = 1`,
+and a stall ended the run before its batch could be read.
+
+`on_refusal` says what a refused stop does. Under `:cap`, the default, the run moves
+to the largest batch and stays there, since [`resample!`](@ref) then draws that batch
+at every iteration whatever the sampling rule asks for. This follows Bastin, Cirillo
+and Toint (2006), *An adaptive Monte Carlo algorithm for computing mixed logit
+estimators*, who move to the full sample when the sampled problem looks critical
+before the full sample is reached. On a finite sum without a budget the rest of the
+run is then the deterministic algorithm. `on_refusal = :continue` leaves the sample
+size to the rule after a refusal.
+
+A stall on a smaller batch moves the run in the same way under every confirming mode,
+whatever `on_refusal` says, instead of ending it. A stall on the largest batch ends
+the run, after its batch has been offered to the stopping test. The deterministic
+loop has tested every state before it steps from it, but the sampled loops draw a new
+batch after their test, and without that offer the stalled batch would never be
+tested. On a small sample a stall often means that the scores have vanished, and the
+five stalls we measured were on batches of two with `‖ĝ‖` between 0 and 1.12e-20.
+The plug-in variance of such a batch certifies nothing. A stalled batch is therefore
+judged only exactly, when it is the population or by the full pass of `:full` and
+`:both`, and the bound of `:test` never reads it. Under `:test` a stall on a largest
+batch that is a sample therefore ends `:stalled`.
+
+`:sample_floor_from` in the trace is the first iteration drawn under the floor that a
+refused stop or a stall raised. It is 0 when no batch was drawn under one, even when
+the rule itself drew the largest batch.
+
+On the run above, the refusal at iteration 33 puts every mode on the population from
+iteration 34, and all three stop at iteration 68 with `‖∇f‖ = 5.4e-7`. Before the
+move to the largest batch existed, all three ended `:stalled` at iteration 341, on a
+batch of two, with `‖∇f‖ = 0.30`. Over 24 runs of that setting, on the logistic
+regression and on the probit, each with problem seeds 2 and 3 and oracle seeds 1 to
+6, every mode now stops at a point where `‖∇f‖ ≤ tol` in all 24. Before, 18 did, 5
+stalled on a batch of two and one reached `max_iterations`, in every mode. `:full`
+drew 3 926 976 samples over the 24 runs, against 19 934 099 before, and against
+768 000 for `FullBatch()` under `:full`.
+
+On an expectation the largest batch is a sample however large, and after the move
+every iteration evaluates it. When it cannot resolve `tol`, the run spends its
+remaining iterations there. On a `PerturbedExpectation` with `σg = 1` built on a
+four-variable quadratic, with `RadiusProportional()`, `RDelta()`, `ExactHessian()`,
+`ExactMS()`, `tol = 1e-2`, 200 iterations and `:test`, three runs at the default budget
+of 10^6 go from no stop to three correct stops, for 6 000 028 samples in all. At a
+budget of 5·10^4 none of them stops either way, and they spend 59 300 028 samples
+against 2 400 before. `on_refusal = :continue` restores the earlier cost, and
+`max_time` bounds it. An expectation whose budget is `typemax(Int)` and whose rule has
+no `N_max` has no largest batch to move to, and [`ExpectationTRSolver`](@ref) refuses
+a confirming mode on it.
 
 `:both` tries `:test` first and takes the full pass only when `:test` refuses. It
-saves the passes that `:full` would spend on candidates the bound settles, and it
-still accepts whatever `:test` accepts.
+saves the passes that `:full` would spend on candidates the bound settles, which
+under the default `N_min` are the candidates on the largest batch, and it still
+accepts whatever `:test` accepts.
 
-`:full` is exact and always pays. It is the only mode whose verdict does not depend
-on the batch, and the mode to use when the status has to mean something. See
-[`confirm_gradient_norm!`](@ref) for what "the largest batch allowed" means and how
-its cost is accounted.
+`:full` is exact and always pays. See [`confirm_gradient_norm!`](@ref) for what "the
+largest batch allowed" means and how its cost is accounted. On a finite sum without a
+budget, and with the default `N_min`, no confirming mode accepts a stop that the
+exact gradient does not satisfy. `:test` concludes only on the population, while
+`:full` and `:both` conclude after an exact pass or on the population, so the three
+differ in cost and not in what their verdict means. With a budget below `M`, or on an
+expectation, the largest batch is a sample, and only `:full`, where it is available,
+does not depend on the batch. A small budget leaves `:test` exposed. With
+`budget = 2` on the probit above with problem seed 2 and oracle seeds 1 to 6, `:test`
+stopped wrongly in 5 of the 6 runs, as it did before the move to the largest batch
+existed.
 
 `true_stop = false` and `true_stop = true` remain accepted, and mean `:none` and
 `:full`. A deterministic solver rejects anything but `:none` — the batch test *is*
@@ -136,6 +199,7 @@ struct TRParams{T}
     true_stop::Symbol
     stop_z::T
     stop_N_min::Int
+    on_refusal::Symbol
     curv_nmax::Int
     curv_lanczos_k::Int
 end
@@ -189,7 +253,8 @@ function TRParams{T}(; η::Union{Real, Nothing} = nothing,
                        max_time::Real = Inf,
                        true_stop::Union{Bool, Symbol} = :none,
                        stop_z::Real = 2,
-                       stop_N_min::Int = 30,
+                       stop_N_min::Int = typemax(Int),
+                       on_refusal::Symbol = :cap,
                        curv_nmax::Int = 200,
                        curv_lanczos_k::Int = 40) where {T}
     e1 = _pick("η1", η1, η₁, T(0.1))
@@ -211,13 +276,16 @@ function TRParams{T}(; η::Union{Real, Nothing} = nothing,
     stop_z > 0 || throw(ArgumentError("TRParams: need stop_z > 0, got $stop_z"))
     stop_N_min >= 1 || throw(ArgumentError(
         "TRParams: need stop_N_min ≥ 1, got $stop_N_min"))
+    on_refusal in (:cap, :continue) || throw(ArgumentError(
+        "TRParams: on_refusal must be :cap or :continue, got :$on_refusal"))
     curv_nmax > 0 || throw(ArgumentError(
         "TRParams: need curv_nmax > 0, got $curv_nmax"))
     curv_lanczos_k > 0 || throw(ArgumentError(
         "TRParams: need curv_lanczos_k > 0, got $curv_lanczos_k"))
     return TRParams{T}(T(ea), T(e1), T(e2), T(d0), T(Δmin), T(Δmax),
                        max_iterations, T(tol), T(tol_H), Float64(max_time),
-                       mode, T(stop_z), stop_N_min, curv_nmax, curv_lanczos_k)
+                       mode, T(stop_z), stop_N_min, on_refusal, curv_nmax,
+                       curv_lanczos_k)
 end
 
 TRParams(; kwargs...) = TRParams{Float64}(; kwargs...)
@@ -231,8 +299,11 @@ end
 
 Base.propertynames(::TRParams) =
     (:η, :η1, :η2, :Δ0, :Δmin, :Δmax, :max_iterations, :tol, :tol_H,
-     :max_time, :true_stop, :stop_z, :stop_N_min, :curv_nmax, :curv_lanczos_k,
-     :η₁, :η₂, :Δ₀)
+     :max_time, :true_stop, :stop_z, :stop_N_min, :on_refusal, :curv_nmax,
+     :curv_lanczos_k, :η₁, :η₂, :Δ₀)
+
+# `stop_N_min` at its default, `typemax(Int)`, means "the largest batch".
+_show_N_min(n::Int) = n == typemax(Int) ? "cap" : string(n)
 
 function Base.show(io::IO, p::TRParams{T}) where {T}
     println(io, "TRParams{$T}:")
@@ -248,7 +319,10 @@ function Base.show(io::IO, p::TRParams{T}) where {T}
     if confirms_stop(p)
         println(io, "  true_stop = :", p.true_stop, "   (stopping test confirmed",
                 p.true_stop === :full ? "" :
-                    ", z = $(p.stop_z), N_min = $(p.stop_N_min)", ")")
+                    ", z = $(p.stop_z), N_min = $(_show_N_min(p.stop_N_min))", ")")
+        println(io, "  on_refusal = :", p.on_refusal,
+                p.on_refusal === :cap ? "   (a refused stop moves the run to the largest batch)" :
+                                        "   (a refused stop leaves the batch size to the rule)")
     else
         println(io, "  true_stop disabled: ‖ĝ‖ ≤ tol is a claim about one batch")
     end

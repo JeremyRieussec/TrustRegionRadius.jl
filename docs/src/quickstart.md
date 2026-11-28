@@ -107,7 +107,10 @@ The one-entry difference is the alignment convention, and it is set out in full 
 A sampled run adds `:grad_sample_trajectory`, `:obj_sample_trajectory`,
 `:samples_total`, `:sample_cap_hits` and — where a truth exists —
 `:true_grad_trajectory`. A finite-sum run adds `:full_batch_trajectory`, marking the
-iterations at which `Nₖ = M` and the step was therefore exact.
+iterations at which `Nₖ = M` and the step was therefore exact. Under a confirming
+`true_stop` mode a sampled run also carries `:sample_floor_from`, the first iteration
+drawn under the floor that a refused stop or a stall raised, or 0 if no batch was drawn
+under one.
 
 The first three are one entry longer than the rest, since they have a value before the first
 iteration; align on the tail when plotting them together.
@@ -170,6 +173,14 @@ against Δ, `‖g‖` and ρ on a shared axis.
 radius contracts forever. This is a genuine numerical limitation of the criticality-anchored
 rules in floating point rather than a bug, and it is reported separately so that it is not
 silently folded into "failure".
+
+On a sampled run the step can also become negligible because the batch gradient has
+vanished while the true one has not, for instance on a batch of two whose scores have both
+vanished. We measured five such stalls on logistic and probit regressions, all on batches of
+two, at points where `‖∇f‖` lay between 0.30 and 2.28. Under a confirming `true_stop` mode
+such a stall no longer ends the run. The run moves to the largest batch, a stalled batch is
+judged only exactly, and `:stalled` is reported only on the largest batch, after that batch
+has failed the stopping test.
 
 !!! note "`:first_order` at iteration 0"
     A problem already critical at `x₀` returns `:first_order` with `iter == 0`. That is

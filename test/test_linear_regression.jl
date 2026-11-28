@@ -555,10 +555,11 @@
 
     @testset "a sampled run, and what its stopping test is worth" begin
         p = LinearRegression(K = 5, M = 2_000, seed = 2)
-        solve(rule, model, stop; maxit = 200) =
+        solve(rule, model, stop; maxit = 200, kw...) =
             tr_solve(FiniteSumNLP(p, rule; x0 = zeros(5), seed = 1);
                      rule = RDelta(), model = model, subsolver = SteihaugCG(), trace = true,
-                     params = TRParams(tol = 1e-6, max_iterations = maxit, true_stop = stop))
+                     params = TRParams(; tol = 1e-6, max_iterations = maxit,
+                                       true_stop = stop, kw...))
         gn() = GaussNewtonModel(ridge = 1e-8)
 
         # Control. Three observations and five parameters: the exact model puts the
@@ -567,8 +568,16 @@
         @test loose.status === :first_order
         @test norm(true_gradient(p, loose.solution)) > 1e-2
 
-        # Confirmed on the full batch, that stop is refused for as long as the run lasts.
-        @test solve(FixedSample(3), gn(), :full).status !== :first_order
+        # Confirmed on the full batch, that stop is refused, and the refusal moves the
+        # run to the population for good, so the stop it reports next is real. We
+        # measured the move from iteration 5 and the stop at iteration 8. With
+        # on_refusal = :continue the batch stays at three, and the stop is refused for
+        # as long as the run lasts.
+        moved = solve(FixedSample(3), gn(), :full)
+        @test moved.status === :first_order
+        @test norm(true_gradient(p, moved.solution)) <= 1e-6
+        @test moved.solver_specific[:grad_sample_trajectory][end] == population(p)
+        @test solve(FixedSample(3), gn(), :full; on_refusal = :continue).status !== :first_order
 
         # The false stop needs the subproblem solved inside the region, so that the
         # step lands where the batch gradient vanishes. Truncated CG gets there on a

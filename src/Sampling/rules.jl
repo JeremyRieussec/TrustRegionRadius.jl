@@ -343,6 +343,11 @@ Sample-average approximation: the same `N` at every iteration.
 The baseline every adaptive rule should be scored against, and the only rule for
 which total work is proportional to the iteration count — which is what
 iteration-count comparisons quietly assume.
+
+The size is `N` at every iteration under `TRParams(true_stop = :none)`. Under a
+confirming mode the solver moves the run to the largest batch after a stall, or after
+a refused stop under the default `on_refusal = :cap`, and every later batch is that
+one. See the section on confirming the stopping test in [`TRParams`](@ref).
 """
 struct FixedSample <: SamplingRule
     N::Int
@@ -444,6 +449,11 @@ observes.
 The other control. It reaches any accuracy eventually and cannot respond to the
 radius at all, so comparing it against `RadiusProportional` at matched total sample
 budget separates "spending more" from "spending it at the right iterations".
+
+The schedule holds under `TRParams(true_stop = :none)`. Under a confirming mode the
+solver moves the run to the largest batch after a stall, or after a refused stop
+under the default `on_refusal = :cap`, and every later batch is that one. See the
+section on confirming the stopping test in [`TRParams`](@ref).
 
 `rate^k` overflows to `Inf` around `k ≈ 7000` for `rate = 1.1`, inside the default
 iteration budget, which is why the conversion goes through `_sample_size`.

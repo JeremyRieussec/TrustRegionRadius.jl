@@ -109,13 +109,18 @@ mechanism.
 abstract type SampledNLP{T, V} <: AbstractNLPModel{T, V} end
 
 """
-    ExpectationNLP(prob, rule; x0, seed = 0, N_init = 8)
+    ExpectationNLP(prob, rule; x0, seed = 0, N_init = 8, budget = 1_000_000,
+                   scheme = :independent)
 
 Oracle for an [`ExpectationProblem`](@ref): each `resample!` draws `N_k` **fresh**
 realisations.
 
-There is no population cap of the problem's own, so the budget comes from the rule's
-`N_max` and from [`ExpectationTRSolver`](@ref)'s `budget`. There is no full-batch
+There is no population cap of the problem's own, so the cap on `N_k` comes from the
+rule's `N_max` and from this oracle's `budget`. Under a confirming
+`TRParams(true_stop = …)` the smaller of the two is also the batch drawn at every
+iteration after a stall, or after a refused stop under the default
+`on_refusal = :cap`, so it should be a size that can be drawn at every iteration.
+There is no full-batch
 iteration and, unless `has_truth(prob)`, no exact gradient — so a run here can be
 scored only against whatever the construction supplies.
 """
@@ -149,6 +154,8 @@ mutable struct ExpectationNLP{P <: ExpectationProblem, S <: SamplingRule} <:
     H_ok::Bool
     scheme::Symbol
     pool::Any
+    N_floor::Int
+    floor_from::Int
 end
 
 """
@@ -161,7 +168,9 @@ Oracle for a [`FiniteSumProblem`](@ref): each `resample!` subsets `1:M`.
 problem; `budget` is where a deliberate sub-population limit belongs.
 
 `:full_batch_trajectory` records the iterations at which `N_k = M`, which are exactly
-the iterations that were deterministic.
+the iterations that were deterministic. The exception is `scheme = :nested` with
+`replace = true`, where a batch of `M` draws repeats some observations and misses
+others.
 """
 mutable struct FiniteSumNLP{P <: FiniteSumProblem, S <: SamplingRule} <:
                SampledNLP{Float64, Vector{Float64}}
@@ -195,6 +204,8 @@ mutable struct FiniteSumNLP{P <: FiniteSumProblem, S <: SamplingRule} <:
     H_ok::Bool
     scheme::Symbol
     pool::Any
+    N_floor::Int
+    floor_from::Int
 end
 
 function ExpectationNLP(prob::ExpectationProblem, rule::SamplingRule;
@@ -215,7 +226,7 @@ function ExpectationNLP(prob::ExpectationProblem, rule::SamplingRule;
     return ExpectationNLP{typeof(prob), typeof(rule)}(
         meta, Counters(), prob, rule, rng, seed, N0, b, b, N0, N0, 0, 0, 0,
         Int[], Int[], 1.0, 1.0, 0.0, 0.0, NaN, 0, budget,
-        zeros(0, 0), Float64[], false, scheme, scheme === :nested ? b : nothing)
+        zeros(0, 0), Float64[], false, scheme, scheme === :nested ? b : nothing, 0, 0)
 end
 
 function FiniteSumNLP(prob::FiniteSumProblem, rule::SamplingRule;
@@ -238,7 +249,7 @@ function FiniteSumNLP(prob::FiniteSumProblem, rule::SamplingRule;
         meta, Counters(), prob, rule, rng, seed, replace, N0, copy(b), copy(b),
         N0, N0, 0, 0, 0, Int[], Int[], Bool[], 1.0, 1.0, 0.0, 0.0, NaN, 0, cap,
         zeros(0, 0), Float64[], false, scheme,
-        scheme === :nested ? copy(b) : nothing)
+        scheme === :nested ? copy(b) : nothing, 0, 0)
 end
 
 underlying_problem(m::SampledNLP) = m.prob
@@ -255,6 +266,61 @@ the accuracy requirement the convergence theory assumes.
 """
 population_cap(m::ExpectationNLP) = m.budget
 population_cap(m::FiniteSumNLP)   = m.budget
+
+"""
+    _largest_batch(m) -> Int
+
+The largest batch this oracle can be asked for, which is the smaller of the rule's own
+`N_max` (see [`sample_cap`](@ref)) and [`population_cap`](@ref). On a finite sum the
+rule carries no `N_max`, so this is `min(budget, M)`, and without a budget it is `M`:
+the batch is then the population. On an expectation it is a sample, however large.
+
+A confirming mode concludes on this batch by default, and moves the run to it after a
+stall, or after a refused stop under the default `on_refusal = :cap`. See the section
+on confirming the stopping test in [`TRParams`](@ref).
+"""
+_largest_batch(m::SampledNLP) = min(sample_cap(m.rule), population_cap(m))
+
+"Whether either batch of the current iteration is smaller than [`_largest_batch`](@ref)."
+_below_largest_batch(m::SampledNLP) = min(m.Ng, m.Nf) < _largest_batch(m)
+
+"""
+    _is_population(m) -> Bool
+
+Whether the gradient batch in hand is the whole population, so that its gradient is
+exact and its standard error zero. Never on an expectation. On a finite sum it is
+whenever `N_k ≥ M`, since [`draw_batch`](@ref) and `:prefix` then return `1:M`, and
+`:nested` without replacement a permutation of it. A confirming mode refuses `:nested`
+with replacement where that would not hold.
+"""
+_is_population(m::FiniteSumNLP) = m.Ng >= population(m.prob)
+_is_population(::ExpectationNLP) = false
+
+"""
+    _variance_estimated(m) -> Bool
+
+Whether a [`resample!`](@ref) has run. Inside a solve that means the oracle's `σ_g²`
+was estimated on the batch in hand, since [`update_variances!`](@ref) runs after every
+resample before any stopping test. Before the first resample the oracle holds the
+placeholder `σ_g² = 1` that the constructor and [`reset_sampling!`](@ref) write.
+"""
+_variance_estimated(m::SampledNLP) = !isempty(m.Ng_hist)
+
+"""
+    _escalate!(m) -> nothing
+
+Raise the sample floor to [`_largest_batch`](@ref) for the rest of the run. Called by
+the sampled solvers, under a confirming mode only, after a refused stop (when
+`TRParams(on_refusal = :cap)`) or a stall on a smaller batch. [`resample!`](@ref)
+applies the floor after the rule has spoken and records in `m.floor_from` the first
+iteration it applied to, which stays 0 when no batch was drawn under it. The solvers
+drop the floor when `solve!` returns, and [`reset_sampling!`](@ref) clears both
+fields.
+"""
+function _escalate!(m::SampledNLP)
+    m.N_floor = _largest_batch(m)
+    return nothing
+end
 
 # -----------------------------------------------------------------------------
 # Evaluation
@@ -317,7 +383,15 @@ not exist yet — the usual plug-in, and the reason `N_min` matters: a rule cann
 estimate a variance from one sample.
 
 The rule states a requirement; the oracle applies the cap. For an expectation that is
-the budget, for a finite sum `min(budget, M)`.
+the budget, for a finite sum `min(budget, M)`. `m.capped` counts the iterations at
+which the rule's own requirement reached the cap.
+
+Under a confirming mode the solver can then impose a floor, the largest batch, after a
+stall, or after a refused stop under the default `on_refusal = :cap` (see the section
+on confirming the stopping test in [`TRParams`](@ref)). The floor is applied after the
+cap and does not itself count as a cap hit. It is zero, and changes nothing, except
+during a confirming run that has raised it, or after such a run was left by an
+exception and until the next solve.
 """
 function resample!(m::SampledNLP, k::Int, Δ::Real, g_norm::Real)
     cap = population_cap(m)
@@ -326,6 +400,11 @@ function resample!(m::SampledNLP, k::Int, Δ::Real, g_norm::Real)
     Ng = min(grad_sample_size(m.rule, st), cap)
     Nf = min(obj_sample_size(m.rule, st), cap)
     (Ng >= cap || Nf >= cap) && (m.capped += 1)
+    if m.N_floor > 0                     # raised by a confirming mode, and N_floor ≤ cap
+        Ng = max(Ng, m.N_floor)
+        Nf = max(Nf, m.N_floor)
+        m.floor_from == 0 && (m.floor_from = k)
+    end
 
     m.Ng, m.Nf = Ng, Nf
     _draw!(m, Ng, Nf)
@@ -460,6 +539,9 @@ and is zero unless `TRParams(true_stop = …)` asked for verification. It is sep
 out because it is *not* optimisation work — comparing a mechanism that confirms
 against one that does not, on `total`, would charge the first for being honest — but
 it is included in `total`, because it is work that was done.
+
+The batches a confirming mode draws at the largest size, after a refused stop or a
+stall, are optimisation batches like any other and count in `grad` and `obj`.
 """
 samples_used(m::SampledNLP) =
     (grad = m.samples_g, obj = m.samples_f, confirm = m.samples_confirm,
@@ -514,16 +596,17 @@ oracle already maintains and the batch size that produced it.
 
 This is what makes the statistical stopping modes free — no extra evaluation, only
 arithmetic on numbers [`update_variances!`](@ref) has already computed. It is a
-*plug-in* estimate and inherits the usual caveat: `σ_g²` comes from the previous
-batch, and on a batch of two it is itself a one-degree-of-freedom quantity. It is
+*plug-in* estimate and inherits the usual caveat: `σ_g²` comes from the batch in hand,
+evaluated at the iterate before the last step, and on a batch of two it is itself a
+one-degree-of-freedom quantity. It is
 used to decide whether a stop is *believable*, never to decide the step.
 
 A batch in which every per-observation gradient has vanished gives `σ_g² = 0` and a
 standard error of zero. That zero describes the batch and says nothing about the
 observations outside it, which is how a bound built on it can accept a stop that is
 not real. `:test` and `:both` therefore read it only on a batch of at least
-`stop_N_min` observations. See the section on confirming the stopping test in
-[`TRParams`](@ref).
+`stop_N_min` observations, by default the largest batch the oracle allows. See the
+section on confirming the stopping test in [`TRParams`](@ref).
 
 # The finite population correction is not optional here
 
@@ -539,6 +622,12 @@ So: zero at `N_k ≥ M`, since [`draw_batch`](@ref) returns the whole population
 whatever `replace` says; the textbook `√((M−N)/(M−1))` correction below that when
 drawing without replacement; and no correction when drawing with replacement, where
 the draws are genuinely i.i.d. and `σ_g/√N_k` is right.
+
+The zero at `N_k ≥ M` assumes the batch is the population. Under `scheme = :nested`
+with `replace = true` it is not, because the batch grows by appending draws with
+replacement, so a batch of `M` repeats some observations and misses others. A
+confirming mode concludes on the largest batch, so [`FiniteSumTRSolver`](@ref)
+refuses that combination under a confirming mode whenever the largest batch is `M`.
 """
 grad_standard_error(m::ExpectationNLP) = sqrt(max(m.σg², 0.0) / max(m.Ng, 1))
 
@@ -557,6 +646,10 @@ Restore the counters, the histories, the batches and the random stream to their
 initial state, so the same oracle can be reused across configurations and each run
 sees the same realisations — which is what makes a comparison of mechanisms under
 noise a comparison of mechanisms rather than of random seeds.
+
+The sample floor that a confirming mode may have raised is cleared too, with the
+iteration it took effect. Every solve calls this first, and the solvers also drop the
+floor when `solve!` returns, so it never carries into the next solve.
 """
 function reset_sampling!(m::SampledNLP)
     m.rng = MersenneTwister(m.seed)
@@ -568,6 +661,7 @@ function reset_sampling!(m::SampledNLP)
     m isa FiniteSumNLP && empty!(m.full_hist)
     m.σg² = 1.0; m.σf² = 1.0; m.ip² = 0.0; m.orth² = 0.0
     m.last_pred = NaN; m.capped = 0; m.H_ok = false
+    m.N_floor = 0; m.floor_from = 0
     reset_sampling_rule!(m.rule)
     return m
 end
@@ -642,7 +736,10 @@ the iterate moved.
 
 Growth without replacement draws from the complement of the current batch, which
 costs `O(M)` per growth; with replacement it appends `rand(1:M, ·)` and duplicates
-are allowed, as they are in the initial draw.
+are allowed, as they are in the initial draw. A batch of `M` drawn that way is not
+the population, so a confirming stopping mode, which concludes on the largest batch,
+refuses `:nested` with replacement when that batch is `M`. See
+[`FiniteSumTRSolver`](@ref).
 
 # `:prefix`
 

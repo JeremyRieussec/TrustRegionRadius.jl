@@ -270,7 +270,9 @@ Under `:independent` the estimate `f̂` moves between iterations for two reasons
 the iterate moved and the sample changed, and while `N_k` is small the second dominates.
 The other two correlate consecutive estimates. On a finite sum, pass `replace = false` with
 `:nested` for the batches to be nested as sets; with replacement the appended draws can
-repeat terms already held.
+repeat terms already held. A batch of `M` drawn with replacement is therefore not the
+population, and a confirming `true_stop` mode, which concludes on the largest batch,
+refuses `:nested` with replacement when that batch is `M`.
 
 !!! warning "`:prefix` can optimise the wrong problem"
     Under `:prefix` the run minimises the average over the first `N_k` terms, and while
@@ -297,18 +299,32 @@ the base model, so [`true_gradient`](@ref) is available at every iterate; use it
 every reported number, and set `TRParams(true_stop = true)` when the *status* itself
 needs to mean something.
 
-`true_stop = true` is the `:full` mode, and the two cheaper modes do not replace it.
-`:test` and `:both` read the plug-in variance of the batch that produced `ĝ_k`. A
-batch whose per-observation scores have all vanished gives a zero variance as well
-as a zero gradient, so the confidence bound passes and certifies nothing. On a
-logistic regression sampled two observations at a time we measured the bound
-accepting a stop at a point where `‖∇f‖ = 0.42`, with `tol = 1e-6`.
+`true_stop = true` is the `:full` mode. `:test` and `:both` read the plug-in variance
+of the batch that produced `ĝ_k`. A batch whose per-observation scores have all
+vanished gives a zero variance as well as a zero gradient, so the confidence bound
+passes and certifies nothing. On a logistic regression sampled two observations at a
+time we measured the bound accepting a stop at a point where `‖∇f‖ = 0.42`, with
+`tol = 1e-6`.
 
-`TRParams(stop_N_min = …)` is the guard. The two modes read the bound only on a
-batch of at least `stop_N_min` observations, 30 by default, and with that default
-the run above is no longer stopped there. The guard makes the wrong stop unlikely
-and does not exclude it, so `:full` remains the only mode that does not depend on
-the batch. The run and the cost of the guard are described under [`TRParams`](@ref).
+The two modes therefore read the bound only on the largest batch the oracle allows,
+unless `TRParams(stop_N_min = …)` names a smaller one. Under every confirming mode a
+stall on a smaller batch moves the run to that batch for good, and so does a refused
+stop under the default `on_refusal = :cap`. A batch on which the step stalled is
+judged only exactly, because on a small sample a stall often means that the scores
+have vanished. On a finite sum without a budget the
+largest batch is the population, so each mode's verdict is then about the exact
+gradient, and `:stalled` is reported only on the population. Over 24 runs on logistic
+regressions and probits, with problem seeds 2 and 3 and six oracle seeds each, all
+three modes stopped at a point where `‖∇f‖ ≤ tol` in all 24. Before, 18 did, 5 stalled
+on a batch of two and one reached `max_iterations`. The confirmation passes cost 0,
+40 000 and 88 000 samples in all under `:test`, `:both` and `:full`, against 0,
+390 000 and 426 000 before.
+
+On an expectation the largest batch is a sample however large, and a run whose
+largest batch cannot resolve `tol` spends its remaining iterations there.
+`TRParams(on_refusal = :continue)` leaves the sample size to the rule after a refused
+stop. The runs, the costs and the case of the expectation are described under
+[`TRParams`](@ref).
 
 An exact model makes the batch test weaker still. On a [`LinearRegression`](@ref) the
 objective on a batch is a quadratic, and under [`ExactHessian`](@ref) or
