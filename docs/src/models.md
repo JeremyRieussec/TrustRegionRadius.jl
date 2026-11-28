@@ -75,7 +75,7 @@ stats.solution     # the saddle
 ```julia
 struct MyModel <: ModelHessian end
 
-TrustRegionRadius.hessian_op(::MyModel, nlp, x) = # anything supporting B * v
+TrustRegionRadius.hessian_op(::MyModel, nlp, x) = # n × n operator with *, mul!, size, eltype
 TrustRegionRadius.dense_hessian(::MyModel, nlp, x) = # Matrix, for ExactMS and diagnostics
 ```
 
