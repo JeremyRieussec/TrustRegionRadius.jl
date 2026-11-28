@@ -109,15 +109,19 @@ mechanism.
 abstract type SampledNLP{T, V} <: AbstractNLPModel{T, V} end
 
 """
-    ExpectationNLP(prob, rule; x0, seed = 0, N_init = 8)
+    ExpectationNLP(prob, rule; x0, seed = 0, N_init = 8, budget = 1_000_000,
+                   scheme = :independent)
 
-Oracle for an [`ExpectationProblem`](@ref): each `resample!` draws `N_k` **fresh**
-realisations.
+Oracle for an [`ExpectationProblem`](@ref). Under the default `scheme`, each
+`resample!` draws `N_k` **fresh** realisations. The other schemes are described under
+[`sample_schemes`](@ref), and `:prefix` is rejected here, since an expectation has no
+first individual.
 
-There is no population cap of the problem's own, so the budget comes from the rule's
-`N_max` and from [`ExpectationTRSolver`](@ref)'s `budget`. There is no full-batch
-iteration and, unless `has_truth(prob)`, no exact gradient — so a run here can be
-scored only against whatever the construction supplies.
+There is no population cap of the problem's own, so `N_k` is capped at the smaller of
+the rule's `N_max`, when it carries one, and `budget`. `budget` is a keyword of this
+constructor, not of [`ExpectationTRSolver`](@ref), and defaults to 1,000,000. There is
+no full-batch iteration and, unless `has_truth(prob)`, no exact gradient, so a run here
+can be scored only against whatever the construction supplies.
 """
 mutable struct ExpectationNLP{P <: ExpectationProblem, S <: SamplingRule} <:
                SampledNLP{Float64, Vector{Float64}}
@@ -152,9 +156,11 @@ mutable struct ExpectationNLP{P <: ExpectationProblem, S <: SamplingRule} <:
 end
 
 """
-    FiniteSumNLP(prob, rule; x0, seed = 0, replace = true, N_init = 8, budget = nothing)
+    FiniteSumNLP(prob, rule; x0, seed = 0, replace = true, N_init = 8, budget = nothing,
+                 scheme = :independent)
 
-Oracle for a [`FiniteSumProblem`](@ref): each `resample!` subsets `1:M`.
+Oracle for a [`FiniteSumProblem`](@ref): each `resample!` subsets `1:M`, as
+[`sample_schemes`](@ref) describes for each `scheme`.
 
 `N_k ≤ M` always. A rule carrying a user-supplied `N_max` is rejected here — see
 [`check_population_cap`](@ref) — because on a finite sum the cap is a property of the
@@ -248,7 +254,7 @@ problem_class(m::FiniteSumNLP)    = :finite_sum
 """
     population_cap(m) -> Int
 
-The largest sample the oracle will ever draw: the solver budget for an expectation,
+The largest sample the oracle will ever draw: its own `budget` for an expectation,
 `min(budget, M)` for a finite sum. `N_k` is clamped to it after the rule has spoken,
 and hitting it is counted in `m.capped` — a run spent at the cap is no longer meeting
 the accuracy requirement the convergence theory assumes.
