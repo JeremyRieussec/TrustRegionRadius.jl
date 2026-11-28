@@ -387,7 +387,7 @@
         sampled(stop, seed) =
             tr_solve(FiniteSumNLP(p, RadiusProportional(); x0 = zeros(5), seed = seed);
                      rule = RDelta(), model = BHHHModel(ridge = 1e-8),
-                     subsolver = SteihaugCG(),
+                     subsolver = SteihaugCG(), trace = true,
                      params = TRParams(tol = 1e-6, max_iterations = 1_000,
                                        true_stop = stop))
         truth(st) = norm(true_gradient(p, st.solution))
@@ -405,11 +405,19 @@
         @test count(st -> st.status === :first_order && truth(st) > 1e-2, loose) >= 1
 
         # Confirmed on the full batch, a run that reports :first_order is at the
-        # estimate. Three of the six do within the budget.
+        # estimate. We measured all six doing so. Oracle seed 2 stalls at iteration
+        # 15 on a batch of two before any candidate stop, under :none as well, and
+        # under :full it continues on the full batch from iteration 16. A
+        # confirmed run stalls only on the full batch, and a stall that does not end
+        # the run keeps the trajectories in step.
         tight = [sampled(:full, s) for s in 1:6]
         @test count(st -> st.status === :first_order, tight) >= 1
         for st in tight
+            ss = st.solver_specific
             @test st.status !== :first_order || norm(st.solution - best) < 1e-4
+            @test st.status !== :stalled || ss[:grad_sample_trajectory][end] == population(p)
+            @test length(ss[:ratio_trajectory]) == length(ss[:grad_sample_trajectory]) == st.iter
+            @test length(ss[:delta_trajectory]) == length(ss[:true_grad_trajectory]) == st.iter + 1
         end
     end
 end
