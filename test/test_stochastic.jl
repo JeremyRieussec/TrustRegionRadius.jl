@@ -604,6 +604,7 @@
         end
         o = ExpectationNLP(pe, RadiusProportional(κ_g = 1.0, κ_f = 1.0, N_max = 10); seed = 1)
         resample!(o, 1, 1e-6, 1.0)
+        go = zeros(4); grad!(o, zeros(4), go); update_variances!(o, zeros(4), go)
         @test o.Ng == 10
         @test TrustRegionRadius._batch_can_conclude(o, TRParams())
 
@@ -615,6 +616,7 @@
         @test o8.Ng == 8
         @test !TrustRegionRadius._batch_can_conclude(o8, TRParams())
         resample!(o8, 1, 1e-6, 1.0)                 # the rule asks for its N_max of 8
+        g8 = zeros(4); grad!(o8, zeros(4), g8); update_variances!(o8, zeros(4), g8)
         @test o8.Ng == 8
         @test TrustRegionRadius._batch_can_conclude(o8, TRParams())
         # On a population of eight the initial batch is the population, where the
@@ -675,6 +677,23 @@
         @test sz.status === :first_order
         @test sz.iter > 2
         @test norm(true_gradient(pz, sz.solution)) <= 0.1
+
+        # With stop_N_min = 1 the bound may read every batch but a stalled one, in this
+        # loop too. The run starts at the solution with a radius of 1e-17, and
+        # on_refusal = :continue keeps it on its batch of eight after the refusal at
+        # iteration 0, where no variance has been estimated yet. The step on that
+        # batch stalls and its ‖ĝ‖ is below tol = 2.5, but a stalled batch is not
+        # read by the bound, so :test refuses it. The run moves to the budget of
+        # 1 000, stalls there, and that batch is a sample, so the run ends :stalled.
+        mf = ExpectationNLP(pe, FixedSample(8); x0 = ones(4), seed = 1, budget = 1_000)
+        sf = tr_solve(mf; rule = RDelta(), model = ExactHessian(), subsolver = ExactMS(),
+                      trace = true,
+                      params = TRParams(tol = 2.5, Δ0 = 1e-17, max_iterations = 50,
+                                        true_stop = :test, stop_N_min = 1,
+                                        on_refusal = :continue))
+        @test sf.status === :stalled
+        @test mf.Ng_hist == [8, 1_000]
+        @test sf.solver_specific[:sample_floor_from] == 2
 
         # With no budget and no N_max there is no largest batch to move to, and a
         # confirming mode is refused, by the constructor and by solve!.

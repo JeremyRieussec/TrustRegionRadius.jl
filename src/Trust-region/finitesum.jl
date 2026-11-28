@@ -22,8 +22,10 @@ Trust-region solver for a [`FiniteSumNLP`](@ref).
 
 Every `TRParams(true_stop = …)` mode is available here: `has_truth` holds for the
 whole class, so `:full` and `:both` can confirm exactly, at the cost of one full
-pass per confirmation. `:both` pays that cost when the `:test` bound fails or when the
-batch is below `stop_N_min`, and it accepts without a pass whatever `:test` accepts.
+pass per confirmation. `:both` pays that cost whenever `:test` refuses, which is when
+the bound fails, when the batch is below `stop_N_min`, before a variance has been
+estimated on the batch in hand, and on a stalled batch that is not the population. It
+accepts without a pass whatever `:test` accepts.
 
 Without a `budget` the largest batch is the population, and so is the default
 `stop_N_min`. A refused stop, under the default `on_refusal = :cap`, and a stall on a
@@ -101,7 +103,9 @@ A run whose tail is all `true` has entered the deterministic regime and its fina
 `‖ĝ‖` is the real one. A run whose tail is all `false` never did, and its status is
 a statement about one batch. Under a confirming mode `:sample_floor_from` is the first
 iteration drawn under the floor that a refused stop or a stall raised, and 0 if no
-batch was drawn under one, even when the rule itself drew the population.
+batch was drawn under one, even when the rule itself drew the population. On an
+`:exception` exit `:full_batch_trajectory`, like the sample-size keys, includes the
+iteration that failed.
 """
 function SolverCore.solve!(solver::FiniteSumTRSolver,
                            nlp::FiniteSumNLP,

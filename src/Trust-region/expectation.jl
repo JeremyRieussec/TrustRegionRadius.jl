@@ -115,6 +115,10 @@ budget, before and after any floor. The floor itself is not a cap hit. Under a
 confirming `true_stop` mode the trace also holds `:sample_floor_from`, the first
 iteration drawn under the floor that a refused stop or a stall raised, or 0 if no
 batch was drawn under one, even when the rule itself drew the largest batch.
+
+On an `:exception` exit `:grad_sample_trajectory` and `:obj_sample_trajectory` include
+the iteration that failed, so they hold `k + 1` entries, and `:sample_floor_from` can
+name that iteration.
 """
 function SolverCore.solve!(solver::ExpectationTRSolver,
                            nlp::ExpectationNLP,

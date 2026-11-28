@@ -109,13 +109,18 @@ mechanism.
 abstract type SampledNLP{T, V} <: AbstractNLPModel{T, V} end
 
 """
-    ExpectationNLP(prob, rule; x0, seed = 0, N_init = 8)
+    ExpectationNLP(prob, rule; x0, seed = 0, N_init = 8, budget = 1_000_000,
+                   scheme = :independent)
 
 Oracle for an [`ExpectationProblem`](@ref): each `resample!` draws `N_k` **fresh**
 realisations.
 
-There is no population cap of the problem's own, so the budget comes from the rule's
-`N_max` and from [`ExpectationTRSolver`](@ref)'s `budget`. There is no full-batch
+There is no population cap of the problem's own, so the cap on `N_k` comes from the
+rule's `N_max` and from this oracle's `budget`. Under a confirming
+`TRParams(true_stop = …)` the smaller of the two is also the batch drawn at every
+iteration after a stall, or after a refused stop under the default
+`on_refusal = :cap`, so it should be a size that can be drawn at every iteration.
+There is no full-batch
 iteration and, unless `has_truth(prob)`, no exact gradient — so a run here can be
 scored only against whatever the construction supplies.
 """
@@ -294,9 +299,9 @@ _is_population(::ExpectationNLP) = false
 """
     _variance_estimated(m) -> Bool
 
-Whether the oracle's `σ_g²` was estimated on the batch in hand. In a solve that holds
-from the first resample on, since [`update_variances!`](@ref) runs after every
-[`resample!`](@ref) before any stopping test. Before it the oracle holds the
+Whether a [`resample!`](@ref) has run. Inside a solve that means the oracle's `σ_g²`
+was estimated on the batch in hand, since [`update_variances!`](@ref) runs after every
+resample before any stopping test. Before the first resample the oracle holds the
 placeholder `σ_g² = 1` that the constructor and [`reset_sampling!`](@ref) write.
 """
 _variance_estimated(m::SampledNLP) = !isempty(m.Ng_hist)
